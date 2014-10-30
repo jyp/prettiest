@@ -5,7 +5,7 @@ module Text.PrettyPrint.Compact (
    Doc, 
 
    -- * Basic combinators
-   empty, char, text, (<>), nest, line, linebreak, group, softline,
+   mempty, char, text, (<>), nest, line, linebreak, group, softline,
    softbreak,
 
    -- * Alignment
@@ -40,13 +40,13 @@ module Text.PrettyPrint.Compact (
 
    -- * Primitive type documents
    string, int, integer, float, double, rational,
+   bool,
 
    -- * Rendering
    render,
 
    -- * Undocumented
-   bool,
-   column, nesting, width
+   -- column, nesting, width
    ) where
 
 import Control.Applicative
