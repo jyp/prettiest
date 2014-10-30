@@ -1,6 +1,53 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Text.PrettyPrint.Compact where
+module Text.PrettyPrint.Compact (
+   -- * Documents
+   Doc, 
+
+   -- * Basic combinators
+   empty, char, text, (<>), nest, line, linebreak, group, softline,
+   softbreak,
+
+   -- * Alignment
+   --
+   -- The combinators in this section can not be described by Wadler's
+   -- original combinators. They align their output relative to the
+   -- current output position - in contrast to @nest@ which always
+   -- aligns to the current nesting level. This deprives these
+   -- combinators from being \`optimal\'. In practice however they
+   -- prove to be very useful. The combinators in this section should
+   -- be used with care, since they are more expensive than the other
+   -- combinators. For example, @align@ shouldn't be used to pretty
+   -- print all top-level declarations of a language, but using @hang@
+   -- for let expressions is fine.
+   align, hang, indent, encloseSep, list, tupled, semiBraces,
+
+   -- * Operators
+   (<+>), (<$>), (</>), (<$$>), (<//>),
+
+   -- * List combinators
+   hsep, vsep, fillSep, sep, hcat, vcat, fillCat, cat, punctuate,
+
+   -- * Fillers
+   fill, fillBreak,
+
+   -- * Bracketing combinators
+   enclose, squotes, dquotes, parens, angles, braces, brackets,
+
+   -- * Character documents
+   lparen, rparen, langle, rangle, lbrace, rbrace, lbracket, rbracket,
+   squote, dquote, semi, colon, comma, space, dot, backslash, equals,
+
+   -- * Primitive type documents
+   string, int, integer, float, double, rational,
+
+   -- * Rendering
+   render,
+
+   -- * Undocumented
+   bool,
+   column, nesting, width
+   ) where
 
 import Control.Applicative
 import Data.Monoid
@@ -322,6 +369,49 @@ backslash       = char '\\'
 equals :: Doc
 equals          = char '='
 
+-----------------------------------------------------------
+-- Combinators for prelude types
+-----------------------------------------------------------
+
+-- string is like "text" but replaces '\n' by "line"
+
+-- | The document @(string s)@ concatenates all characters in @s@
+-- using @line@ for newline characters and @char@ for all other
+-- characters. It is used instead of 'text' whenever the text contains
+-- newline characters.
+string :: String -> Doc
+string ""       = mempty
+string ('\n':s) = line <> string s
+string s        = case (span (/='\n') s) of
+                    (xs,ys) -> text xs <> string ys
+
+bool :: Bool -> Doc
+bool b          = text (show b)
+
+-- | The document @(int i)@ shows the literal integer @i@ using
+-- 'text'.
+int :: Int -> Doc
+int i           = text (show i)
+
+-- | The document @(integer i)@ shows the literal integer @i@ using
+-- 'text'.
+integer :: Integer -> Doc
+integer i       = text (show i)
+
+-- | The document @(float f)@ shows the literal float @f@ using
+-- 'text'.
+float :: Float -> Doc
+float f         = text (show f)
+
+-- | The document @(double d)@ shows the literal double @d@ using
+-- 'text'.
+double :: Double -> Doc
+double d        = text (show d)
+
+-- | The document @(rational r)@ shows the literal rational @r@ using
+-- 'text'.
+rational :: Rational -> Doc
+rational r      = text (show r)
 
 -----------------------------------------------------------
 -- semi primitive: fill and fillBreak

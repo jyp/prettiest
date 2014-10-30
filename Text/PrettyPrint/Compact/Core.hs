@@ -1,15 +1,18 @@
 {-# LANGUAGE RecordWildCards #-}
-module Text.PrettyPrint.Compact.Core(Doc(..),pretty,group,flatten,space,spacing,text) where
+module Text.PrettyPrint.Compact.Core(Doc(..),render,group,flatten,space,spacing,text) where
 
 import Data.Monoid
 import Data.Function (on)
 import Data.List (partition,minimumBy,sort)
 import Data.Either (partitionEithers)
+import Data.String
 
 type Indentation = Int
 
 data Box = Str String | Spacing Indentation | NewLine {-^ not allowed in the input -}
 
+instance IsString Doc where
+  fromString = text
 
 data Doc = Empty
          | Text Box
@@ -78,7 +81,7 @@ filtering (x:y:xs) | numToks x >= numToks y = filtering (x:xs)
                    | otherwise = x:filtering (y:xs)
 filtering xs = xs
 
-renderAll :: Indentation -> Indentation -> Doc -> [Box]
+renderAll :: Double -> Indentation -> Doc -> [Box]
 renderAll rfrac w doc = reverse $ loop [Process 0 0 0 [] $ Cons 0 doc Nil]
     where
       loop ps = case dones of
@@ -100,7 +103,7 @@ renderAll rfrac w doc = reverse $ loop [Process 0 0 0 [] $ Cons 0 doc Nil]
           (dones,dones'over) = partition (\(o,_) -> o <= 0) dones0
 
       -- r :: the ribbon width in characters
-      r  = max 0 (min w (w * rfrac))
+      r  =  max 0 (min w (round (fromIntegral w * rfrac)))
 
       -- Automatically inserted spacing does not count as doing more production.
       count (Spacing _) = 0
@@ -130,7 +133,9 @@ layout (Str s:xs) = s ++ layout xs
 layout (NewLine:xs) = '\n' : layout xs
 layout (Spacing x:xs) = replicate x ' ' ++ layout xs
 
-pretty :: Indentation -> Indentation -> Doc -> String
-pretty rfrac w d = do
+render :: Double -> Indentation -> Doc -> String
+render rfrac w d = do
   layout $ renderAll rfrac w d
 
+instance Show Doc where
+  show = render 0.8 80
