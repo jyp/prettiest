@@ -17,7 +17,8 @@ vertically like so:
 
 With Wadler we can implement this as:
 
-"(" <> nest 1 (mconcat xs) <> ")"
+vcat xs = foldr (<> line <>) nil
+group $ "(" <> nest 1 (vcat xs) <> ")"
 
 And we try to prettify:
 
@@ -106,14 +107,22 @@ backtracking? Yep.
 * Specification of the problem
 ** Syntax
 
+spacing :: String -> Doc -- so we can use arbitrary characters as "spaces"; useful for example for haskell layout.
+line :: Doc
 nil :: Doc
 (<>) :: Doc -> Doc -> Doc
 text :: String -> Doc
-line :: Doc
 nest :: Int -> Doc -> Doc
 align :: Doc -> Doc
+(<|>) :: Doc -> Doc -> Doc -- invariant: the two docs have the same contents:
 
-(same as Leijen)
+contents (spacing _) = []
+contents nil = []
+contents line = []
+contents (d1 <> d2) = contents d1 <> contents d2
+contents (text x) = [x]
+contents (align x) = contents x
+contents (x <|> y) = contents x
 
 ** Semantics
 
@@ -121,6 +130,51 @@ layout :: Doc -> String
 
 Define a interpretation of the combinators as a relation Doc ⟶ Layout
 (aop style relations, folds, etc.)
+
+For compositional semantics, a Layout is something rather complicated:
+
+Layout = IndentLevel × Column → Text × Column × NumberOfLines
+
+The column is necessary to implement alignment, which (locally) sets
+the indentation level to the current column.
+
+The evaluation relation can be defined as follows:
+
+⟦text    s⟧ (i,c0) = (s,c0+len s)
+⟦spacing s⟧ (i,c0) = (s,c0+len s)
+nil (i,c) = ("",c,0)
+⟦align d⟧ (i,c) = ⟦d⟧ (c,c,0)
+⟦line⟧ (i,c) = ("\n", i)
+⟦d1 <> d2⟧ (i,c) = let (t1,c1) = ⟦d1⟧ (i,c)
+                       (t2,c2) = ⟦d2⟧ (i,c2)
+                   in (t1 ++ t2, c2)
+⟦nest n d⟧ (i,c) = ⟦d⟧ (i+n,c)
+⟦d1 <|> d2⟧ (i,c) = ⟦d1⟧ (i,c)
+                  = ⟦d2⟧ (i,c) 
+
+-- two cases for group; so we have a relation.
+
+
+A useful combinator (not part of the core) is the following:
+flatten :: Doc -> Doc
+flatten line  = nil
+flatten nil = nil
+flatten (text x) = text x
+flatten (x <> y)        = flatten x <> flatten y
+flatten (x <|> y)       = flatten x -- arbitrary choice
+flatten (Nest i x)      = flatten x
+flatten (group x)       = flatten x
+flatten (align x)       = flatten x
+
+For the purpose of the derivation, we can ignore the actual text, and
+just recall its maximal width and number of lines.
+
+We define the overflow to be the difference between the maximal width
+and some constant w, the width of the page.
+
+The goal is then to find the solution which has non positive overflow,
+and returns the smallest number of lines.
+
 
 ** Some quickspec laws
 text [] = empty
