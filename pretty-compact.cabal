@@ -1,0 +1,29 @@
+name: pretty-compact
+version: 1.0
+synopsis: Pretty-printing library
+description:
+  This package contains a pretty-printing library, a set of API's
+  that provides a way to easily print out text in a consistent
+  format of your choosing. This is useful for compilers and related
+  tools.
+  .
+  This library produces more compact outputs than both
+  Wadler-Leijen or Hughes-PJ algorithms, at the expense of computational ressources.
+  The API is the same as Wadler-Leijen's.
+license: GPL
+license-file: LICENSE
+category: Text
+maintainer: Jean-Philippe Bernardy <jeanphilippe.bernardy@gmail.com>
+build-type: Simple
+Cabal-Version: >= 1.8
+
+source-repository head
+                  type: git
+                  location: http://github.com/jyp/prettiest.git
+
+Library
+        exposed-modules:
+                Text.PrettyPrint.Compact
+                Text.PrettyPrint.Compact.Core
+        build-depends:
+                base >= 3 && < 5
