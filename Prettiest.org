@@ -1,0 +1,144 @@
+
+* State of the art
+
+- Hughes. Pretty, but makes eager decisions (sec. 7.4) so the results are ugly.
+- Wadler. Much simpler, but produces even uglier things.
+
+Let us detail these claims
+
+Say we pretty print s-exps, and we allow for them to be printed either horizontally, or
+vertically like so:
+(a
+ b
+ c
+ d)
+
+(ie. we want the elements to be aligned on the 1st parens)
+
+With Wadler we can implement this as:
+
+"(" <> nest 1 (mconcat xs) <> ")"
+
+And we try to prettify:
+
+(a b c (d e f))
+
+in this width:
+###########
+
+We get:
+
+(a
+ b
+ c
+ (d e f))
+
+but never the shorter:
+
+###########
+(a b c (d
+        e
+        f))
+
+Indeed, it tries to fit the whole text on one line. This fails, so the
+vertical option is chosen.
+
+
+Hughes choses the prettier option, bu also suffers from the problem of
+making eager decisions:
+
+Consider:
+
+(axbxcxd ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d)))
+
+To fit:
+###############
+
+Hughes tries to fit as much as possible on the 1st line. In this case, it succeeds:
+
+###############
+(axbxcxd ((a
+
+But then, it has committed to this indentation level, and we get a
+very long output:
+
+###############
+(axbxcxd ((a
+           b
+           c
+           d)
+          (a
+           b
+           c
+           d)
+          (a
+           b
+           c
+           d)
+          (a
+           b
+           c
+           d)
+          (a
+           b
+           c
+           d)))
+###############
+
+While this choice could have been made:
+
+###############
+(axbxcxd
+ ((a b c d)
+  (a b c d)
+  (a b c d)
+  (a b c d)
+  (a b c d))
+###############
+
+These examples may feel contrieved. In reality they occur all the
+time.
+
+Can we implement a library that choses always the prettiest layout?
+Can we take the best possible choice, while not getting lost in
+backtracking? Yep.
+
+* Specification of the problem
+** Syntax
+
+nil :: Doc
+(<>) :: Doc -> Doc -> Doc
+text :: String -> Doc
+line :: Doc
+nest :: Int -> Doc -> Doc
+nesting :: Int -> (Int -> Doc) -> Doc
+column :: Int -> (Int -> Doc) -> Doc
+layout :: Doc -> String
+
+(same as Leijen)
+
+** Semantics
+
+Define a interpretation of the combinators as a relation Doc ⟶ Layout
+(aop style relations, folds, etc.)
+
+* Derivation.
+ TODO
+
+The solution is to pretty-print line by line (so we consider only
+shortest resuts).  We prune dominated solutions. Each solution is
+assigned a pair (i,p) of current indentation (i) and progess (p).  The current
+indentation is well defined, because we are at a given line. The
+progress is the number of tokens that could be printed so far.
+
+(i0,p0) > (i1,p1)  iff i0 < i1 and p0 >= p1
+
+If there is a finite number (l) of indentation levels (traditionally
+l=80), then we have only to consider l solutions after each line
+break.
+
+* Result
+
+The algorithm has been implemented.
+The result have been used sucessfully to pretty print code in papers;
+allowing to fit more stuff than was possible using Wadler's approach.
