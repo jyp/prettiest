@@ -129,6 +129,7 @@ renderAll rfrac w doc = reverse $ loop [Process 0 0 0 [] $ Cons 0 doc Nil]
 
 
 layout :: [Box] -> String
+layout [] = []
 layout (Str s:xs) = s ++ layout xs
 layout (NewLine:xs) = '\n' : layout xs
 layout (Spacing x:xs) = replicate x ' ' ++ layout xs
