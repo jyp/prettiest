@@ -1,6 +1,6 @@
 
 * State of the art
-
+  
 - Hughes. Pretty, but makes eager decisions (sec. 7.4) so the results are ugly.
 - Wadler. Much simpler, but produces even uglier things.
 
@@ -111,16 +111,83 @@ nil :: Doc
 text :: String -> Doc
 line :: Doc
 nest :: Int -> Doc -> Doc
-nesting :: Int -> (Int -> Doc) -> Doc
-column :: Int -> (Int -> Doc) -> Doc
-layout :: Doc -> String
+align :: Doc -> Doc
 
 (same as Leijen)
 
 ** Semantics
 
+layout :: Doc -> String
+
 Define a interpretation of the combinators as a relation Doc ⟶ Layout
 (aop style relations, folds, etc.)
+
+** Some quickspec laws
+text [] = empty
+
+Size 3, 36 schemas to consider:
+x <> empty = x
+empty <> x = x
+nest i empty = empty
+nest 0 x = x
+
+Size 4, 38 schemas to consider:
+nest i (text xs) = text xs
+
+Size 5, 107 schemas to consider:
+text xs <> text ys = text (xs ++ ys)
+(x <> y) <> z = x <> (y <> z)
+nest i (nest j x) = nest j (nest i x)
+nest (i + j) x = nest i (nest j x)
+
+Size 6, 154 schemas to consider:
+nest i (x <> text xs) = nest i x <> text xs
+nest i (text xs <> x) = text xs <> nest i x
+
+Size 7, 383 schemas to consider:
+nest i x <> nest i y = nest i (x <> y)
+
+Size 8, 722 schemas to consider:
+
+Size 9, 1745 schemas to consider:
+
+7179 events created in total (1295 schemas, 1027 terms, 4823 creation, 34 miscellaneous).
+34 hooks installed.
+
+== Signature ==
+group :: Doc1 -> Doc1
+align :: Doc1 -> Doc1
+
+Size 1, 13 schemas to consider:
+
+Size 2, 27 schemas to consider:
+align empty = empty
+group empty = empty
+
+Size 3, 55 schemas to consider:
+align (align x) = align x
+align (group line) = group line
+align (text xs) = text xs
+group (align x) = align (group x)
+group (group x) = group x
+group (text xs) = text xs
+
+Size 4, 108 schemas to consider:
+line <> align x = line <> x
+group (nest i line) = group line
+nest i (align x) = align x
+nest i (group x) = group (nest i x)
+
+Size 5, 264 schemas to consider:
+align line <> align x = align (line <> x)
+align (x <> align y) = align x <> align y
+align (align x <> y) = align (x <> y)
+group (x <> text xs) = group x <> text xs
+group (group line <> line) = group line <> group line
+group (text xs <> x) = text xs <> group x
+
+Size 6, 724 schemas to consider:
+group (group x <> group y) = group x <> group y
 
 * Derivation.
  TODO
