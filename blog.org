@@ -1,0 +1,293 @@
+#+ TITLE The Prettiest Printer
+
+Classic functional programmers have two darling problems: parsing and
+pretty printing.  Having turned my attention to parsing before, allow
+me to foray in the (hopefully clear) waters of pretty printing.
+
+* The state of the art.
+Even today, pretty printing in Haskell is mostly backed by two classic
+libraries, either:
+
+1. The Hughes-Peyton Jones library. The design is described by Hughes
+   (in *The Design of a Pretty-printing Library*).  It has then been
+   adopted (and modified) by Peyton Jones, and was distributed with
+   GHC for a long time, making it the de-facto standard pretty
+   printer. It is now available on Hackage in the eponymous package
+   "pretty". I believe that this remains the dominant design, perhaps
+   disputed by...
+
+2. The Wadler-Leijen library. In the penultimate chapter of *The Fun
+   of Progarmming*, Wadler re-constructs a pretty printing library
+   from scratch. Keeping true to Hughes in particular and the general
+   functional programming tradition in general, Wadler starts by
+   specifying his library using equational laws, and derives an
+   implementation. Leijen took Wadler's implementation and modified it
+   to increase its expressivity (but more on that later). The result
+   is available in the "print-wl" package.
+
+** Not. Pretty. Enough.
+
+*** Hughes
+As it happens, I am dissatisfied with the outputs produced by either
+libraries. At the risk of appearing ungrateful to the masters, I'll
+spend some effort to back this claim.
+
+Let us assume we want to pretty print S-Expressions:
+
+INSERT
+
+We'd like to allow to pretty print an S-Expr either horizontally, like
+so:
+
+: (a b c d)
+
+or vertically, like so:
+
+: (a
+:  b
+:  c
+:  d)
+
+(I'll refrain the urge to be more specific at this point).
+
+For the sake of the argument, let's pretend we want to pretty print
+the following s-expr:
+
+INSERT
+
+Printed on a wide page, we get:
+
+: (axbxcxd ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d)))
+
+In a rather narrow page, whose width is indicated by the row of
+hashes, what you'd get from Hughes' library is the following output:
+
+: ###############
+: (axbxcxd ((a
+:            b
+:            c
+:            d)
+:           (a
+:            b
+:            c
+:            d)
+:           (a
+:            b
+:            c
+:            d)
+:           (a
+:            b
+:            c
+:            d)
+:           (a
+:            b
+:            c
+:            d)))
+: ###############
+
+This does not quite cut it.  Our senses of aesthetics are
+tingling. This is not pretty enough. We want something more
+compact. Why can't we get this:
+
+: ###############
+: (axbxcxd
+:  ((a b c d)
+:   (a b c d)
+:   (a b c d)
+:   (a b c d)
+:   (a b c d))
+: ###############
+
+The thing is, Hughes belives that "it would be ureasonably ineffcient
+for a pretty-printer do decide whether or not to split the first line
+of a document on the basis of the content of the last." So, a greedy
+algorithm is chosen, which tries to fit as much as possible on a
+single line. This is how much can we fit on the 1st line:
+
+: (axbxcxd ((a
+
+But then we have committed to a very deep indentation level, which
+forces a less-than-pretty outcome for the remainder of the document.
+
+*** Wadler
+
+Wadler's design fares somewhat better. It does not suffer from the
+problem... /by default/. That is, it lacks the capability to express
+that the elements of an s-expr may be vertically aligned ---
+compositionally.
+
+Let us illustrate. Using Wadler's library, one might specify pretty
+printing of s-exprs as follows (see Wadler's paper is there is any
+doubt on the meaning of the following):
+
+: x </> y = x <> line <> y
+: sep = foldr empty (</>)
+
+: pretty (SExpr xs) = group $ "(" <> nest 1 (sep $ map pretty xs) <> ")"
+: pretty (Atom x) = text x
+
+which appears to do the trick.
+
+However, the ~group~ combinator does not quite behave as I'd like.
+What ~group~ does is to allow its argument to be laid out on a single
+line, instead of multiple ones. Hence, we can put two elements next to
+each other only if they are flattened. This means that if we typeset
+the same s-expr, but in a slightly wider page, we get the same output:
+
+: #####################
+: (axbxcxd
+:  ((a b c d)
+:   (a b c d)
+:   (a b c d)
+:   (a b c d)
+:   (a b c d))
+
+whereas my iThings-saturated eyes crave something more pleasing:
+
+: #####################
+: (axbxcxd ((a b c d)
+:           (a b c d)
+:           (a b c d)
+:           (a b c d)
+:           (a b c d))
+
+At this point, the reader my raise two obections:
+
+- Objection 1: All this fuss for ONE LINE?  I reply: every
+  computer-science academic has once in their lifetime been in a
+  killing mood due to a one-line-to-long printout causing a paper to
+  spill over the page limit. So that extra line saved /is/ worth
+  something. Plus, we can construct examples where more space can be
+  saved.
+
+- Objection 2: Leijen's extension of Wadler's design solves the issue:
+  it provides an ~align~ combinator. Yes, but: it exhibits the same
+  symptoms as Hughes' library.
+
+  Aside: In his paper, Wadler proves that his library produces the
+  shortest output. Leijen's extension breaks this invariant. This
+  makes me suspect that the extension was done on the implementation
+  directly rather than on the design. If there were a functional
+  programming inquisition, they should knock on Leijen's door.
+
+* The Prettiest Printer?
+
+** API
+
+Before discussing possible algorithms, we need to chose the
+combinators wisely.  I'll daringly stand on Phil's strong shoulders
+(himself balancing on John), and propose the following:
+
+- ~empty~:  The empty document
+- ~(<>)~:  concatenation
+- ~line~: insert a new line (unconditionally)
+- ~text~: insert a meaningful piece of text
+- ~nest~: nest the argument
+- ~align~: align the documents in the argument
+- ~(<|>)~: disjunction of layouts
+- ~spacing~: non-meaningful text (spaces or typographical hints)
+
+which can be implemented as follows:
+
+INSERT
+
+The main pitfall of the above api is that disjunction (<|>) can only
+take arguments which differ in layout. That is, it requires two
+documents with the same ~content~, defined as follows:
+
+INSERT
+
+(Note that the above function recursively relies on the invariant
+being verified.)
+
+Other pitfalls include that text and spacing may not contain any
+newline, and nesting may not be negative.
+** Semantics
+
+Now that we have our API, we can specify how to render documents.  I
+could start by stating a few laws on the API (in particular all laws
+stated by Wadler should hold) but I'll specify it directly using a
+compositional interpretation. The interpretation of a document is a
+non-deterministic function from the current indentation level and
+current column to a text and a final column.
+
+Using lists for non-determinism, we have:
+
+INSERT
+
+The evaluation function is then the following.
+
+
+INSERT
+
+Given the use of monadic syntax to handle list-non-determinism, the
+interpretation of text, spacing, empty, <>, and even <|> reserve no
+particular surprise. The interesting bit is the interplay between
+line, nest and align.
+
+The indentation level is implemented by inserting a certain number of
+spaces after moving to the next line.  Nesting is defined by
+increasing the indentation level. Aligning means setting the
+indentation level to the current column.
+
+Finally, we define pretty by
+- fitting the page and
+- using the smallest amount of lines
+
+Fitting the page means that the line width is less than the page
+width.
+
+INSERT
+
+The final renderer is thus:
+
+INSERT
+
+(This is not quite the full truth: sometimes no layout fits the page,
+and we want to pick that with the least overflow. We'll leave
+such details to the implementer.)
+
+The above renderer satisfies our needs: it finds the prettiest layout.
+Yet, it is not satisfying. A document may contain hundreds of
+disjunctions, and it is not acceptable to exhaustively search a space
+that big: even the legendary long-lasting batteries of our iPads(tm)
+will die before anything can be printed.
+
+** Implementation
+
+Fortunately, there is a way out of this. The trick is to explore the
+search space /line by line/. That is, every time we find the Line
+combinator, we stash the current partial result for later
+examination. Eventually, all pending states will be stashed. We can
+then /prune out/ useless, dominated states.
+
+For each state ~t~, we define:
+- i(t): the indentation of the next line (remember that we stopped at
+  a given line)
+- p(t): the progress inside the document, defined as the number of
+  tokens printed so far. Remember that disjuncted documents must have
+  the same contents, so it is meaningful to compare p(t) and p(u) for
+  every pair of processes (t,u).
+
+Definition: t dominates u iff. i(t) < i(u) and p(t) >= p(u).
+
+Indeed, if /u/ is at a higher indentation level, it has much less
+space to print the rest of the document (remember that indentation is
+always positive). Therefore, if it is also late in the production of
+tokens, there is no hope for /u/ to catch up with /t/. (The proof of
+this fact may come to an academic journal in the future. And it
+certainly does not fit in the margin.)
+
+Consequently, if there is a finite number (l) of indentation levels
+(traditionally l=80), then we have only to consider l solutions after
+each line break. There is no exponential blow up.
+
+* Coda
+
+The above has been inspired by two implementation of pretty printers
+that I've made.  One is a regular pretty printing library, available
+on hackage LINK which is (nearly) a drop-in replacement for the
+print-wl package.
+
+Another is part of the marxup package, which is a haskell-layer on top
+of the latex document-preparation system.
