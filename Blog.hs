@@ -1,7 +1,8 @@
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GADTs, RecordWildCards #-}
 import Data.Monoid
 import Data.Function
 import Data.List
+import Data.Either
 
 data SExpr where
   SExpr :: [SExpr] -> SExpr
@@ -62,8 +63,50 @@ pretty (SExpr xs) = Text "(" <> Align (sep $ map pretty xs) <> Text ")"
 abcd = SExpr $ map (Atom . (:[])) "abcd"
 abcd4 = SExpr [abcd,abcd,abcd,abcd]
 testData = SExpr [Atom "axbxcxd", abcd4] 
-  
-test n = layout n $ pretty testData
+
+type Docs = [(Int,Doc)]
+data Process = Process {curIndent :: Int -- current indentation
+                       ,progress :: Int
+                       ,tokens :: [String] -- tokens produced, in reverse order
+                       ,rest :: Docs  -- rest of the input document to process
+                       }
+measure :: Process -> (Int, Int)
+measure Process{..} = (curIndent, negate progress)
+
+filtering :: [Process] -> [Process]
+filtering (x:y:xs) | progress x >= progress y = filtering (x:xs)
+                   | otherwise = x:filtering (y:xs)
+filtering xs = xs
+
+renderFast :: Int -> Doc -> String
+renderFast w doc = concat $ reverse $ loop [Process 0 0 [] $ [(0,doc)]]
+    where
+      loop ps = case dones of
+        (done:_) -> done
+        [] -> case conts of
+          (_:_) -> loop $ filtering $ sortBy (compare `on` measure) $ conts
+          [] -> ["Panic: overflow"]
+
+        where
+          ps' = concatMap (\Process{..} -> rall progress tokens curIndent rest) ps
+          (dones,conts) = partitionEithers ps'
+
+      rall :: Int -> [String] -> Int -> Docs -> [Either [String] Process]
+      rall p ts k ds0 | k > w = []
+      rall p ts k ds0 = case ds0 of
+         [] ->  [Left ts] -- Done!
+         (i,d):ds -> case d of
+            Nil       -> rall p ts k ds
+            Text s    -> rall (p+1) (s:ts) (k+length s) ds
+            Spacing s -> rall (p  ) (s:ts) (k+length s) ds
+            Line      -> [Right $ Process i p (('\n':replicate i ' '):ts) ds]
+            x :<> y   -> rall p ts k ((i,x):(i,y):ds)
+            Nest j x  -> rall p ts k ((i+j,x):ds)
+            x :<|> y  -> rall p ts k ((i,x):ds) ++ rall p ts k ((i,y):ds)
+            Align x   -> rall p ts k ((k,x):ds)
+
+
+test n = renderFast n $ pretty testData
 main = do
   putStrLn $ test 15
   putStrLn $ test 21

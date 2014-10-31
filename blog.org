@@ -14,7 +14,7 @@ libraries, either:
    adopted (and modified) by Peyton Jones, and was distributed with
    GHC for a long time, making it the /de-facto/ standard pretty
    printer. It is now available on Hackage in the eponymous package
-   ~[[https://hackage.haskell.org/package/pretty][pretty]]~. I believe that this remains the dominant design, perhaps
+   [[https://hackage.haskell.org/package/pretty][pretty]]. I believe that this remains the dominant design, perhaps
    disputed by...
 
 2. The Wadler-Leijen library. In the [[penultimate%20chapter][penultimate chapter]] of *The Fun
@@ -24,15 +24,15 @@ libraries, either:
    specifying his library using equational laws, and derives an
    implementation. Leijen took Wadler's implementation and modified it
    to increase its expressivity (but more on that later). The result
-   is available in the ~[[https://hackage.haskell.org/package/wl-pprint][wl-pprint]]~ package.
+   is available in the _[[https://hackage.haskell.org/package/wl-pprint][wl-pprint]]_ package.
 
 ** Not. Pretty. Enough.
 
-*** Hughes
 As it happens, I am dissatisfied with the outputs produced by either
 libraries. At the risk of appearing ungrateful to the masters, I'll
 spend some effort to back this claim.
 
+*** Hughes
 Let us assume we want to pretty print S-Expressions:
 
 : data SExpr where
@@ -106,7 +106,7 @@ for a pretty-printer do decide whether or not to split the first line
 of a document on the basis of the content of the last." (sec. 7.4 of
 his paper). Therefore, he chooses a greedy algorithm, which tries to
 fit as much as possible on a single line, without regard for what
-comes next. In our example, the algorithm fits ~(axbxcxd ((a~, but
+comes next. In our example, the algorithm fits _(axbxcxd ((a_, but
 then it has committed to a very deep indentation level, which forces a
 less-than-pretty outcome for the remainder of the document.
 
@@ -137,8 +137,8 @@ which appears to do the trick; we get:
 :   (a b c d)
 :   (a b c d))
 
-However, the ~group~ combinator does not quite behave as I'd like.
-What ~group~ does is to allow its argument to be laid out on a single
+However, the _group_ combinator does not quite behave as I'd like.
+What _group_ does is to allow its argument to be laid out on a single
 line, instead of multiple ones. Hence, we can put two elements next to
 each other /only if/ they are flattened. This means that if we typeset
 the same s-expr, but in a slightly wider page, we get the same output:
@@ -170,7 +170,7 @@ At this point, the reader may raise two objections:
   can be saved.
 
 - Objection 2: /Leijen's extension of Wadler's design solves the issue:
-  it provides an ~align~ combinator./
+  it provides an _align_ combinator./
 - Reply 2: Yes, but: it exhibits the same symptoms as Hughes' library.
 
   Aside: In his paper, Wadler proves that his library produces the
@@ -188,14 +188,14 @@ document-description language that we accept.  I'll daringly stand on
 Phil's strong shoulders (himself balancing on John; what a feat), and
 propose the following set of combinators:
 
-- ~empty~:  The empty document
-- ~(<>)~:  concatenation
-- ~line~: insert a new line (unconditionally)
-- ~text~: insert a meaningful piece of text
-- ~nest~: nest the argument
-- ~align~: align the documents in the argument
-- ~(<|>)~: disjunction of layouts
-- ~spacing~: non-meaningful text (spaces or typographical marks)
+- _empty_:  The empty document
+- _(<>)_:  concatenation
+- _line_: insert a new line (unconditionally)
+- _text_: insert a meaningful piece of text
+- _nest_: nest the argument
+- _align_: align the documents in the argument
+- _(<|>)_: disjunction of layouts
+- _spacing_: non-meaningful text (spaces or typographical marks)
 
 which can be implemented as follows:
 
@@ -211,7 +211,7 @@ which can be implemented as follows:
 
 The main pitfall of the above API is that disjunction (<|>) can only
 take arguments which differ in layout. That is, it requires two
-documents with the same ~content~, defined as follows:
+documents with the same _content_, defined as follows:
 
 : contents :: Doc -> [String]
 : contents (Spacing _) = []
@@ -227,6 +227,18 @@ being verified.)
 
 Other pitfalls include that text and spacing may not contain any
 newline, and nesting may not be negative.
+*** Example
+
+Using the above combinators, we can pretty print s-exprs as follows:
+
+: x <+> y = x <> Spacing " " <> y
+: x </> y = x <> Line <> y
+:
+: sep [] = mempty
+: sep xs = foldr1 (<+>) xs :<|> foldr1 (</>) xs
+: pretty (Atom s) = Text s
+: pretty (SExpr xs) = Text "(" <> Align (sep $ map pretty xs) <> Text ")"
+
 ** Semantics
 
 Now that we have our API, we can specify how to render documents.  I
@@ -256,13 +268,13 @@ The evaluation function is then the following.
 : eval (d1 :<|> d2) i c = eval d1 i c ++ eval d2 i c
 
 Given the use of monadic syntax to handle list-non-determinism, the
-interpretation of ~text~, ~spacing~, ~empty~, ~<>~, and even ~<|>~
+interpretation of _text~, ~spacing~, ~empty~, ~<>~, and even ~<|>_
 reserve no particular surprise. The interesting bit is the interplay
-between ~line~, ~nest~ and ~align~.
+between _line~, ~nest~ and ~align_.
 
 The indentation level is implemented by inserting a certain number of
-spaces after moving to the next ~Line~.  ~Nest~-ing is defined by
-increasing the indentation level. ~Align~-ing means setting the
+spaces after moving to the next _Line~.  ~Nest_-ing is defined by
+increasing the indentation level. _Align_-ing means setting the
 indentation level to the current column.
 
 Finally, we can define the prettiest rendering as that which
@@ -294,12 +306,12 @@ iPads(tm) will die before anything can be printed.
 
 Fortunately, there is a way out of this tar-pit. The trick is to
 explore the search space /line by line/. That is, every time we find
-the ~Line~ combinator, we stash the current partial result for later
+the _Line_ combinator, we stash the current partial result for later
 examination. Eventually, all pending states will be stashed. We can
 then /prune out/ useless, dominated states, and resume the search.
 There remains to define when a state is dominated.
 
-For each state ~t~, we define:
+For each state _t_, we define:
 - /i(t)/: the indentation of the next line (remember that we stopped
   at a given line)
 - /p(t)/: the progress inside the document, defined as the number of
@@ -320,11 +332,54 @@ Consequently, if there is a finite number /l/ of indentation levels
 (traditionally /l=80/), then we have only to consider /l/ solutions
 after each line break. There is no exponential blow up.
 
+The code implementing the above idea fits just about in a page:
+
+: type Docs = [(Int,Doc)]
+: data Process = Process {curIndent :: Int -- current indentation
+:                        ,progress :: Int
+:                        ,tokens :: [String] -- tokens produced, in reverse order
+:                        ,rest :: Docs  -- rest of the input document to process
+:                        }
+: measure :: Process -> (Int, Int)
+: measure Process{..} = (curIndent, negate progress)
+: 
+: filtering :: [Process] -> [Process]
+: filtering (x:y:xs) | progress x >= progress y = filtering (x:xs)
+:                    | otherwise = x:filtering (y:xs)
+: filtering xs = xs
+: 
+: renderFast :: Int -> Doc -> String
+: renderFast w doc = concat $ reverse $ loop [Process 0 0 [] $ [(0,doc)]]
+:     where
+:       loop ps = case dones of
+:         (done:_) -> done
+:         [] -> case conts of
+:           (_:_) -> loop $ filtering $ sortBy (compare `on` measure) $ conts
+:           [] -> ["Panic: overflow"]
+:         where
+:           ps' = concatMap (\Process{..} -> rall progress tokens curIndent rest) ps
+:           (dones,conts) = partitionEithers ps'
+: 
+:       rall :: Int -> [String] -> Int -> Docs -> [Either [String] Process]
+:       rall p ts k ds0 | k > w = []
+:       rall p ts k ds0 = case ds0 of
+:          [] ->  [Left ts] -- Done!
+:          (i,d):ds -> case d of
+:             Nil       -> rall p ts k ds
+:             Text s    -> rall (p+1) (s:ts) (k+length s) ds
+:             Spacing s -> rall (p  ) (s:ts) (k+length s) ds
+:             Line      -> [Right $ Process i p (('\n':replicate i ' '):ts) ds]
+:             x :<> y   -> rall p ts k ((i,x):(i,y):ds)
+:             Nest j x  -> rall p ts k ((i+j,x):ds)
+:             x :<|> y  -> rall p ts k ((i,x):ds) ++ rall p ts k ((i,y):ds)
+:             Align x   -> rall p ts k ((k,x):ds)
+
+
 * Coda
 
 The above has been inspired by two implementations of pretty printers
 that I've made.  One is a regular pretty printing library, [[https://hackage.haskell.org/package/pretty-compact][available
-on hackage]] which is (nearly) a drop-in replacement for the ~print-wl~
+on hackage]] which is (nearly) a drop-in replacement for the _print-wl_
 package.
 
 Another is part of the [[https://hackage.haskell.org/package/marxup][marxup]] package, which is a Haskell layer on top
