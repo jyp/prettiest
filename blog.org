@@ -18,7 +18,7 @@ libraries, either:
    disputed by...
 
 2. The Wadler-Leijen library. In the [[penultimate%20chapter][penultimate chapter]] of *The Fun
-   of Progarmming*, Wadler re-constructs a pretty printing library
+   of Programming*, Wadler re-constructs a pretty printing library
    from scratch. Keeping true to Hughes in particular and the general
    functional programming tradition in general, Wadler starts by
    specifying his library using equational laws, and derives an
@@ -101,10 +101,10 @@ tingling... this is not pretty enough. Why can't we get the following?
 :   (a b c d)
 :   (a b c d))
 
-The thing is, Hughes belives that "it would be ureasonably ineffcient
+The thing is, Hughes believes that "it would be unreasonably inefficient
 for a pretty-printer do decide whether or not to split the first line
 of a document on the basis of the content of the last." (sec. 7.4 of
-his paper). Therefore, he choses a greedy algorithm, which tries to
+his paper). Therefore, he chooses a greedy algorithm, which tries to
 fit as much as possible on a single line, without regard for what
 comes next. In our example, the algorithm fits ~(axbxcxd ((a~, but
 then it has committed to a very deep indentation level, which forces a
@@ -114,7 +114,7 @@ less-than-pretty outcome for the remainder of the document.
 
 Wadler's design fares somewhat better. It does not suffer from the
 above problem... /by default/. That is, it lacks the capability to
-express that subdocuments should be vertically aligned ---
+express that sub-documents should be vertically aligned ---
 compositionally.
 
 Let us illustrate. Using Wadler's library, one might specify pretty
@@ -160,7 +160,7 @@ whereas my iThings-saturated eyes crave something more pleasing:
 :           (a b c d)
 :           (a b c d))
 
-At this point, the reader may raise two obections:
+At this point, the reader may raise two objections:
 
 - Objection 1: /All this fuss for ONE LINE?/  
 - Reply 1: Every computer-science academic has once in their lifetime
@@ -209,7 +209,7 @@ which can be implemented as follows:
 :   (:<|>) :: Doc -> Doc -> Doc -- ^ Attn: INVARIANT
 :   Spacing :: String -> Doc
 
-The main pitfall of the above api is that disjunction (<|>) can only
+The main pitfall of the above API is that disjunction (<|>) can only
 take arguments which differ in layout. That is, it requires two
 documents with the same ~content~, defined as follows:
 
@@ -329,3 +329,9 @@ package.
 
 Another is part of the [[https://hackage.haskell.org/package/marxup][marxup]] package, which is a Haskell layer on top
 of the Latex document-preparation system.
+
+#  LocalWords:  Peyton facto Leijen equational Wadler's wl pprint ing
+#  LocalWords:  SExpr Expr expr abcd testData axbxcxd compositionally
+#  LocalWords:  Leijen's Phil's compositional Eval eval monadic fst
+#  LocalWords:  maxWidth renderer minimumBy disjunctions iPads tm iff
+#  LocalWords:  disjuncted marxup
