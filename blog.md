@@ -1,11 +1,10 @@
 % The Prettiest Printer
 % a note by Jean-Philippe Bernardy
 
-
-
-Classic functional programmers have two darling problems: parsing and
-pretty printing. Having turned my attention to parsing before, allow me
-to foray in the (hopefully clear) waters of pretty printing.
+Parsing and pretty printing are perhaps the two most classic problems
+in the functional programming repertoire. I having turned my attention
+to parsing (many times) before. Before I retire, I feel that I should
+to try my hands on pretty printing.
 
 The state of the art.
 =====================
