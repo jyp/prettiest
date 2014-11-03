@@ -1,10 +1,12 @@
 % The Prettiest Printer
-% a note by Jean-Philippe Bernardy
+% Jean-Philippe Bernardy
 
-Parsing and pretty printing are perhaps the two most classic problems
-in the functional programming repertoire. I having turned my attention
-to parsing (many times) before. Before I retire, I feel that I should
-to try my hands on pretty printing.
+Popular Haskell pretty printers have given me less-than-optimal
+results.  This is especially disappointing, as they seem to be the
+epitome of functional programs, blessed with the
+correct-by-construction methodology of program development.  In this
+note I review why I find the current solutions suboptimal, and propose
+a satisfactory alternative.
 
 The state of the art.
 =====================
@@ -222,15 +224,15 @@ Phil's strong shoulders (himself balancing on John; what a feat), and
 propose the following set of combinators:
 
 -   `empty`: The empty document
--   `(\<\>)`: concatenation
+-   `(<>)`: concatenation
 -   `line`: insert a new line (unconditionally)
 -   `text`: insert a meaningful piece of text
 -   `nest`: nest the argument
 -   `align`: align the documents in the argument
--   `(\<|\>)`: disjunction of layouts
+-   `(<|>)`: disjunction of layouts
 -   `spacing`: non-meaningful text (spaces or typographical marks)
 
-which can be implemented as follows:
+We can capture the above in a data type, as follows:
 
 ``` {.example}
 data Doc where
@@ -244,9 +246,13 @@ data Doc where
   Spacing :: String -> Doc
 ```
 
-The main pitfall of the above API is that disjunction (\<|\>) can only
-take arguments which differ in layout. That is, it requires the two
-documents with the same `content`, defined as follows:
+Compared to Wadler (and *a-fortiori* Hughes) the above API is very
+liberal in the layouts that it can express. Indeed, the user can use a
+fully-general disjunction operator `(<|>)`, which accepts arbitrary
+layouts as arguments. A downside is that it leaves the user
+responsible to give two documents that differ only in layout: they
+have the same contents (as defined below).
+
 
 ``` {.example}
 contents :: Doc -> [String]
@@ -262,7 +268,7 @@ contents (x :<|> y) = contents x
 (Note that the above function recursively relies on the invariant being
 verified.)
 
-Other pitfalls include that text and spacing may not contain any
+Other invariants include that text and spacing may not contain any
 newline, and nesting may not be negative.
 
 ### Example
@@ -372,7 +378,7 @@ For each state *t*, we define:
     the same contents, so it is meaningful to compare *p(t)* and *p(u)*
     for every pair of processes *(t,u)*.
 
-Definition: *t* dominates *u* iff. *i(t) \< i(u)* and *p(t) \>= p(u)*.
+Definition: *t* dominates *u* iff. *i(t) < i(u)* and *p(t) >= p(u)*.
 
 Indeed, if *u* is at a higher indentation level, it has much less space
 to print the rest of the document (remember that indentation is always
@@ -433,13 +439,15 @@ Coda
 ====
 
 The above has been inspired by two implementations of pretty printers
-that I've made. One is a regular pretty printing library, [available on
-hackage](https://hackage.haskell.org/package/pretty-compact) which is
-(nearly) a drop-in replacement for the `print-wl` package.
+that I've made. The first one is a regular pretty printing library,
+[available on hackage](https://hackage.haskell.org/package/pretty-compact)
+which is a drop-in replacement for the `print-wl` package, except for
+a few unsafe functions which I've hidden.
 
-Another is part of the
+The second one is part of the
 [marxup](https://hackage.haskell.org/package/marxup) package, which is a
-Haskell layer on top of the Latex document-preparation system.
+Haskell layer on top of the Latex document-preparation system. To see an
+example of a paper typeset with this technology, follow [this link](http://www.cse.chalmers.se/~bernardy/controlled-array-fusion.pdf).
 
 Happy pretty printing!
 
