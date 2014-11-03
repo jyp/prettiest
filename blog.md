@@ -5,7 +5,7 @@ Popular Haskell pretty printers have given me less-than-optimal
 results.  This is especially disappointing, as they seem to be the
 epitome of functional programs, blessed with the
 correct-by-construction methodology of program development.  In this
-note I review why I find the current solutions suboptimal, and propose
+note I review why I find the current solutions sub-optimal, and propose
 a satisfactory alternative.
 
 The state of the art.
@@ -182,7 +182,7 @@ the same s-expr, but in a slightly wider page, we get the same output:
   (a b c d))
 ```
 
-whereas my iThings-saturated eyes crave something more pleasing:
+whereas my I crave something more pleasing to the eye:
 
 ``` {.example}
 #####################
@@ -209,8 +209,7 @@ At this point, the reader may raise two objections:
     Aside: In his paper, Wadler proves that his library produces the
     shortest output. But, Leijen's extension breaks this invariant. This
     makes me suspect that the extension was done on the implementation
-    directly rather than on the design. (If there were a functional
-    programming inquisition, they should knock on Leijen's door.)
+    directly rather than on the design.
 
 In search of the prettiest output
 =================================
@@ -219,9 +218,8 @@ API
 ---
 
 Before discussing possible algorithms, we need to chose wisely the the
-document-description language that we accept. I'll daringly stand on
-Phil's strong shoulders (himself balancing on John; what a feat), and
-propose the following set of combinators:
+document-description language that we accept. Daringly standing on
+Phil's strong shoulders, we propose the following set of combinators:
 
 -   `empty`: The empty document
 -   `(<>)`: concatenation
@@ -247,11 +245,11 @@ data Doc where
 ```
 
 Compared to Wadler (and *a-fortiori* Hughes) the above API is very
-liberal in the layouts that it can express. Indeed, the user can use a
-fully-general disjunction operator `(<|>)`, which accepts arbitrary
-layouts as arguments. A downside is that it leaves the user
-responsible to give two documents that differ only in layout: they
-have the same contents (as defined below).
+liberal in the typesetting strategies that it can express. Indeed, the
+user can use a fully-general disjunction operator `(<|>)`, which
+accepts arbitrary documents as arguments. A downside is that it leaves
+the user responsible to give two documents that differ only in layout:
+they must have the same `contents`.
 
 
 ``` {.example}
@@ -264,8 +262,7 @@ contents (Text x) = [x]
 contents (Align x) = contents x
 contents (x :<|> y) = contents x
 ```
-
-(Note that the above function recursively relies on the invariant being
+(Note that the `contents` function relies on the invariant being
 verified.)
 
 Other invariants include that text and spacing may not contain any
@@ -287,15 +284,20 @@ pretty (Atom s) = Text s
 pretty (SExpr xs) = Text "(" <> Align (sep $ map pretty xs) <> Text ")"
 ```
 
+The `sep` combinator now precisely expresses what I was after at the
+beginning: either all the elements are glued horizontally, or they are
+aligned vertically.
+
 Semantics
 ---------
 
 Now that we have our API, we can specify how to render documents. I
-could start by stating a few laws on the API (in particular all laws
-stated by Wadler should hold) but I'll specify it directly using a
-compositional interpretation. The interpretation of a document is a
-non-deterministic function from the current indentation level and
-current column to a text and a final column.
+could do as Hughes or Wadler and start by stating a few laws on the
+API (in particular all laws stated by Wadler should hold). Instead
+I'll give the semantics it directly, using a compositional
+interpretation. I will interpret documents as a non-deterministic
+function from the current indentation level and current column to a
+text and a final column.
 
 Using lists for non-determinism, we have:
 
@@ -326,18 +328,20 @@ reserve no particular surprise. The interesting bit is the interplay
 between `line`, `nest` and `align`.
 
 The indentation level is implemented by inserting a certain number of
-spaces after moving to the next `Line`. `Nest`-ing is defined by
-increasing the indentation level. `Align`-ing means setting the
-indentation level to the current column.
+spaces after moving to the next `Line` (which also resets the current
+column). `Nest`-ing is defined by increasing the indentation
+level. `Align`-ing means setting the indentation level to the current
+column. (Exercise: verify that, at all times, *c >= i*.)
 
 Finally, we can define the prettiest rendering as that which
 
 -   fits the page and
 -   uses the smallest amount of lines
 
-(This is not quite the full truth: sometimes no layout fits the page,
-and we want to pick that with the least overflow. We'll leave such
-details to the implementer.)
+(This is not quite the ideal definition: sometimes no layout fits the
+page, and we want to pick that with the least overflow. But we'll
+leave such details to the implementer and stick to the simpler
+definition given above.)
 
 Fitting the page means that the line width is less than the page width:
 
@@ -367,16 +371,16 @@ the search space *line by line*. That is, every time we find the
 `Line` combinator, we stash the current partial result for later
 examination. Eventually, all pending states will be stashed. We can then
 *prune out* useless, dominated states, and resume the search. There
-remains to define when a state is dominated.
+remains to define when a state is dominated:
 
 For each state *t*, we define:
 
 -   *i(t)*: the indentation of the next line (remember that we stopped
-    at a given line)
+    at a given newline)
 -   *p(t)*: the progress inside the document, defined as the number of
     tokens printed so far. Remember that disjuncted documents must have
     the same contents, so it is meaningful to compare *p(t)* and *p(u)*
-    for every pair of processes *(t,u)*.
+    for every pair of states *(t,u)*.
 
 Definition: *t* dominates *u* iff. *i(t) < i(u)* and *p(t) >= p(u)*.
 
@@ -391,7 +395,7 @@ Consequently, if there is a finite number *l* of indentation levels
 (traditionally *l=80*), then we have only to consider *l* solutions
 after each line break. There is no exponential blow up.
 
-The code implementing the above idea fits just about on a page:
+For completeness, here is the code implementing the above idea.
 
 ``` {.example}
 type Docs = [(Int,Doc)]
@@ -415,7 +419,7 @@ renderFast w doc = concat $ reverse $ loop [Process 0 0 [] $ [(0,doc)]]
         (done:_) -> done
         [] -> case conts of
           (_:_) -> loop $ filtering $ sortBy (compare `on` measure) $ conts
-          [] -> ["Panic: overflow"]
+          [] -> error "overflow"
         where
           ps' = concatMap (\Process{..} -> rall progress tokens curIndent rest) ps
           (dones,conts) = partitionEithers ps'
@@ -442,13 +446,18 @@ The above has been inspired by two implementations of pretty printers
 that I've made. The first one is a regular pretty printing library,
 [available on hackage](https://hackage.haskell.org/package/pretty-compact)
 which is a drop-in replacement for the `print-wl` package, except for
-a few unsafe functions which I've hidden.
+a few unsafe functions which I've hidden. It implements exaclty the above idea,
+but handles overflow satisfactorily.
 
 The second one is part of the
-[marxup](https://hackage.haskell.org/package/marxup) package, which is a
-Haskell layer on top of the Latex document-preparation system. To see an
-example of a paper typeset with this technology, follow [this link](http://www.cse.chalmers.se/~bernardy/controlled-array-fusion.pdf).
+[marxup](https://hackage.haskell.org/package/marxup) package, which is
+a Haskell layer on top of the Latex document-preparation system. To
+see an example of a paper typeset with this technology, follow
+[this link](http://www.cse.chalmers.se/~bernardy/controlled-array-fusion.pdf).
 
 Happy pretty printing!
 
 
+
+<!--  LocalWords:  Peyton invariants
+ -->
