@@ -56,9 +56,9 @@ x <+> y = x <> Spacing " " <> y
 x </> y = x <> Line <> y
 
 sep [] = mempty
-sep xs = foldr1 (<+>) xs :<|> foldr1 (</>) xs
+sep xs = foldr1 (<+>) xs :<|> Align (foldr1 (</>) xs)
 pretty (Atom s) = Text s
-pretty (SExpr xs) = Text "(" <> Align (sep $ map pretty xs) <> Text ")"
+pretty (SExpr xs) = Text "(" <> (sep $ map pretty xs) <> Text ")"
 
 abcd = SExpr $ map (Atom . (:[])) "abcd"
 abcd4 = SExpr [abcd,abcd,abcd,abcd]
@@ -77,6 +77,19 @@ filtering :: [Process] -> [Process]
 filtering (x:y:xs) | progress x >= progress y = filtering (x:xs)
                    | otherwise = x:filtering (y:xs)
 filtering xs = xs
+
+
+--------------
+-- Derivation of the efficient renderer. (sketch)
+
+-- 1. Reify the evaluation process
+
+-- 1.a CPS
+-- 1.b Defunctionalise
+
+-- 2. Schedule the processing line by line
+
+-- 3. Prune the dominated processes
 
 renderFast :: Int -> Doc -> String
 renderFast w doc = concat $ reverse $ loop [Process 0 0 [] $ [(0,doc)]]
@@ -110,3 +123,5 @@ test n = renderFast n $ pretty testData
 main = do
   putStrLn $ test 15
   putStrLn $ test 21
+
+
