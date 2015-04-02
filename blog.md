@@ -19,8 +19,8 @@ libraries, either:
     *The Design of a Pretty-printing Library*. It has then been
     adopted (and modified) by Peyton Jones, and was distributed with GHC
     for a long time, making it the *de-facto* standard pretty printer.
-    It is now available on Hackage in the eponymous package
-    [pretty](https://hackage.haskell.org/package/pretty). I believe that
+    It is now available on Hackage in the
+    [pretty](https://hackage.haskell.org/package/pretty) package. I believe that
     this remains the dominant design, perhaps disputed by...
 
 2.  The Wadler-Leijen library. In the penultimate chapter of *The Fun
@@ -30,7 +30,7 @@ libraries, either:
     specifying his library using equational laws, and derives an
     implementation. Leijen took Wadler's implementation and modified it
     to increase its expressivity (but more on that later). The result is
-    available in the
+    available in the eponymous
     [wl-pprint](https://hackage.haskell.org/package/wl-pprint)
     package.
 
@@ -154,7 +154,7 @@ pretty (SExpr xs) = group $ "(" <> nest 1 (sep $ map pretty xs) <> ")"
 pretty (Atom x) = text x
 ```
 
-which appears to do the trick; we get:
+which appears to do the trick. Indeed, we get:
 
 ``` {.example}
 ###############
@@ -182,7 +182,7 @@ the same s-expr, but in a slightly wider page, we get the same output:
   (a b c d))
 ```
 
-whereas my I crave something more pleasing to the eye:
+whereas I crave something more pleasing to the eye:
 
 ``` {.example}
 #####################
@@ -211,15 +211,15 @@ At this point, the reader may raise two objections:
     makes me suspect that the extension was done on the implementation
     directly rather than on the design.
 
-In search of the prettiest output
-=================================
+The search for the prettiest output
+===================================
 
 API
 ---
 
 Before discussing possible algorithms, we need to chose wisely the the
 document-description language that we accept. Daringly standing on
-Phil's strong shoulders, we propose the following set of combinators:
+Phil's strong shoulders, I propose the following set of combinators:
 
 -   `empty`: The empty document
 -   `(<>)`: concatenation
@@ -230,7 +230,7 @@ Phil's strong shoulders, we propose the following set of combinators:
 -   `(<|>)`: disjunction of layouts
 -   `spacing`: non-meaningful text (spaces or typographical marks)
 
-We can capture the above in a data type, as follows:
+We can represent the above API in a data type, as follows:
 
 ``` {.example}
 data Doc where
@@ -279,9 +279,9 @@ x </> y = x <> Line <> y
 
 ``` {.example}
 sep [] = mempty
-sep xs = foldr1 (<+>) xs :<|> foldr1 (</>) xs
+sep xs = foldr1 (<+>) xs :<|> Align (foldr1 (</>) xs)
 pretty (Atom s) = Text s
-pretty (SExpr xs) = Text "(" <> Align (sep $ map pretty xs) <> Text ")"
+pretty (SExpr xs) = Text "(" <> (sep $ map pretty xs) <> Text ")"
 ```
 
 The `sep` combinator now precisely expresses what I was after at the
@@ -291,24 +291,25 @@ aligned vertically.
 Semantics
 ---------
 
-Now that we have our API, we can specify how to render documents. I
-could do as Hughes or Wadler and start by stating a few laws on the
-API (in particular all laws stated by Wadler should hold). Instead
-I'll give the semantics it directly, using a compositional
-interpretation. I will interpret documents as a non-deterministic
-function from the current indentation level and current column to a
-text and a final column.
+We have our API and an intuition of what it means. Let us make the
+intuition formal, by specifying how to render documents. I could do as
+Hughes or Wadler and start by stating a few laws on the API (in
+particular all laws stated by Wadler should hold). Instead I'll give
+the semantics directly, using a compositional interpretation. I will
+interpret documents as a non-deterministic function from the current
+indentation level (1st argument) and current column (2nd argument) to
+a text and a final column.
 
 Using lists for non-determinism, we have:
 
 ``` {.example}
-type Eval = Int -> Int -> [(String,Int)]
+type Semantics = Int -> Int -> [(String,Int)]
 ```
 
-The evaluation function is then the following.
+The interpretation function is then the following.
 
 ``` {.example}
-eval :: Doc -> Eval
+eval :: Doc -> Semantics
 eval (Text s) i c = return (s, c + length s)
 eval (Spacing s) i c = return (s, c + length s)
 eval Nil i c = return ("",c)
@@ -384,16 +385,16 @@ For each state *t*, we define:
 
 Definition: *t* dominates *u* iff. *i(t) < i(u)* and *p(t) >= p(u)*.
 
-Indeed, if *u* is at a higher indentation level, it has much less space
+Indeed, if *u* is at a higher indentation level, it has less space
 to print the rest of the document (remember that indentation is always
 positive). Therefore, if it is also late in the production of tokens,
 there is no hope for *u* to catch up with *t*. (The proof of this fact
-may come to an academic journal in the future. And it certainly does not
-fit in the margin.)
+does not
+fit in the margin[^1].)
 
 Consequently, if there is a finite number *l* of indentation levels
-(traditionally *l=80*), then we have only to consider *l* solutions
-after each line break. There is no exponential blow up.
+(traditionally *l=79*), then we have only to consider at worst *l*
+solutions after each line break. There is no exponential blow up.
 
 For completeness, here is the code implementing the above idea.
 
@@ -457,7 +458,7 @@ see an example of a paper typeset with this technology, follow
 
 Happy pretty printing!
 
-
+[^1]: Indeed, there is a missing invariant relating spaces and lines that I have not even discussed.
 
 <!--  LocalWords:  Peyton invariants
  -->
