@@ -17,7 +17,10 @@ data Doc where
   Nest :: Int -> Doc -> Doc
   Align :: Doc -> Doc
   (:<|>) :: Doc -> Doc -> Doc -- ^ Attn: INVARIANT
-  Spacing :: String -> Doc 
+  Spacing :: String -> Doc
+
+-- Invariants:
+-- in a <|> b, contents a == contents b
 
 instance Monoid Doc where
   mempty = Nil
@@ -46,6 +49,11 @@ eval (d1 :<> d2) i c = do
   (t2,c2) <- eval d2 i c1
   return (t1 ++ t2, c2)
 eval (d1 :<|> d2) i c = eval d1 i c ++ eval d2 i c
+
+type Measure = Int -> Int -> (Int,Int)
+
+docMeasure :: Doc -> Measure
+docMeasure d i c = minimum [(height s, c) | (s,c) <- eval d i c]
 
 maxWidth = maximum . map length . lines
 fits w s = maxWidth s <= w
@@ -90,6 +98,15 @@ filtering xs = xs
 -- 2. Schedule the processing line by line
 
 -- 3. Prune the dominated processes
+-- Why can we do this?
+
+-- We can verify that docMeasure is monotonous in the indentation level:
+
+-- ∀d:Doc, ∀c:Column, ∀(i,j : Level), if i > j then docMeasure d i c > docMeasure d j c
+-- Proof.
+-- By ind. on doc.
+-- Disj case: The min. of monotonous functions is monotonous.
+
 
 renderFast :: Int -> Doc -> String
 renderFast w doc = concat $ reverse $ loop [Process 0 0 [] $ [(0,doc)]]
