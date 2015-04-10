@@ -68,6 +68,9 @@ sep xs = foldr1 (<+>) xs :<|> Align (foldr1 (</>) xs)
 pretty (Atom s) = Text s
 pretty (SExpr xs) = Text "(" <> (sep $ map pretty xs) <> Text ")"
 
+-- prettyCase xs = Text "case" <+>
+--       (foldr1 (<+>) xs :<|> Align Nest ) 
+
 abcd = SExpr $ map (Atom . (:[])) "abcd"
 abcd4 = SExpr [abcd,abcd,abcd,abcd]
 testData = SExpr [Atom "axbxcxd", abcd4] 
