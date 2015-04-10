@@ -85,14 +85,16 @@ instance Show Substitution where
 
 data M = M {mcond :: Condition,
             mlines :: Int,
-            msubst :: Substitution}
-         deriving (Eq)
+            msubst :: Substitution,
+            mtext :: Int -> Int -> (Int,String)}
 instance Show M where
-  show (M a b c) = show (a,b,c)
+  show (M a b c _) = show (a,b,c)
+instance Eq M where
+  M c1 l1 s1 _ == M c2 l2 s2 _ = c1 == c2 && l1 == l2 && s1 == s2
 instance Ord M where
-  M c1 l1 s1 <= M c2 l2 s2 = c1 <= c2 && l1 <= l2 && s1 <= s2
+  M c1 l1 s1 _ <= M c2 l2 s2 _ = c1 <= c2 && l1 <= l2 && s1 <= s2
 
-newtype Measure = Measure [M] deriving Show
+newtype Measure = Measure {fromMeasure :: [M] } deriving Show
 
 instance Num Expr where
   fromInteger x = Expr (fromInteger x) $ \_ -> 0
@@ -182,24 +184,26 @@ merge (m@x:xs) (n@y:ys)
 mergeAll [] = []
 mergeAll (x:xs) = merge x $ mergeAll xs
 
-best = nubBy (<=)
+best = pareto
 -- best = nubBy (\x y -> not (x <= y))
 -- best = id
 
-text s = Measure [M (curCol + len s .<. globalWidth) 0 (Incr (length s))]
-spacing s = Measure [M true 0 (Incr (length s))]
-align (Measure d) = Measure [M (onCol c) n (s' s) | M c n s <- d]
+text s = Measure [M (curCol + len s .<. globalWidth) 0 (Incr (length s)) $ \_ c -> (c + length s,s)]
+spacing s = Measure [M true 0 (Incr (length s)) $ \_ c -> (c+length s,s)]
+align (Measure d) = Measure [M (onCol c) n (s' s) (\i c -> t c c) | M c n s t <- d]
   where s' (Reset k) = Incr k
         s' (Incr k) = Incr k
         onCol (Cond lvl col) = Cond UnBound (lvl <> col)
-nil = Measure [M true 0 (Incr 0)]
-line = Measure [M true 1 (Reset 0)]
+nil = Measure [M true 0 (Incr 0) $ \_ c -> (c,"")]
+line = Measure [M true 1 (Reset 0) $ \i _ -> (i,"\n" ++ replicate i ' ')]
 Measure d1 .<> Measure d2 = Measure $ best $ mergeAll ms'
-  where ms' = [[M c' (n1+n2)  (s2 `after` s1)
-               |M c1 n1 s1 <- d1,
+  where ms' = [[M c' (n1+n2)  (s2 `after` s1) $ \i c -> let (col',x') = t1 i c
+                                                            (c'',x'') = t2 i col'
+                                                        in (c'',x'++x'')
+               |M c1 n1 s1 t1 <- d1,
                 let c' = c1 /\ apply s1 c2,
                 feasible c']
-              | M c2 n2 s2 <- d2]
+              | M c2 n2 s2 t2 <- d2]
 
 Measure d1 .<|> Measure d2 = Measure $best $ ( d1) ++ ( d2)
 
@@ -229,3 +233,13 @@ abcd = SExpr $ map (Atom . (:[])) "abcd"
 abcd4 = SExpr [abcd,abcd,abcd,abcd]
 testData = SExpr [Atom "axbxcxd", abcd4] 
 testData2 = SExpr (replicate 10 testData)
+
+
+pareto :: Ord a => [a] -> [a]
+pareto = pareto' []
+
+pareto' :: Ord a => [a] -> [a] -> [a]
+pareto' acc [] = acc
+pareto' acc (x:xs) = if any (<= x) acc
+                        then pareto' acc xs
+                        else pareto' (x:filter (\y -> not (x <= y)) acc) xs
