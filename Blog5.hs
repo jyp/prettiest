@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs, RecordWildCards, ScopedTypeVariables #-}
+{-# LANGUAGE GADTs, RecordWildCards, ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances, FlexibleContexts #-}
 
 module Blog5 where
 
@@ -8,37 +8,16 @@ import Data.List
 import Data.Either
 import Control.Applicative
 
-data Doc where
-  Line :: Doc
-  Nil :: Doc
-  (:<>) :: Doc -> Doc -> Doc
-  Text :: String -> Doc
-  Nest :: Int -> Doc -> Doc
-  Align :: Doc -> Doc
-  (:<|>) :: Doc -> Doc -> Doc
-  Spacing :: String -> Doc
+type Doc = Measure
 
-instance Monoid Doc where
-  mempty = Nil
-  mappend = (:<>)
+instance Monoid Measure where
+  mempty = nil
+  mappend = (.<>)
 
 type Eval = Int -> Int -> [(String,Int)]
 
-eval :: Doc -> Eval
-eval (Text s) _ c = return (s, c + length s)
-eval (Spacing s) i c = return (s, c + length s)
-eval Nil i c = return ("",c)
-eval (Align d) i c = eval d c c
-eval (Nest j d) i c = eval d (min c (i+j)) c
-eval Line i c = return ('\n' : replicate i ' ', i)
-eval (d1 :<> d2) i c = do
-  (t1,c1) <- eval d1 i c
-  (t2,c2) <- eval d2 i c1
-  return (t1 ++ t2, c2)
-eval (d1 :<|> d2) i c = eval d1 i c ++ eval d2 i c
-
 globalWidth :: Expr
-globalWidth = 30
+globalWidth = 80
 
 data Var = Level | Delta
   deriving (Eq, Show)
@@ -113,7 +92,7 @@ instance Show M where
 instance Ord M where
   M c1 l1 s1 <= M c2 l2 s2 = c1 <= c2 && l1 <= l2 && s1 <= s2
 
-type Measure = [M]
+newtype Measure = Measure [M] deriving Show
 
 instance Num Expr where
   fromInteger x = Expr (fromInteger x) $ \_ -> 0
@@ -195,12 +174,10 @@ instance Feasible Condition where
 
 merge [] xs = xs
 merge xs [] = xs
-merge (x@m:xs) (y@n:ys) | m < n = x:merge xs (y:ys)
-                        | m == n = x:y:merge xs ys
-                        | m > n = y:merge (x:xs) ys
-
-uniq :: Eq a => [a] -> [a]
-uniq = map head . group
+merge (m@x:xs) (n@y:ys)
+  | m < n = x:merge xs (y:ys)
+  | m == n = x:y:merge xs ys
+  | m > n = y:merge (x:xs) ys
 
 mergeAll [] = []
 mergeAll (x:xs) = merge x $ mergeAll xs
@@ -209,44 +186,44 @@ best = nubBy (<=)
 -- best = nubBy (\x y -> not (x <= y))
 -- best = id
 
-measure :: Doc -> Measure
-measure (Text s) = [M (curCol + len s .<. globalWidth) 0 (Incr (length s))]
-measure (Spacing s) = [M true 0 (Incr (length s))]
-measure (Align d) = [M (onCol c) n (s' s) | M c n s <- measure d]
+text s = Measure [M (curCol + len s .<. globalWidth) 0 (Incr (length s))]
+spacing s = Measure [M true 0 (Incr (length s))]
+align (Measure d) = Measure [M (onCol c) n (s' s) | M c n s <- d]
   where s' (Reset k) = Incr k
         s' (Incr k) = Incr k
         onCol (Cond lvl col) = Cond UnBound (lvl <> col)
-
-measure Line = [M true 1 (Reset 0)] where
-measure (d1 :<> d2) = best $ mergeAll ms'
+nil = Measure [M true 0 (Incr 0)]
+line = Measure [M true 1 (Reset 0)]
+Measure d1 .<> Measure d2 = Measure $ best $ mergeAll ms'
   where ms' = [[M c' (n1+n2)  (s2 `after` s1)
-               |M c1 n1 s1 <- measure d1,
+               |M c1 n1 s1 <- d1,
                 let c' = c1 /\ apply s1 c2,
                 feasible c']
-              | M c2 n2 s2 <- measure d2]
+              | M c2 n2 s2 <- d2]
 
-measure (d1 :<|> d2) = best $ (measure d1) ++ (measure d2)
+Measure d1 .<|> Measure d2 = Measure $best $ ( d1) ++ ( d2)
 
 
-header = Text "case x of"
-example = header <> Align body
-body = Text "abcd" <> Line <> Text "efg"
+header = text "case x of"
+example = header <> align body
+body = text "abcd" <> line <> text "efg"
 
 main :: IO ()
-main = print $ measure $ pretty $ testData
+main = print $  pretty $ testData
 
 
 data SExpr where
   SExpr :: [SExpr] -> SExpr
   Atom :: String -> SExpr
  deriving Show
-x <+> y = x <> Spacing " " <> y
-x </> y = x <> Line <> y
+x <+> y = x <> spacing " " <> y
+x </> y = x <> line <> y
 
+sep :: [Doc] -> Doc
 sep [] = mempty
-sep xs = foldr1 (<+>) xs :<|> Align (foldr1 (</>) xs)
-pretty (Atom s) = Text s
-pretty (SExpr xs) = Text "(" <> (sep $ map pretty xs) <> Text ")"
+sep xs = foldr1 (<+>) xs .<|> align (foldr1 (</>) xs)
+pretty (Atom s) = text s
+pretty (SExpr xs) = text "(" <> (sep $ map pretty xs) <> text ")"
 
 abcd = SExpr $ map (Atom . (:[])) "abcd"
 abcd4 = SExpr [abcd,abcd,abcd,abcd]
