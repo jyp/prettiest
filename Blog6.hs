@@ -29,29 +29,34 @@ type Eval = Int -> Int -> [M]
 tab ::  Eval -> Measure
 tab f = array ((0,0),(40,40)) [((r1,rs),f r1 rs) | r1 <- [0..40], rs <- [0..40]]
 
+d ? (r1,rs) | r1 > 40 = []
+            | rs > 40 = []
+            | r1 < 0 = []
+            | rs < 0 = []
+            | otherwise = d!(r1,rs)
+
 text s = tab $ \r1 rs -> [M 0 (r1 - length s) | length s <= r1]
 spacing s = tab $ \r1 rs -> [M 0 (r1 - length s)]
 align :: Doc -> Doc
-align d = tab $ \r1 rs -> d!(r1,r1)
+align d = tab $ \r1 rs -> d?(r1,r1)
 nil = tab $ \r1 rs -> [M 0 r1]
 line = tab $ \r1 rs -> [M 1 rs]
 
 d1 .<> d2 = tab $ \r1 rs -> pareto
              [M (n1+n2) r1''
-             |M n1 r1' <- d1!(r1,rs),
-              M n2 r1'' <- d2!(r1',rs)]
+             |M n1 r1' <- d1?(r1,rs),
+              M n2 r1'' <- d2?(r1',rs)]
 
-d1 .<|> d2 = tab $ \r1 rs -> pareto $ (d1!(r1,rs)) ++ (d2!(r1,rs))
+d1 .<|> d2 = tab $ \r1 rs -> pareto $ (d1?(r1,rs)) ++ (d2?(r1,rs))
 
 
 header = text "case x of"
 example = header <> align body
 body = text "abcd" <> line <> text "efg"
 
-tst x = x!(40,40)
+tst x = x? (40,40)
 main :: IO ()
-main = print $ (pretty $ testData)!(40,40)
-
+main = print $ (pretty $ testData2)?(40,40)
 
 data SExpr where
   SExpr :: [SExpr] -> SExpr

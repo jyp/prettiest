@@ -17,7 +17,7 @@ instance Monoid Measure where
 type Eval = Int -> Int -> [(String,Int)]
 
 globalWidth :: Expr
-globalWidth = 80
+globalWidth = 40
 
 data Var = Level | Delta
   deriving (Eq, Show)
@@ -213,7 +213,7 @@ example = header <> align body
 body = text "abcd" <> line <> text "efg"
 
 main :: IO ()
-main = print $  pretty $ testData
+main = print $  pretty $ testData2
 
 
 data SExpr where
