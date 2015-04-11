@@ -43,7 +43,7 @@ data Bound x = UnBound | Bound x
 instance Ord x => Ord (Bound x) where
   UnBound <= _ = True
   _ <= UnBound = False
-  Bound x <= Bound y = y >= x
+  Bound x <= Bound y = y <= x
 
 instance Ord x => Monoid (Bound x) where
   UnBound `mappend` x = x
@@ -65,7 +65,7 @@ instance Ord Condition where
 
 showBound :: Show a => String -> Bound a -> [String]
 showBound v UnBound = []
-showBound v (Bound b) = [v ++ " < " ++ show b]
+showBound v (Bound b) = [v ++ " <= " ++ show b]
 
 instance Show Condition where
    show (Cond UnBound UnBound) = "true"
@@ -116,8 +116,8 @@ mkCond e@(Expr k cs) = case map cs [Level,Delta] of
   [0,0] -> if k < 0 then false else true
   _ -> error $ "condition: " ++ show e
 
-(.<.) :: Expr -> Expr -> Condition
-x .<. y = mkCond (x - y)
+(.<=.) :: Expr -> Expr -> Condition
+x .<=. y = mkCond (x - y)
 
 curCol :: Expr
 curCol = level + delta
@@ -128,7 +128,7 @@ literal x = Expr x (\_ -> 0)
 len :: forall a. [a] -> Expr
 len = literal . length
 
-infix 0 .<.
+infix 0 .<=.
 
 class Subst x where
   apply :: Substitution -> x -> x
@@ -144,12 +144,12 @@ instance Subst Expr where
   apply s (Expr k cs) = literal k + (cs Level .* level) + (cs Delta .* dExpr s)
 
 instance Subst Condition where
-  apply s (Cond lvl col) = (level <. lvl) /\ ((dExpr s + level) <. col)
+  apply s (Cond lvl col) = (level <=. lvl) /\ ((dExpr s + level) <=. col)
 
-(<.) :: Expr -> Bound Int -> Condition
+(<=.) :: Expr -> Bound Int -> Condition
 
-_ <. UnBound = true
-x <. Bound y = x .<. literal y
+_ <=. UnBound = true
+x <=. Bound y = x .<=. literal y
 
 (/\) :: Condition -> Condition -> Condition
 Cond lvl1 col1 /\ Cond lvl2 col2 = Cond (lvl1 <> lvl2) (col1 <> col2)
@@ -188,8 +188,8 @@ best = pareto
 -- best = nubBy (\x y -> not (x <= y))
 -- best = id
 
-text s = Measure [M (curCol + len s .<. globalWidth) 0 (Incr (length s)) $ \_ c -> (c + length s,s)]
-spacing s = Measure [M true 0 (Incr (length s)) $ \_ c -> (c+length s,s)]
+text    s = Measure [M (curCol + len s .<=. globalWidth) 0 (Incr (length s)) $ \_ c -> (c + length s,s)]
+spacing s = Measure [M (curCol + len s .<=. globalWidth) 0 (Incr (length s)) $ \_ c -> (c+length s,s)]
 align (Measure d) = Measure [M (onCol c) n (s' s) (\i c -> t c c) | M c n s t <- d]
   where s' (Reset k) = Incr k
         s' (Incr k) = Incr k
@@ -213,9 +213,14 @@ example = header <> align body
 body = text "abcd" <> line <> text "efg"
 
 main :: IO ()
-main = print $  pretty $ testData2
+main = do
+  putStrLn $ snd $ mtext m 0 0
+  print $ mms
+  where m = minimumBy (compare `on` mlines) mms
+        Measure mms = pretty testData4
 
-
+Measure mms = pretty testData4
+    
 data SExpr where
   SExpr :: [SExpr] -> SExpr
   Atom :: String -> SExpr
@@ -233,6 +238,7 @@ abcd = SExpr $ map (Atom . (:[])) "abcd"
 abcd4 = SExpr [abcd,abcd,abcd,abcd]
 testData = SExpr [Atom "axbxcxd", abcd4] 
 testData2 = SExpr (replicate 10 testData)
+testData4 = SExpr (replicate 10 testData2)
 
 
 pareto :: Ord a => [a] -> [a]
