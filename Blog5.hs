@@ -214,7 +214,7 @@ body = text "abcd" <> line <> text "efg"
 
 main :: IO ()
 main = do
-  putStrLn $ snd $ mtext m 0 0
+  -- putStrLn $ snd $ mtext m 0 0
   print $ mms
   where m = minimumBy (compare `on` mlines) mms
         Measure mms = pretty testData4
