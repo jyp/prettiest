@@ -1,26 +1,25 @@
 {-# LANGUAGE GADTs, RecordWildCards, ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances, FlexibleContexts #-}
 
-module Blog5b where
+module Hughes where
 
 import Data.Monoid
 import Data.Function
 import Data.List
 
+globalWidth = 40
+
 instance Monoid Doc where
   mempty = nil
   mappend = (.<>)
 
-globalWidth = 40
-
-data Var = None | Level | CurCol
+data Var = None | CurCol
   deriving (Eq, Show, Ord)
 data Expr = Expr Int Var deriving Eq
 
 (.+) :: Int -> Expr -> Expr
 k .+ Expr k' v = Expr (k + k') v
 
-level, curCol :: Expr
-level = Expr 0 Level
+curCol :: Expr
 curCol = Expr 0 CurCol
 
 after :: Expr -> Expr -> Expr
@@ -42,62 +41,62 @@ instance Ord x => Monoid (Bound x) where
   Bound x `mappend` Bound y = Bound (min x y)
   mempty = UnBound
 
-data Condition = Cond (Bound Int) (Bound Int) -- level; curCol bound
+data Condition = Cond (Bound Int) -- level; curCol bound
   deriving Eq
 
-cond :: Bound Int -> Bound Int -> Condition
-cond x y = Cond (x <> y) y
-
 true :: Condition
-true = Cond UnBound UnBound
+true = Cond UnBound
 
 feasible :: Condition -> Bool
-feasible (Cond lvl col) = all (>= 0) [x | Bound x <- [lvl,col]]
+feasible (Cond (Bound col)) = col >= 0
+feasible _ = True
 
 apply :: Expr -> Condition -> Condition
-apply newCurCol (Cond lvl col) = (level <=. lvl) /\ (newCurCol <=. col)
+apply newCurCol (Cond col) = (newCurCol <=. col)
 
 infix 0 .<=.
 (.<=.) :: Expr -> Int -> Condition
 (.<=.) (Expr k v) n = case v of
-  CurCol -> cond UnBound (Bound $ n - k)
-  Level -> cond (Bound $ n - k) UnBound
-  None -> if k >= 0 then true else Cond (Bound (-1))(Bound (-1))
+  CurCol -> Cond (Bound $ n - k)
+  None -> if k >= 0 then true else Cond (Bound (-1))
 
 (<=.) :: Expr -> Bound Int -> Condition
 _ <=. UnBound = true
 x <=. Bound y = x .<=. y
 
 (/\) :: Condition -> Condition -> Condition
-Cond lvl1 col1 /\ Cond lvl2 col2 = Cond (lvl1 <> lvl2) (col1 <> col2)
+Cond col1 /\ Cond col2 = Cond (col1 <> col2)
 
 data M = M {mcond :: Condition,
             mlines :: Int,
             mNewCurCol :: Expr,
-            mtext :: Int -> Int -> (Int,String)}
+            mtext :: Int -> (Int,String)}
 
 newtype Doc = Doc {fromDoc :: [M]} deriving Show
 
-text    s = Doc [M (newCurCol .<=. globalWidth) 0 newCurCol $ \_ c -> (c + length s,s)]
+text    s = Doc [M (newCurCol .<=. globalWidth) 0 newCurCol $ \c -> (c + length s,s)]
   where newCurCol = (length s .+ curCol)
 spacing s = text s
-align (Doc d) = Doc [M (onCol c) n (s' s) (\i c -> t c c) | M c n s t <- d]
-  where s' (Expr k v) = Expr k CurCol
-        onCol (Cond lvl col) = Cond UnBound (lvl <> col)
-nest n (Doc d) = Doc [M (adjust c) n s $ \i c -> t (i+n) c | M c n s t <- d]
-  where adjust (Cond lvl col) = (n .+ level <=. lvl) /\ (curCol <=. col)
-nil = Doc [M true 0 curCol $ \_ c -> (c,"")]
-line = Doc [M true 1 level $ \i _ -> (i,"\n" ++ replicate i ' ')]
-Doc d1 .<> Doc d2 = Doc $ pareto $ 
-      [M c' (n1+n2)  (s2 `after` s1) $ \i c -> let (col',x') = t1 i c
-                                                   (c'',x'') = t2 i col'
-                                               in (c'',x'++x'')
+Doc d1 $$ Doc d2 = Doc $ bests $
+      [M (c1 /\ c2) (1+n1+n2) s2 $ \c ->
+        let (_,x') = t1 c
+            (c',x'') = t2 c
+        in (c',x'++"\n"++replicate c ' '++x'')
+       | M c2 n2 s2 t2 <- d2, M c1 n1 _ t1 <- d1]
+nest :: Int -> Doc -> Doc
+nest k (Doc d) = Doc [M (adjust c) n s $ \c -> t (c+n) | M c n s t <- d]
+  where adjust (Cond col) = (k .+ curCol <=. col)
+nil = Doc [M true 0 curCol $ \c -> (c,"")]
+Doc d1 .<> Doc d2 = Doc $ bests $ 
+      [M c' (n1+n2)  (s2 `after` s1) $ \c -> let (col',x') = t1 c
+                                                 (c'',x'') = t2 col'
+                                             in (c'',x'++x'')
        | M c2 n2 s2 t2 <- d2, M c1 n1 s1 t1 <- d1,
          let c' = c1 /\ apply s1 c2,  feasible c']
-Doc d1 .<|> Doc d2 = Doc $ pareto $ d1 ++ d2
+Doc d1 .<|> Doc d2 = Doc $ bests $ d1 ++ d2
 
 instance Ord Condition where
-  Cond l1 c1 <= Cond l2 c2 = l1 <= l2 && c1 <= c2
+  Cond c1 <= Cond c2 = c1 <= c2
 
 instance Ord Expr where
   Expr k1 v1 <= Expr k2 v2 = k1 <= k2 && v1 <= v2
@@ -107,6 +106,18 @@ instance Eq M where
 instance Ord M where
   M c1 l1 s1 _ <= M c2 l2 s2 _ = c1 <= c2 && l1 <= l2 && s1 <= s2
 
+-- bests xs = pareto $ [((mlines,(mcond,(mNewCurCol,()))),x) | x@M{..} <- xs]
+-- class Pareto a where
+--   pareto :: [(a,x)] -> [x]
+
+-- instance Pareto () where
+--   pareto xs = map snd xs
+
+-- instance (Ord a, Pareto b) => Pareto (a,b) where
+--   pareto xs = concatMap re grps
+--     where grps = groupBy ((==) `on` (fst . fst)) $ sortBy (compare `on` (fst . fst)) xs
+--           re grp = pareto [(m,x) | ((_,m),x) <- grp]
+bests = pareto
 pareto :: Ord a => [a] -> [a]
 pareto = pareto' []
 
@@ -131,46 +142,48 @@ instance Show Expr where
       ('-':y') -> x ++ " - " ++ y'
       _ -> x ++ " + " ++ y
     sho None = ""
-    sho Level = "ı"
     sho CurCol = "γ"
 
 
-showBound :: Show a => String -> Bound a -> [String]
-showBound v UnBound = []
-showBound v (Bound b) = [v ++ " <= " ++ show b]
+showBound :: Show a => String -> Bound a -> String
+showBound _ UnBound = ""
+showBound v (Bound b) = v ++ " <= " ++ show b
 
 instance Show Condition where
-   show (Cond UnBound UnBound) = "true"
-   show (Cond i d) | i == d = concat $ showBound "γ" d
-                   | otherwise = intercalate " ∧ " $  [s | (v,b) <- [("ı",i),("γ",d)], s <- showBound v b]
+   show (Cond UnBound) = "true"
+   show (Cond c) = showBound "γ" c
 
 ------------
 -- Examples
 
 
-header = text "case x of"
-example = header <> align body
-body = text "abcd" <> line <> text "efghi"
+header = text "case x of "
+example = header <> body
+body = text "abcd" $$ text "efghi"
 
+
+render1 x = putStrLn $ snd $ mtext x 0
+renderAll (Doc ms)= mapM_ render1 ms
+render x = render1 m
+  where Doc (m:_) = x
 main :: IO ()
 main = do
   -- putStrLn $ snd $ mtext m 0 0
   print $ mms
-  where m = minimumBy (compare `on` mlines) mms
-        Doc mms = pretty testData4
+  where Doc mms = pretty testData4
 
 Doc mms = pretty testData4
-    
+
 data SExpr where
   SExpr :: [SExpr] -> SExpr
   Atom :: String -> SExpr
  deriving Show
-x <+> y = x <> spacing " " <> y
-x </> y = x <> line <> y
+x <+> y = x <> text " " <> y
+x </> y = x $$ y
 
 sep :: [Doc] -> Doc
 sep [] = mempty
-sep xs = foldr1 (<+>) xs .<|> align (foldr1 (</>) xs)
+sep xs = foldr1 (<+>) xs .<|> (foldr1 (</>) xs)
 pretty (Atom s) = text s
 pretty (SExpr xs) = text "(" <> (sep $ map pretty xs) <> text ")"
 
@@ -179,4 +192,30 @@ abcd4 = SExpr [abcd,abcd,abcd,abcd]
 testData = SExpr [Atom "axbxcxd", abcd4] 
 testData2 = SExpr (replicate 10 testData)
 testData4 = SExpr (replicate 10 testData2)
-
+{-
+data Doc where
+  (:<>) :: Doc -> Doc -> Doc
+  (:$$) :: Doc -> Doc -> Doc
+  Text :: String -> Doc
+  Nest :: Int -> Doc -> Doc
+  (:<|>) :: Doc -> Doc -> Doc
+  Nil :: Doc
+  
+instance Monoid Doc where
+  mempty = Nil
+  mappend = (:<>)
+eval :: Doc -> Int -> [(Int,String)]
+eval (Text s) c = [(c',s) | let c' = c+length s, c' <= globalWidth]
+eval (Nest n d) c = eval d (c+n)
+eval (d1 :<> d2) c = do
+  (c',s1) <- eval d1 c
+  (c'',s2) <- eval d2 c'
+  return (c'',s1++s2)
+eval (d1 :$$ d2) c = do
+  (_,s1) <- eval d1 c
+  (c',s2) <- eval d2 c
+  return (c',s1++ "\n"++replicate c ' ' ++s2)
+eval (d1 :<|> d2) c = eval d1 c ++ eval d2 c
+eval Nil c = [(c,"")]
+render d = snd $ minimumBy (compare `on` (length . lines . snd)) (eval d 0)
+-}
