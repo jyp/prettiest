@@ -76,27 +76,33 @@ mergeAllBy _ [] = []
 mergeAllBy f (x:xs) = mergeBy f x (mergeAllBy f xs)
 
 mm :: [[M]] -> [M]
-mm = mergeAllBy (compare `on` \M{..} -> (mcond,mlines,colDiff))
+mm = mergeAllBy (compare `on` \M{..} -> (mlines,mcond,colDiff))
 
-filtering :: [M] -> [M]
-filtering [] = []
-filtering [x] = [x]
-filtering (x:y:xs) | mlines x <= mlines y &&
-                     mcond x <= mcond y &&
-                     colDiff x <= colDiff y = filtering (x:xs)
-                   | otherwise = x : filtering (y:xs)
+instance Eq M where
+  M c1 l1 s1 _ == M c2 l2 s2 _ = c1 == c2 && l1 == l2 && s1 == s2
+instance Ord M where
+  M c1 l1 s1 _ <= M c2 l2 s2 _ = c1 <= c2 && l1 <= l2 && s1 <= s2
 
-bests = filtering . mm
+pareto' :: Ord a => [a] -> [a] -> [a]
+pareto' acc [] = acc
+pareto' acc (x:xs) = if any (<= x) acc
+                        then pareto' acc xs
+                        else pareto' (x:acc) xs
+
+bests = pareto' [] . mm
+-- bests = filtering (const True) . mm
+
+-- -- Alternative filtering.
+filtering :: (M -> Bool) -> [M] -> [M]
+filtering ok [] = []
+filtering ok (x:xs) | ok x = x : filtering (\z -> (colDiff z <= colDiff x || mcond x <= mcond x) && ok z) xs
+                    | otherwise = filtering ok xs
 
 ---------------------
 -- Debug
 
 instance Show M where
   show (M a b c _) = show (a,b,c)
-
-showBound :: Show a => String -> Bound a -> String
-showBound _ UnBound = ""
-showBound v (Bound b) = v ++ " <= " ++ show b
 
 ------------
 -- Examples
