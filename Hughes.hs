@@ -56,9 +56,9 @@ instance Docu Doc where
                        | M c n s t <- d]
   nil = Doc [M UnBound 0 0 $ \c -> (c,"")]
   Doc d1 .<> Doc d2 = Doc $ bests $
-        [[M c' (n1+n2)  (s2 + s1) $ \c -> let (col',x') = t1 c
-                                              (c'',x'') = t2 col'
-                                          in (c'',x'++x'')
+        [[M c' (n1+n2) (s2+s1) $ \c -> let (col',x') = t1 c
+                                           (c'',x'') = t2 col'
+                                       in (c'',x'++x'')
          | M c1 n1 s1 t1 <- d1,let c' = c1 <> (c2 .- s1),  feasible c']
          | M c2 n2 s2 t2 <- d2]
   Doc d1 .<|> Doc d2 = Doc $ bests [d1,d2]
@@ -76,7 +76,7 @@ mergeAllBy _ [] = []
 mergeAllBy f (x:xs) = mergeBy f x (mergeAllBy f xs)
 
 mm :: [[M]] -> [M]
-mm = mergeAllBy (compare `on` \M{..} -> (mlines,mcond,colDiff))
+mm = mergeAllBy (compare `on` \M{..} -> (mcond,mlines,colDiff))
 
 filtering :: [M] -> [M]
 filtering [] = []
@@ -86,17 +86,7 @@ filtering (x:y:xs) | mlines x <= mlines y &&
                      colDiff x <= colDiff y = filtering (x:xs)
                    | otherwise = x : filtering (y:xs)
 
-filt :: M -> [M] -> [M]
-filt x [] = [x]
-filt x (y:xs) | mlines x <= mlines y &&
-                mcond x <= mcond y &&
-                colDiff x <= colDiff y = filt x xs
-              | otherwise = x : filt y xs
-
-filtering' [] = []
-filtering' (x:xs) = filt x xs
-
-bests = filtering' . mm
+bests = filtering . mm
 
 ---------------------
 -- Debug
@@ -138,13 +128,13 @@ data SExpr where
 x <+> y = x .<> text " " .<> y
 x </> y = x $$ y
 
-foldSeq k f [] = k
-foldSeq k f [x] = x
-foldSeq k f xs = foldSeq k f l `f` foldSeq k f r
-  where (l,r) = splitAt (length xs `div` 2) xs
-
 -- foldSeq k f [] = k
--- foldSeq k f xs = foldr1 f xs
+-- foldSeq k f [x] = x
+-- foldSeq k f xs = foldSeq k f l `f` foldSeq k f r
+--   where (l,r) = splitAt (length xs `div` 2) xs
+
+foldSeq k f [] = k
+foldSeq k f xs = foldr1 f xs
 
 
 sep,hcat,vcat :: Docu a => [a] -> a
