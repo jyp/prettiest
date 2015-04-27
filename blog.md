@@ -385,12 +385,15 @@ For each state *t*, we define:
 
 Definition: *t* dominates *u* iff. *i(t) < i(u)* and *p(t) >= p(u)*.
 
-Indeed, if *u* is at a higher indentation level, it has less space
-to print the rest of the document (remember that indentation is always
+Heuristic: If *t* dominates *u*, and *t* is a valid state, then *u*
+does not generate the prettiest output.  The idea is the following: if
+*u* is at a higher indentation level, it has less space to print the
+rest of the document (remember that indentation is always
 positive). Therefore, if it is also late in the production of tokens,
-there is no hope for *u* to catch up with *t*. (The proof of this fact
-does not
-fit in the margin[^1].)
+there is no hope for *u* to catch up with *t*. There are some
+pathological cases where things do not go as I outline above, however
+they are pretty rare: they never occured in the examples that I've
+tried[^1].
 
 Consequently, if there is a finite number *l* of indentation levels
 (traditionally *l=79*), then we have only to consider at worst *l*
@@ -458,7 +461,8 @@ see an example of a paper typeset with this technology, follow
 
 Happy pretty printing!
 
-[^1]: Indeed, there is a missing invariant relating spaces and lines that I have not even discussed.
+[^1]: I originally thought this heurisitic to be a theorem, as shown
+in earlier versions of this document.
 
 <!--  LocalWords:  Peyton invariants
  -->
