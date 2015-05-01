@@ -1,7 +1,7 @@
 > {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
 > module Blog2 where
 
-% The Prettiest Printer (2)
+% The *Real* Prettiest Printer
 % Jean-Philippe Bernardy
 
 
@@ -100,6 +100,10 @@ alpha
 
 \end{spec}
 
+Implementation: two steps.
+
+1. Precomputing shit.
+
 > type D2 = Int -> [(Int,Int,Int,String)] -- height, max col, col, text
 
 > instance Doc D2 where
@@ -111,3 +115,6 @@ alpha
 >   d1 <|> d2 = \i -> d1 i ++ d2 i
 >   nest n d = \i -> d (i+n)
 
+2. Pruning out dominated results
+
+3. Using some better than strings
