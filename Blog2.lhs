@@ -1,8 +1,14 @@
-> {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
-> module Blog2 where
-
 % The *Real* Prettiest Printer
 % Jean-Philippe Bernardy
+
+This blog post is a literate Haskell file. Here is the header needed
+to compile the file with ghc 7.8.3
+
+> {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, PostfixOperators #-}
+> module Blog2 where
+
+> import Data.List
+> import Data.Function
 
 
 API
@@ -24,12 +30,25 @@ Phil's strong shoulders, I propose the following set of combinators:
 >   empty :: d
 >   (<>) :: d -> d -> d
 >   ($$) :: d -> d -> d
+>   d1 $$ d2 = close d1 <> d2
 >   text :: String -> d
->   spacing :: String -> d
->   spacing = text
 >   nest :: Int -> d -> d
 >   (<|>) :: d -> d -> d
 >   close :: d -> d
+>   render :: d -> Maybe String
+
+> type D0 = Int -> (Int,String)
+
+> instance Doc D0 where
+>   empty = \i -> (i,"")
+>   d1 <> d2 = \i0 -> let (i1,t1) = d1 i0
+>                         (i2,t2) = d2 i1
+>                     in (i2,t1 ++ t2) 
+>   close d = \i -> let (_,t) = d i in (i,t ++ "\n" ++ replicate i ' ')
+>   text s i = (c,s)
+>     where c = i + length s
+>   nest n d = \i -> d (i+n)
+>   render d = Just $ snd (d 0)
 
 Semantics: function from the current column to a list of possible
 outputs. The first component of the tuple is the column reached on the
@@ -46,21 +65,29 @@ last line (convenience).
 >   d1 <|> d2 = \i -> d1 i ++ d2 i
 >   nest n d = \i -> d (i+n)
 >   d1 $$ d2 = close d1 <> d2
+>   render d = case sortBy (compare `on` fst) (d 0) of
+>       ((_,s):_) -> Just s
+>       _ -> Nothing
 
 
-close (close a <> b) = close a <> close b
-
+> (%) :: Doc d => d -> d
+> (%) = close
 
 Documents form a monoid with:
   empty and <>
-  empty and $$
+
   failure and <|> (also commutative)
 
-  nest i (nest j a) == nest (i+j) a
+Nesting accumulates
 
-  (a $$ b) <> c /= a $$ (b <> c)
+> prop_nest :: (Doc a, Eq a) => a -> Int -> Int -> Bool
+> prop_nest a i j = nest i (nest j a) == nest (i+j) a
 
-  (a <> b) $$ c /= a <> (b $$ c)
+closing can be pushed in concatenation:
+
+> prop_close :: (Doc a, Eq a) => a -> a -> Bool
+> prop_close a b = (((a%) <> b)%) == (a%) <> (b%)
+
 
 All operators distribute over disjunction
 
@@ -95,7 +122,6 @@ alpha
 \i0 -> [(i3,t1 ++ t2 ++ t3) | (i1,t1) <- d1 i0, (i2,t2) <- d2 i1, (i3,t3) <- d3 i2]
 
 
-(d1 $$ d2) $$ d3 == d1 $$ (d2 $$ d3)
 
 
 \end{spec}
@@ -117,4 +143,10 @@ Implementation: two steps.
 
 2. Pruning out dominated results
 
-3. Using some better than strings
+
+4. Ribbon length
+
+Note that we pick the narrowest result fitting on min. lines lines!
+
+3. Using something better than strings for text
+
