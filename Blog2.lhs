@@ -47,7 +47,7 @@ Phil's strong shoulders, I propose the following set of combinators:
 > instance Doc Di where
 >   empty = text ""
 >   xs $$ ys = xs ++ ys
->   (viewLast -> (xs,x)) <> (y:ys) = xs ++ [x ++ y] ++ map (indent (length x)) ys
+>   (viewLast -> (xs,x)) <> (y:ys) = xs ++ [x ++ y] ++ nest (length x) ys
 >   close xs = xs ++ [""]
 >   text s = [s]
 >   nest n = map (indent n)
@@ -98,6 +98,9 @@ Nesting accumulates
 
 > prop_nest :: (Doc a, Eq a) => a -> Int -> Int -> Bool
 > prop_nest a i j = nest i (nest j a) == nest (i+j) a
+
+> prop_nest0 :: (Doc a, Eq a) => a -> Bool
+> prop_nest0 a = nest 0 a == a
 
 closing can be pushed in concatenation:
 
