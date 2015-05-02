@@ -51,7 +51,7 @@ Phil's strong shoulders, I propose the following set of combinators:
 >   close xs = xs ++ [""]
 >   text s = [s]
 >   nest n = map (indent n)
->   render xs = Just $ intercalate "\n" xs
+>   render xs = Just $ unlines xs
 
 > type D0 = Int -> (Int,String)
 
