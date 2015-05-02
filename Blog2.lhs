@@ -4,7 +4,7 @@
 This blog post is a literate Haskell file. Here is the header needed
 to compile the file with ghc 7.8.3
 
-> {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, PostfixOperators #-}
+> {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, PostfixOperators, ViewPatterns #-}
 > module Blog2 where
 
 > import Data.List
@@ -36,6 +36,22 @@ Phil's strong shoulders, I propose the following set of combinators:
 >   (<|>) :: d -> d -> d
 >   close :: d -> d
 >   render :: d -> Maybe String
+
+> type Di = [String]
+
+> viewLast :: Di -> ([String],String)
+> viewLast xs = (init xs, last xs)
+
+> indent n x = replicate n ' ' ++ x
+
+> instance Doc Di where
+>   empty = text ""
+>   xs $$ ys = xs ++ ys
+>   (viewLast -> (xs,x)) <> (y:ys) = xs ++ [x ++ y] ++ map (indent (length x)) ys
+>   close xs = xs ++ [""]
+>   text s = [s]
+>   nest n = map (indent n)
+>   render xs = Just $ intercalate "\n" xs
 
 > type D0 = Int -> (Int,String)
 
