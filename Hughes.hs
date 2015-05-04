@@ -13,30 +13,10 @@ instance Monoid Doc where
   mempty = nil
   mappend = (.<>)
 
-data Bound x = UnBound | Bound x
-  deriving (Eq,Show,Functor)
+feasible :: Int -> Bool
+feasible x = x <= globalWidth
 
-(.-) :: Bound Int -> Int -> Bound Int
-x .- k = (subtract k) <$> x
-
-instance Ord x => Ord (Bound x) where
-  UnBound <= _ = True
-  _ <= UnBound = False
-  Bound x <= Bound y = y <= x
-
-instance Ord x => Monoid (Bound x) where
-  UnBound `mappend` x = x
-  x `mappend` UnBound = x
-  Bound x `mappend` Bound y = Bound (min x y)
-  mempty = UnBound
-
-type Condition = Bound Int
-
-feasible :: Condition -> Bool
-feasible (Bound col) = col >= 0
-feasible _ = True
-
-data M = M {mcond :: Condition,
+data M = M {width :: Int,
             mlines :: Int,
             colDiff :: Int,
             mtext :: Int -> (Int,String)}
@@ -44,22 +24,22 @@ data M = M {mcond :: Condition,
 newtype Doc = Doc {results :: [M]} deriving Show
 
 instance Docu Doc where
-  text    s = Doc [M (Bound (globalWidth - length s)) 0 (length s) $ \c -> (c + length s,s)]
+  text    s = Doc [M (length s) 0 (length s) $ \c -> (c + length s,s)]
   Doc d1 $$ Doc d2 = Doc $ bests $
-        [[M (c1 <> c2) (1+n1+n2) s2 $ \c ->
+        [[M (max c1 c2) (1+n1+n2) s2 $ \c ->
           let (_,x') = t1 c
               (c',x'') = t2 c
           in (c',x'++"\n"++replicate c ' '++x'')
          | M c1 n1 _ t1 <- d1]
          | M c2 n2 s2 t2 <- d2]
-  nest k (Doc d) = Doc [ M (c .- k) n (s + k) $ \c -> t (c+n)
-                       | M c n s t <- d]
-  nil = Doc [M UnBound 0 0 $ \c -> (c,"")]
+  nest k (Doc d) = Doc [ M (w + k) n (s + k) $ \c -> t (c+n)
+                       | M w n s t <- d]
+  nil = Doc [M 0 0 0 $ \c -> (c,"")]
   Doc d1 .<> Doc d2 = Doc $ bests $
         [[M c' (n1+n2) (s2+s1) $ \c -> let (col',x') = t1 c
                                            (c'',x'') = t2 col'
                                        in (c'',x'++x'')
-         | M c1 n1 s1 t1 <- d1,let c' = c1 <> (c2 .- s1),  feasible c']
+         | M c1 n1 s1 t1 <- d1,let c' = max c1 (c2 + s1), feasible c']
          | M c2 n2 s2 t2 <- d2]
   Doc d1 .<|> Doc d2 = Doc $ bests [d1,d2]
 
@@ -76,7 +56,7 @@ mergeAllBy _ [] = []
 mergeAllBy f (x:xs) = mergeBy f x (mergeAllBy f xs)
 
 mm :: [[M]] -> [M]
-mm = mergeAllBy (compare `on` \M{..} -> (mlines,mcond,colDiff))
+mm = mergeAllBy (compare `on` \M{..} -> (mlines,width,colDiff))
 
 instance Eq M where
   M c1 l1 s1 _ == M c2 l2 s2 _ = c1 == c2 && l1 == l2 && s1 == s2
@@ -90,12 +70,11 @@ pareto' acc (x:xs) = if any (<= x) acc
                         else pareto' (x:acc) xs
 
 bests = pareto' [] . mm
--- bests = filtering (const True) . mm
 
 -- -- Alternative filtering.
 filtering :: (M -> Bool) -> [M] -> [M]
 filtering ok [] = []
-filtering ok (x:xs) | ok x = x : filtering (\z -> (colDiff z <= colDiff x || mcond x <= mcond x) && ok z) xs
+filtering ok (x:xs) | ok x = x : filtering (\z -> (colDiff z <= colDiff x || width z <= width x) && ok z) xs
                     | otherwise = filtering ok xs
 
 ---------------------
@@ -209,3 +188,37 @@ eval (d1 :<|> d2) c = eval d1 c ++ eval d2 c
 eval Nil c = [(c,"")]
 
 render0 d = putStrLn $ snd $ minimumBy (compare `on` (length . lines . snd)) (eval d 0)
+
+
+{-
+
+Steps to derive the efficient implementation:
+
+--    Int -> [(Int,String)]
+-- iso
+--    [Int -> (Int,String)]
+-- expansion of height and width
+--    [Int -> (Int,Int,Int,String)]
+-- Iso
+--    [((Int -> Int),(Int -> Int),(Int -> Int),Int -> (Int,String))]
+-- defunctionalization
+--    [(Width,Height,FinalColDiff,String)]
+
+Then we need a theorem to show that filtering on globalWidth can be
+pushed inside. (easy)
+
+Then we need a theorem to restrict the computation to pareto frontiers.
+
+A measure is the triple (Width,Height,FinalColDiff)
+
+Theorem: If a measure is dominated, then the combination of the
+measures are dominated.
+
+something like
+
+if   measure d1 <= measure d2 and measure d'1 <= measure d'2
+then measure (d1 $$ d2) <= measure (d'1 $$ d'2) and
+     measure (d1 <> d2) <= measure (d'1 <> d'2) and
+     measure (d1 <|> d2) <= measure (d'1 <|> d'2)
+
+-}
