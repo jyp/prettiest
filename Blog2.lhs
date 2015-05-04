@@ -4,11 +4,11 @@
 This blog post is a literate Haskell file. Here is the header needed
 to compile the file with ghc 7.8.3
 
-> {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, PostfixOperators, ViewPatterns, RecordWildCards #-}
+> {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, PostfixOperators, ViewPatterns, RecordWildCards, GADTs #-}
 > module Blog2 where
 
-> import Data.List
 > import Data.Function
+> import Data.List
 
 
 API
@@ -53,7 +53,7 @@ Semantics for layouts: list of strings
 >   close xs = xs ++ [""]
 >   text s = [s]
 >   nest n = map (indent n)
->   render xs = unlines xs
+>   render xs = intercalate "\n" xs
 
 
 
@@ -109,12 +109,25 @@ Precomputing metrics
 >             mlines :: Int,
 >             colDiff :: Int,
 >             mtext :: L}
+>   deriving (Show)
+> measure :: M -> (Int, Int, Int)
+> measure (M w h c _) = (h,w,c)
 
+> class Poset a where
+>   (≺) :: a -> a -> Bool
+
+> instance Eq M where
+>   (==)  = (==) `on` measure
+> instance Ord M where
+>   compare = compare `on` measure
+
+> instance Poset M where
+>   M c1 l1 s1 _ ≺ M c2 l2 s2 _ = c1 <= c2 && l1 <= l2 && s1 <= s2
 
 > instance Doc M where
 >   empty = M 0 0 0 empty
 >   text s = M (length s) 0 (length s) (text s)
->   (M w1 h1 c1 s1) <> (M w2 h2 c2 s2) = M (max w1 (w2 + c1)) (h1 + h2) c2 (s1 <> s2)
+>   (M w1 h1 c1 s1) <> (M w2 h2 c2 s2) = M (max w1 (w2 + c1)) (h1 + h2) (c1 + c2) (s1 <> s2)
 >   close (M w h _ s) = M w (h+1) 0 (close s)
 >   nest k (M w h c s) = M (w+k) h (c+k) (nest k s)
 >   render (M _ _ _ s) = render s
@@ -124,47 +137,49 @@ Free monoid of <|> (and failure)
 
 > type D0 = [M]
 
-> instance Doc D0 where
->   empty = [empty]
->   xs <> ys = concat [ [x <> y | x <- xs] | y <- ys]
->   xs <|> ys = xs ++ ys
->   close xs = map close xs
->   text s = [text s]
->   nest n = map (nest n)
->   render = render . minimumBy (compare `on` mlines) . filter ((<= 80) . width)
+> valid = ((<= 80) . width)
+
+-- > instance Doc D0 where
+-- >   empty = [empty]
+-- >   xs <> ys = concat [ [x <> y | x <- xs] | y <- ys]
+-- >   xs <|> ys = xs ++ ys
+-- >   close xs = map close xs
+-- >   text s = [text s]
+-- >   nest n = map (nest n)
+-- >   render = render . minimum . filter valid
 
 
 Pruning out dominated results
 =============================
 
-> mergeBy :: (a -> a -> Ordering) -> [a] -> [a] -> [a]
-> mergeBy _ [] xs = xs
-> mergeBy _ xs [] = xs
-> mergeBy f (x:xs) (y:ys) = case f x y of
->   LT -> x:mergeBy f xs (y:ys)
->   EQ -> x:y:mergeBy f xs ys
->   GT -> y:mergeBy f (x:xs) ys
+> merge :: Ord a => [a] -> [a] -> [a]
+> merge [] xs = xs
+> merge xs [] = xs
+> merge (x:xs) (y:ys) = case compare x y of
+>   LT -> x:merge xs (y:ys)
+>   EQ -> x:y:merge xs ys
+>   GT -> y:merge (x:xs) ys
 > 
-> mergeAllBy ::(a -> a -> Ordering) -> [[a]] -> [a]
-> mergeAllBy _ [] = []
-> mergeAllBy f (x:xs) = mergeBy f x (mergeAllBy f xs)
-
-> mm :: [[M]] -> [M]
-> mm = mergeAllBy (compare `on` \M{..} -> (mlines,width,colDiff))
+> mergeAll :: Ord a => [[a]] -> [a]
+> mergeAll [] = []
+> mergeAll (x:xs) = merge x (mergeAll xs)
 
 > instance Doc D0 where
 >   empty = [empty]
->   xs <> ys = mm [ [x <> y | x <- xs] | y <- ys]
->   xs <|> ys = xs ++ ys
+>   xs <> ys = bests $ [ filter valid [x <> y | x <- xs] | y <- ys]
+>   xs <|> ys = bests [xs,ys]
 >   close xs = map close xs
 >   text s = [text s]
 >   nest n = map (nest n)
->   render = render . minimumBy (compare `on` mlines) . filter ((<= 80) . width)
+>   render (x:_) = render x
 
-> bests = pareto' [] . mm
-> pareto' :: Ord a => [a] -> [a] -> [a]
+
+> bests :: [[M]] -> [M]
+> bests = pareto' [] . mergeAll
+
+> pareto' :: Poset a => [a] -> [a] -> [a]
 > pareto' acc [] = acc
-> pareto' acc (x:xs) = if any (<= x) acc
+> pareto' acc (x:xs) = if any (≺ x) acc
 >                        then pareto' acc xs
 >                        else pareto' (x:acc) xs
 
@@ -230,3 +245,40 @@ instance Doc D2 where
   d1 <|> d2 = \i -> d1 i ++ d2 i
   nest n d = \i -> d (i+n)
 \end{spec}
+
+
+> x <+> y = x <> text " " <> y
+> x </> y = x $$ y
+> 
+> -- foldSeq k f [] = k
+> -- foldSeq k f [x] = x
+> -- foldSeq k f xs = foldSeq k f l `f` foldSeq k f r
+> --   where (l,r) = splitAt (length xs `div` 2) xs
+> 
+> foldSeq k f [] = k
+> foldSeq k f xs = foldr1 f xs
+> 
+> 
+> sep,hcat,vcat :: Doc a => [a] -> a
+> 
+> vcat = foldSeq empty ($$)
+> hcat = foldSeq empty (<+>)
+> 
+> sep [] = empty
+> sep xs = hcat xs <|> vcat xs
+> 
+> pretty :: SExpr -> D0
+> pretty (Atom s) = text s
+> pretty (SExpr xs) = text "(" <> (sep $ map pretty xs) <> text ")"
+> 
+> abcd = SExpr $ map (Atom . (:[])) "abcd"
+> abcd4 = SExpr [abcd,abcd,abcd,abcd]
+> testData = SExpr [Atom "axbxcxd", abcd4]
+> testData2 = SExpr (replicate 10 testData)
+> testData4 = SExpr (replicate 10 testData2)
+> testData8 = SExpr (replicate 10 testData4)
+
+> data SExpr where
+>   SExpr :: [SExpr] -> SExpr
+>   Atom :: String -> SExpr
+>  deriving Show
