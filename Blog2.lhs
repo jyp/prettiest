@@ -26,14 +26,13 @@ Phil's strong shoulders, I propose the following set of combinators:
 -   `nest`: nest the argument
 -   `(<|>)`: disjunction of layouts
 
-> class Doc d where
+> class Layout d where
 >   empty :: d
 >   (<>) :: d -> d -> d
 >   ($$) :: d -> d -> d
 >   d1 $$ d2 = close d1 <> d2
 >   text :: String -> d
 >   nest :: Int -> d -> d
->   (<|>) :: d -> d -> d
 >   close :: d -> d
 >   render :: d -> String
 
@@ -42,11 +41,12 @@ Phil's strong shoulders, I propose the following set of combinators:
 > viewLast :: L -> ([String],String)
 > viewLast xs = (init xs, last xs)
 
+> indent :: Int -> String -> String
 > indent n x = replicate n ' ' ++ x
 
 Semantics for layouts: list of strings
 
-> instance Doc L where
+> instance Layout L where
 >   empty = text ""
 >   xs $$ ys = xs ++ ys
 >   (viewLast -> (xs,x)) <> (y:ys) = xs ++ [x ++ y] ++ nest (length x) ys
@@ -110,6 +110,48 @@ Precomputing metrics
 >             colDiff :: Int,
 >             mtext :: L}
 >   deriving (Show)
+
+> instance Layout M where
+>   empty = M 0 0 0 empty
+>   text s = M (length s) 0 (length s) (text s)
+>   (M w1 h1 c1 s1) <> (M w2 h2 c2 s2) = M (max w1 (w2 + c1)) (h1 + h2) (c1 + c2) (s1 <> s2)
+>   close (M w h _ s) = M w (h+1) 0 (close s)
+>   nest k (M w h c s) = M (w+k) h (c+k) (nest k s)
+>   render (M _ _ _ s) = render s
+
+Free monoid of <|> (and failure)
+================================
+
+> class Layout d => Doc d where
+>   (<|>) :: d -> d -> d
+
+
+> type D0 = [M]
+
+
+-- > instance Doc D0 where
+-- >   empty = [empty]
+-- >   xs <> ys = concat [ [x <> y | x <- xs] | y <- ys]
+-- >   xs <|> ys = xs ++ ys
+-- >   close xs = map close xs
+-- >   text s = [text s]
+-- >   nest n = map (nest n)
+-- >   render = render . minimum . filter valid
+
+
+Early filtering out invalid results
+===================================
+
+> valid :: M -> Bool
+> valid = ((<= 80) . width)
+
+-- >   xs <> ys = [ filter valid [x <> y | x <- xs] | y <- ys]
+
+This is because the width can only ever increase.
+
+Pruning out dominated results
+=============================
+
 > measure :: M -> (Int, Int, Int)
 > measure (M w h c _) = (h,w,c)
 
@@ -124,33 +166,17 @@ Precomputing metrics
 > instance Poset M where
 >   M c1 l1 s1 _ ≺ M c2 l2 s2 _ = c1 <= c2 && l1 <= l2 && s1 <= s2
 
-> instance Doc M where
->   empty = M 0 0 0 empty
->   text s = M (length s) 0 (length s) (text s)
->   (M w1 h1 c1 s1) <> (M w2 h2 c2 s2) = M (max w1 (w2 + c1)) (h1 + h2) (c1 + c2) (s1 <> s2)
->   close (M w h _ s) = M w (h+1) 0 (close s)
->   nest k (M w h c s) = M (w+k) h (c+k) (nest k s)
->   render (M _ _ _ s) = render s
-
-Free monoid of <|> (and failure)
-================================
-
-> type D0 = [M]
-
-> valid = ((<= 80) . width)
-
--- > instance Doc D0 where
--- >   empty = [empty]
--- >   xs <> ys = concat [ [x <> y | x <- xs] | y <- ys]
--- >   xs <|> ys = xs ++ ys
--- >   close xs = map close xs
--- >   text s = [text s]
--- >   nest n = map (nest n)
--- >   render = render . minimum . filter valid
+Then we need a theorem to restrict the computation to pareto frontiers.
 
 
-Pruning out dominated results
-=============================
+Theorem: all operators are monotonous wrt. ≺
+
+if    d1 ≺  d2 and  d'1 ≺  d'2
+then  (d1 <> d2) ≺  (d'1 <> d'2) and
+      (d1 <|> d2) ≺  (d'1 <|> d'2)
+      close d1 ≺ close d2
+      nest k d1 ≺ nest k d2
+       
 
 > merge :: Ord a => [a] -> [a] -> [a]
 > merge [] xs = xs
@@ -164,14 +190,16 @@ Pruning out dominated results
 > mergeAll [] = []
 > mergeAll (x:xs) = merge x (mergeAll xs)
 
-> instance Doc D0 where
+> instance Layout D0 where
 >   empty = [empty]
 >   xs <> ys = bests $ [ filter valid [x <> y | x <- xs] | y <- ys]
->   xs <|> ys = bests [xs,ys]
 >   close xs = map close xs
 >   text s = [text s]
 >   nest n = map (nest n)
 >   render (x:_) = render x
+
+> instance Doc D0 where
+>   xs <|> ys = bests [xs,ys]
 
 
 > bests :: [[M]] -> [M]
