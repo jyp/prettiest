@@ -11,12 +11,11 @@ to compile the file with ghc 7.8.3
 > import Data.List
 
 
+Layouts
+=======
+
 API
 ---
-
-Before discussing possible algorithms, we need to chose wisely the the
-document-description language that we accept. Daringly standing on
-Phil's strong shoulders, I propose the following set of combinators:
 
 -   `empty`: The empty document
 -   `(<>)`: horizontal concatenation
@@ -29,12 +28,22 @@ Phil's strong shoulders, I propose the following set of combinators:
 > class Layout d where
 >   empty :: d
 >   (<>) :: d -> d -> d
->   ($$) :: d -> d -> d
->   d1 $$ d2 = close d1 <> d2
 >   text :: String -> d
 >   nest :: Int -> d -> d
 >   close :: d -> d
 >   render :: d -> String
+
+> ($$) :: Layout d => d -> d -> d
+> a $$ b = close a <> b
+
+
+> (%) :: Doc d => d -> d
+> (%) = close
+
+Semantics
+---------
+
+Semantics for layouts: list of strings
 
 > type L = [String]
 
@@ -44,24 +53,16 @@ Phil's strong shoulders, I propose the following set of combinators:
 > indent :: Int -> String -> String
 > indent n x = replicate n ' ' ++ x
 
-Semantics for layouts: list of strings
 
 > instance Layout L where
 >   empty = text ""
->   xs $$ ys = xs ++ ys
 >   (viewLast -> (xs,x)) <> (y:ys) = xs ++ [x ++ y] ++ nest (length x) ys
 >   close xs = xs ++ [""]
 >   text s = [s]
 >   nest n = map (indent n)
 >   render xs = intercalate "\n" xs
 
-
-
-> (%) :: Doc d => d -> d
-> (%) = close
-
-Documents form a monoid with:
-  empty and <>
+Layouts form a monoid with empty and <>
 
 Nesting accumulates
 
@@ -102,8 +103,9 @@ alpha
 
 \end{spec}
 
+
 Precomputing metrics
-====================
+--------------------
 
 > data M = M {width :: Int,
 >             mlines :: Int,
@@ -119,14 +121,19 @@ Precomputing metrics
 >   nest k (M w h c s) = M (w+k) h (c+k) (nest k s)
 >   render (M _ _ _ s) = render s
 
+Documents
+=========
+
 Free monoid of <|> (and failure)
-================================
 
 > class Layout d => Doc d where
 >   (<|>) :: d -> d -> d
 
 
 > type D0 = [M]
+
+> valid :: M -> Bool
+> valid = ((<= 80) . width)
 
 
 -- > instance Doc D0 where
@@ -140,17 +147,15 @@ Free monoid of <|> (and failure)
 
 
 Early filtering out invalid results
-===================================
-
-> valid :: M -> Bool
-> valid = ((<= 80) . width)
+-----------------------------------
 
 -- >   xs <> ys = [ filter valid [x <> y | x <- xs] | y <- ys]
 
 This is because the width can only ever increase.
 
 Pruning out dominated results
-=============================
+-----------------------------
+
 
 > measure :: M -> (Int, Int, Int)
 > measure (M w h c _) = (h,w,c)
@@ -176,7 +181,7 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
       (d1 <|> d2) ≺  (d'1 <|> d'2)
       close d1 ≺ close d2
       nest k d1 ≺ nest k d2
-       
+
 
 > merge :: Ord a => [a] -> [a] -> [a]
 > merge [] xs = xs
@@ -185,7 +190,7 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
 >   LT -> x:merge xs (y:ys)
 >   EQ -> x:y:merge xs ys
 >   GT -> y:merge (x:xs) ys
-> 
+ 
 > mergeAll :: Ord a => [[a]] -> [a]
 > mergeAll [] = []
 > mergeAll (x:xs) = merge x (mergeAll xs)
