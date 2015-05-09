@@ -25,6 +25,16 @@ API
 -   `nest`: nest the argument
 -   `(<|>)`: disjunction of layouts
 
+
+But:
+
+> ($$) :: Layout d => d -> d -> d
+> a $$ b = close a <> b
+
+Where close adds a newline at the end of its argument.
+
+So we adopt the interface:
+
 > class Layout d where
 >   empty :: d
 >   (<>) :: d -> d -> d
@@ -33,17 +43,15 @@ API
 >   close :: d -> d
 >   render :: d -> String
 
-> ($$) :: Layout d => d -> d -> d
-> a $$ b = close a <> b
-
 
 > (%) :: Doc d => d -> d
 > (%) = close
 
+
 Semantics
 ---------
 
-Semantics for layouts: list of strings
+Semantics for layouts: list of strings.
 
 > type L = [String]
 
@@ -124,7 +132,10 @@ Precomputing metrics
 Documents
 =========
 
-Free monoid of <|> (and failure)
+Layouts can be defined by the initial structure satisfying the above
+semantics. 
+
+Free monoid of <|> (and failure).
 
 > class Layout d => Doc d where
 >   (<|>) :: d -> d -> d
