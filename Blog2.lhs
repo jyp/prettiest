@@ -2,118 +2,315 @@
 % Jean-Philippe Bernardy
 
 This blog post is a literate Haskell file. Here is the header needed
-to compile the file with ghc 7.8.3
+to compile the file with ghc 7.10
 
-> {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, PostfixOperators, ViewPatterns, RecordWildCards, GADTs #-}
+> {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, PostfixOperators, ViewPatterns, RecordWildCards, GADTs, NoMonomorphismRestriction, ScopedTypeVariables #-}
 > module Blog2 where
 
 > import Data.Function
 > import Data.List
 
 
+Popular Haskell pretty printers have given me less-than-optimal
+results.  This is especially disappointing, as they seem to be the
+epitome of functional programs, blessed with the
+correct-by-construction methodology of program development.  In this
+note I review why I find the current solutions sub-optimal, and propose
+a satisfactory alternative.
+
+The state of the art.
+=====================
+
+Even today, pretty printing in Haskell is mostly backed by two classic
+libraries, either:
+
+1.  The Hughes-Peyton Jones library. The design is [described by
+    Hughes](http://belle.sourceforge.net/doc/hughes95design.pdf) in
+    *The Design of a Pretty-printing Library*. It has then been
+    adopted (and modified) by Peyton Jones, and was distributed with GHC
+    for a long time, making it the *de-facto* standard pretty printer.
+    It is now available on Hackage in the
+    [pretty](https://hackage.haskell.org/package/pretty) package. I believe that
+    this remains the dominant design, perhaps disputed by...
+
+2.  The Wadler-Leijen library. In the penultimate chapter of *The Fun
+    of Programming*, Wadler re-constructs a pretty printing library
+    from scratch. Keeping true to Hughes in particular and the general
+    functional programming tradition in general, Wadler starts by
+    specifying his library using equational laws, and derives an
+    implementation. Leijen took Wadler's implementation and modified it
+    to increase its expressivity (but more on that later). The result is
+    available in the eponymous
+    [wl-pprint](https://hackage.haskell.org/package/wl-pprint)
+    package.
+
+Not. Pretty. Enough.
+--------------------
+
+Let us assume we want to pretty print S-Expressions:
+
+``` {.example}
+data SExpr where
+  SExpr :: [SExpr] -> SExpr
+  Atom :: String -> SExpr
+```
+
+We'd like to allow to pretty print an S-Expr either horizontally, like
+so:
+
+``` {.example}
+(a b c d)
+```
+
+or vertically, like so:
+
+``` {.example}
+(a
+ b
+ c
+ d)
+```
+
+The idea is that the pretty printer shoud print the expression in as
+few lines as possible.
+
+
+
+Taking inspiration from from Hughes, we will allow for both vertical
+and horizontal composition. We will also allow for embedding raw text;
+and disjunction between layouts.
+
+< text  :: String -> d
+< (<>)  :: Doc d => d -> d -> d
+< ($$)  :: Doc d => d -> d -> d
+< (<|>)  :: Doc d => d -> d -> d
+
+We can then define a few useful combinators on top of the above:
+
+
+> empty :: Layout d => d
+> empty = text ""
+
+> (<+>) :: Layout d => d -> d -> d
+> x <+> y = x <> text " " <> y
+
+> sep,hsep,vcat :: Doc d => [d] -> d
+> vcat = foldr1 ($$)
+> hsep = foldr1 (<+>)
+
+
+> sep [] = empty
+> sep xs = hsep xs <|> vcat xs
+
+> pretty :: SExpr -> D0
+> pretty (Atom s) = text s
+> pretty (SExpr xs) = text "(" <> (sep $ map pretty xs) <> text ")"
+
+let's suppose we want to pretty print the
+following s-expr:
+
+``` {.example}
+abcd = SExpr $ map (Atom . (:[])) "abcd"
+abcd4 = SExpr [abcd,abcd,abcd,abcd]
+testData = SExpr [Atom "axbxcxd", abcd4] 
+```
+
+Printed on a wide page, we'd like to get:
+
+``` {.example}
+(axbxcxd ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d)))
+```
+
+Printed on a narrow page, we'd like to get:
+
+``` {.example}
+---------------
+(axbxcxd
+ ((a b c d)
+  (a b c d)
+  (a b c d)
+  (a b c d)
+  (a b c d))
+```
+
+NOT This :
+
+``` {.example}
+---------------
+(axbxcxd ((a
+           b
+           c
+           d)
+          (a
+           b
+           c
+           d)
+          (a
+           b
+           c
+           d)
+          (a
+           b
+           c
+           d)
+          (a
+           b
+           c
+           d)))
+---------------
+```
+
+The thing is, Hughes states that "it would be unreasonably inefficient
+for a pretty-printer do decide whether or not to split the first line of
+a document on the basis of the content of the last." (sec. 7.4 of his
+paper). Therefore, he chooses a greedy algorithm, which tries to fit as
+much as possible on a single line, without regard for what comes next.
+In our example, the algorithm fits `(axbxcxd ((a`, but then it has
+committed to a very deep indentation level, which forces a
+less-than-pretty outcome for the remainder of the document.
+
+Wadler's design fares somewhat better. It does not suffer from the above
+problem... *by default*. That is, it lacks the capability to express
+that sub-documents should be vertically aligned --- compositionally.
+
+(See sec ??? for a discussion)
+
 Layouts
 =======
 
-API
----
 
--   `empty`: The empty document
--   `(<>)`: horizontal concatenation
--   `($$)`: vertical concatenation
--   `text`: insert a meaningful piece of text
--   `spacing`: insert a non-meaningful text (spaces or typographical marks)
--   `nest`: nest the argument
--   `(<|>)`: disjunction of layouts
+Refinement of the API
+---------------------
+
+> spaces :: Layout d => Int -> d
+> spaces n = text $ replicate n ' '
+
+> nest :: Layout d => Int -> d -> d
+> nest n y = spaces n <> y
 
 
-But:
+Define both a minimal API and its semantics for layouts (without
+disjunction).
+
+Interpret a layout as a non-empty list of lines to print.
+
+> type L = [String]
+
+> instance Layout L where
+
+Preparing a layout for printing is as easy as appending a newline
+character to each item of the list and concatenate them:
+
+>   render xs = concatMap (++ "\n") xs
+
+The interpretation of embeded strings is thus immediate:
+
+>   text s = [s]
+
+Interpretating the horizontal concatenation requires barely more
+thought:
+
+<  xs $$ ys = xs ++ ys
+
+Hughes: "translate [to the right] the second operand, so that is tabs
+against the last character of the first operand"
+
+>   xs <> (y:ys) = xs0 ++ [x ++ y] ++ nest (length x) ys
+>      where xs0 = init xs
+>            x = last xs
+
+The trained eye will detect that, given the above semantics,
+horizontal concatenation is nearly a special case of horizontal
+composition. That is, instead of composing vertically, one can add an
+empty line to the left hand side layout and compose horizontally:
+
+>   close xs = xs ++ [""]
 
 > ($$) :: Layout d => d -> d -> d
 > a $$ b = close a <> b
 
-Where close adds a newline at the end of its argument.
+One might argue that this choice of API is not really simpler. Yet,
+we will stick with it, for two reasons:
 
-So we adopt the interface:
+1. The horizontal composition has a nicer algebraic structure, and
+
+2. the efficient implementation is shorter with a single concatenation
+operator.
+
+
+To sum up, our API for layouts is the following:
 
 > class Layout d where
->   empty :: d
 >   (<>) :: d -> d -> d
 >   text :: String -> d
->   nest :: Int -> d -> d
 >   close :: d -> d
 >   render :: d -> String
 
+Algebra
+-------
+
+- Layouts form a monoid with empty and <>
+
+> prop_leftUnit :: (Doc a, Eq a) => a -> Bool
+> prop_leftUnit a = empty <> a == a
+
+> prop_rightUnit :: (Doc a, Eq a) => a -> Bool
+> prop_rightUnit a = a <> empty == a
+
+> prop_assoc :: (Doc a, Eq a) => a -> a -> a -> Bool
+> prop_assoc a b c = (a <> b) <> c == a <> (b <> c)
+
+- closing can be pushed in concatenation:
+
+> prop_close :: (Doc a, Eq a) => a -> a -> Bool
+> prop_close a b = ((a <> b)%) == a <> (b%)
 
 > (%) :: Doc d => d -> d
 > (%) = close
 
+- text is a monoid homomorphism
 
-Semantics
----------
-
-Semantics for layouts: list of strings.
-
-> type L = [String]
-
-> viewLast :: L -> ([String],String)
-> viewLast xs = (init xs, last xs)
-
-> indent :: Int -> String -> String
-> indent n x = replicate n ' ' ++ x
-
-
-> instance Layout L where
->   empty = text ""
->   (viewLast -> (xs,x)) <> (y:ys) = xs ++ [x ++ y] ++ nest (length x) ys
->   close xs = xs ++ [""]
->   text s = [s]
->   nest n = map (indent n)
->   render xs = intercalate "\n" xs
-
-Layouts form a monoid with empty and <>
-
-Nesting accumulates
-
-> prop_nest :: (Doc a, Eq a) => a -> Int -> Int -> Bool
-> prop_nest a i j = nest i (nest j a) == nest (i+j) a
-
-> prop_nest0 :: (Doc a, Eq a) => a -> Bool
-> prop_nest0 a = nest 0 a == a
-
-closing can be pushed in concatenation:
-
-> prop_close :: (Doc a, Eq a) => a -> a -> Bool
-> prop_close a b = (((a%) <> b)%) == (a%) <> (b%)
-
-
-\begin{spec}
-(d1 <> d2) <> d3 == d1 <> (d2 <> d3)
-
-consequence of >>= assoc (list compr), ++ assoc
-
-(d1 <> d2) <> d3
-def
- (\i0 -> [(i2,t1 ++ t2) | (i1,t1) <- d1 i0, (i2,t2) <- d2 i1]) <> d3
-alpha
- (\ia0 -> [(ia2,ta1 ++ ta2) | (ia1,ta1) <- d1 ia0, (ia2,ta2) <- d2 ia1]) <> d3
-def
- \i0 -> [(i3,t1 ++ t3) | (i1,t1) <- (\ia0 -> [(ia2,ta1 ++ ta2) | (ia1,ta1) <- d1 ia0, (ia2,ta2) <- d2 ia1]) i0, (i3,t3) <- d3 i1]
-beta
- \i0 -> [(i3,t1 ++ t3) | (i1,t1) <- [(ia2,ta1 ++ ta2) | (ia1,ta1) <- d1 i0, (ia2,ta2) <- d2 ia1], (i3,t3) <- d3 i1]
-=<< assoc
- \i0 -> [(i3,t1 ++ t3) | (ia1,ta1) <- d1 i0, (ia2,ta2) <- d2 ia1, let i1 = ia2; t1 =ta1++ta2,   (i3,t3) <- d3 i1]
-beta
- \i0 -> [(i3,(ta1 ++ ta2) ++ t3) | (i1,ta1) <- d1 i0, (ia2,ta2) <- d2 i1,  (i3,t3) <- d3 ia2]
-alpha
-\i0 -> [(i3,(t1 ++ t2) ++ t3) | (i1,t1) <- d1 i0, (i2,t2) <- d2 i1, (i3,t3) <- d3 i2]
-++ assoc
-\i0 -> [(i3,t1 ++ t2 ++ t3) | (i1,t1) <- d1 i0, (i2,t2) <- d2 i1, (i3,t3) <- d3 i2]
-
-\end{spec}
+< prop_text s t = text s <> text t == text (s ++ t)
 
 
 Precomputing metrics
 --------------------
+
+In order to pick the best layout, it will be useful to compute its
+metrics. Two metrics are needed: the width (on which there is an upper
+bound) and the index of the last line (which we want to minimize).
+
+These metrics are easy to compute:
+
+> height :: L -> Int
+> height a = length a - 1
+
+> width' :: L -> Int
+> width' = maximum . map length
+
+However, we will not want to recompute these values over and over, so
+they should be precomputed; added as meta-data to the layout. We
+remark in particular the following properties, which will allow us to
+do no recomputation whatsoever of heights:
+
+< height (a <> b) = height a + height b
+< height (close a) = 1 + height a
+
+Efficient computation of the width requires to notice that the width
+of the last line plays a special role.
+
+> lastW :: L -> Int
+> lastW = length . last
+
+Using it we can compute the width efficiently, thanks to the following
+equalities:
+
+< width' (a <> b) = max (width a) (lastW a + width b)
+< width' (close a) = width' a
+
+< lastW  (a <> b) = lastW a + lastW b
+< lastW  (close a) = 0
+
 
 > data M = M {width :: Int,
 >             mlines :: Int,
@@ -122,20 +319,26 @@ Precomputing metrics
 >   deriving (Show)
 
 > instance Layout M where
->   empty = M 0 0 0 empty
 >   text s = M (length s) 0 (length s) (text s)
 >   (M w1 h1 c1 s1) <> (M w2 h2 c2 s2) = M (max w1 (w2 + c1)) (h1 + h2) (c1 + c2) (s1 <> s2)
 >   close (M w h _ s) = M w (h+1) 0 (close s)
->   nest k (M w h c s) = M (w+k) h (c+k) (nest k s)
 >   render (M _ _ _ s) = render s
 
 Documents
 =========
 
-Layouts can be defined by the initial structure satisfying the above
-semantics. 
+Documents can be defined as the free monoid of layouts (i.e. a list of
+layouts). The layout operators can be lifted in the natural manner.
 
-Free monoid of <|> (and failure).
+< instance Doc D0 where
+<   empty = [empty]
+<   xs <> ys = concat [ [x <> y | x <- xs] | y <- ys]
+<   xs <|> ys = xs ++ ys
+<   close xs = map close xs
+<   text s = [text s]
+<   nest n = map (nest n)
+<   render = render . minimum . filter valid
+
 
 > class Layout d => Doc d where
 >   (<|>) :: d -> d -> d
@@ -147,14 +350,6 @@ Free monoid of <|> (and failure).
 > valid = ((<= 80) . width)
 
 
--- > instance Doc D0 where
--- >   empty = [empty]
--- >   xs <> ys = concat [ [x <> y | x <- xs] | y <- ys]
--- >   xs <|> ys = xs ++ ys
--- >   close xs = map close xs
--- >   text s = [text s]
--- >   nest n = map (nest n)
--- >   render = render . minimum . filter valid
 
 
 Early filtering out invalid results
@@ -207,11 +402,9 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
 > mergeAll (x:xs) = merge x (mergeAll xs)
 
 > instance Layout D0 where
->   empty = [empty]
 >   xs <> ys = bests $ [ filter valid [x <> y | x <- xs] | y <- ys]
 >   close xs = map close xs
 >   text s = [text s]
->   nest n = map (nest n)
 >   render (x:_) = render x
 
 > instance Doc D0 where
@@ -226,6 +419,13 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
 > pareto' acc (x:xs) = if any (≺ x) acc
 >                        then pareto' acc xs
 >                        else pareto' (x:acc) xs
+
+Nesting and hanging
+===================
+
+> hang :: Doc d => Int -> d -> d -> d
+> hang n x y = (x <> y) <|> (x $$ nest n y)
+
 
 4. Ribbon length
 
@@ -291,7 +491,6 @@ instance Doc D2 where
 \end{spec}
 
 
-> x <+> y = x <> text " " <> y
 > x </> y = x $$ y
 > 
 > -- foldSeq k f [] = k
@@ -299,21 +498,9 @@ instance Doc D2 where
 > -- foldSeq k f xs = foldSeq k f l `f` foldSeq k f r
 > --   where (l,r) = splitAt (length xs `div` 2) xs
 > 
-> foldSeq k f [] = k
-> foldSeq k f xs = foldr1 f xs
 > 
 > 
-> sep,hcat,vcat :: Doc a => [a] -> a
 > 
-> vcat = foldSeq empty ($$)
-> hcat = foldSeq empty (<+>)
-> 
-> sep [] = empty
-> sep xs = hcat xs <|> vcat xs
-> 
-> pretty :: SExpr -> D0
-> pretty (Atom s) = text s
-> pretty (SExpr xs) = text "(" <> (sep $ map pretty xs) <> text ")"
 > 
 > abcd = SExpr $ map (Atom . (:[])) "abcd"
 > abcd4 = SExpr [abcd,abcd,abcd,abcd]
@@ -326,3 +513,29 @@ instance Doc D2 where
 >   SExpr :: [SExpr] -> SExpr
 >   Atom :: String -> SExpr
 >  deriving Show
+
+
+\begin{spec}
+(d1 <> d2) <> d3 == d1 <> (d2 <> d3)
+
+consequence of >>= assoc (list compr), ++ assoc
+
+(d1 <> d2) <> d3
+def
+ (\i0 -> [(i2,t1 ++ t2) | (i1,t1) <- d1 i0, (i2,t2) <- d2 i1]) <> d3
+alpha
+ (\ia0 -> [(ia2,ta1 ++ ta2) | (ia1,ta1) <- d1 ia0, (ia2,ta2) <- d2 ia1]) <> d3
+def
+ \i0 -> [(i3,t1 ++ t3) | (i1,t1) <- (\ia0 -> [(ia2,ta1 ++ ta2) | (ia1,ta1) <- d1 ia0, (ia2,ta2) <- d2 ia1]) i0, (i3,t3) <- d3 i1]
+beta
+ \i0 -> [(i3,t1 ++ t3) | (i1,t1) <- [(ia2,ta1 ++ ta2) | (ia1,ta1) <- d1 i0, (ia2,ta2) <- d2 ia1], (i3,t3) <- d3 i1]
+=<< assoc
+ \i0 -> [(i3,t1 ++ t3) | (ia1,ta1) <- d1 i0, (ia2,ta2) <- d2 ia1, let i1 = ia2; t1 =ta1++ta2,   (i3,t3) <- d3 i1]
+beta
+ \i0 -> [(i3,(ta1 ++ ta2) ++ t3) | (i1,ta1) <- d1 i0, (ia2,ta2) <- d2 i1,  (i3,t3) <- d3 ia2]
+alpha
+\i0 -> [(i3,(t1 ++ t2) ++ t3) | (i1,t1) <- d1 i0, (i2,t2) <- d2 i1, (i3,t3) <- d3 i2]
+++ assoc
+\i0 -> [(i3,t1 ++ t2 ++ t3) | (i1,t1) <- d1 i0, (i2,t2) <- d2 i1, (i3,t3) <- d3 i2]
+
+\end{spec}
