@@ -10,6 +10,13 @@ to compile the file with ghc 7.10
 > import Data.Function
 > import Data.List
 
+What is pretty printing.
+Used as a test ground for functional programming.
+
+A look at design mistakes of Hughes and Wadler.
+
+
+
 
 Popular Haskell pretty printers have given me less-than-optimal
 results.  This is especially disappointing, as they seem to be the
@@ -71,10 +78,9 @@ or vertically, like so:
  d)
 ```
 
-The idea is that the pretty printer shoud print the expression in as
-few lines as possible.
-
-
+The goal of a the pretty printer is to print a given s-expression in
+as few lines as possible, while respecting the above rules and fitting
+within the width of a page.
 
 Taking inspiration from from Hughes, we will allow for both vertical
 and horizontal composition. We will also allow for embedding raw text;
@@ -125,6 +131,7 @@ Printed on a narrow page, we'd like to get:
 
 ``` {.example}
 ---------------
+123456678901234
 (axbxcxd
  ((a b c d)
   (a b c d)
@@ -136,7 +143,7 @@ Printed on a narrow page, we'd like to get:
 NOT This :
 
 ``` {.example}
----------------
+123456678901234
 (axbxcxd ((a
            b
            c
@@ -276,41 +283,71 @@ Algebra
 Precomputing metrics
 --------------------
 
-In order to pick the best layout, it will be useful to compute its
-metrics. Two metrics are needed: the width (on which there is an upper
-bound) and the index of the last line (which we want to minimize).
+It will be useful to compute its metrics: width and the index of the
+last line. Indeed, recall that the pretty printer searches for the layout
 
-These metrics are easy to compute:
+1. has as few lines as possible and
+2. whose width does not exceed a certain size
+
+
+Given the chosen interpretation of layouts, these metrics are easy to
+compute:
 
 > height :: L -> Int
-> height a = length a - 1
+> height = length
 
 > width' :: L -> Int
 > width' = maximum . map length
 
-However, we will not want to recompute these values over and over, so
-they should be precomputed; added as meta-data to the layout. We
-remark in particular the following properties, which will allow us to
-do no recomputation whatsoever of heights:
+However, we do not want to recompute these values over and over, so
+they should be precomputed and tupled with the layout data.  The
+traditional approach is to re-cast computation of the attributes as
+recursive equations over the API. For the height metric, we have:
 
-< height (a <> b) = height a + height b
+< height (a <> b) = height a + height b - 1
+< height (text _) = 1
 < height (close a) = 1 + height a
 
-Efficient computation of the width requires to notice that the width
-of the last line plays a special role.
+< height (xs <> (y:ys)) = length (init xs ++ [last xs ++ y] ++ nest (length x) ys)
+<                       = length (init xs)  +  length [last xs ++ y]  + length (nest (length (last xs)) ys)
+<                       = length xs - 1     +  1                      + length (map _ ys)
+<                       = length xs                                   + length ys
+<                       = length xs                                   + length (y:ys) - 1
+
+
+< width (xs <> (y:ys))
+  Assuming x = last xs
+           lx = length x
+<  = maximum $ map length (init xs ++ [x ++ y] ++ nest lx ys)
+<  = maximum $ map length (init xs ++ [x ++ y] ++ nest lx ys)
+<  = maximum $ init (map length xs) ++ [length (x ++ y)] ++ map length (nest lx ys)
+<  = maximum $ init (map length xs) ++ [length x + length y] ++ map (lx +) (map length ys)
+  By monotonicity of maximum
+<  = maximum $ (map length xs) ++ [length x + length y] ++ map (lx +) (map length ys)
+<  = maximum $ (map length xs) ++  map (lx +) (map length (y:ys))
+<  = max (maximum (map length xs)) (maximum (map (lx +) (map length (y:ys))))
+<  = max (maximum (map length xs)) (lx + (maximum (map length (y:ys))))
+<  = max (width xs)  (lx + width (y:ys))
+
+Thus efficient computation of the width of a layout depends on the
+width of the last line of a layout. This new metric can be defined as follows.
 
 > lastW :: L -> Int
 > lastW = length . last
 
-Using it we can compute the width efficiently, thanks to the following
-equalities:
+It can be efficently computed:
 
-< width' (a <> b) = max (width a) (lastW a + width b)
-< width' (close a) = width' a
-
+< lastW  (text t) = length t
 < lastW  (a <> b) = lastW a + lastW b
 < lastW  (close a) = 0
 
+And thus, so can be the width of a layout:
+
+< width' (text t) = length t
+< width' (a <> b) = max (width a) (lastW a + width b)
+< width' (close a) = width' a
+
+Putting all this reasoning into our implementation, we get:
 
 > data M = M {width :: Int,
 >             mlines :: Int,
@@ -320,15 +357,31 @@ equalities:
 
 > instance Layout M where
 >   text s = M (length s) 0 (length s) (text s)
->   (M w1 h1 c1 s1) <> (M w2 h2 c2 s2) = M (max w1 (w2 + c1)) (h1 + h2) (c1 + c2) (s1 <> s2)
+>   (M w1 h1 c1 s1) <> (M w2 h2 c2 s2) = M (max w1 (w2 + c1)) (h1 + h2 - 1) (c1 + c2) (s1 <> s2)
+>   a <> b = M {width = max (width a) (width b + colDiff a),
+>               mlines = mlines a + mlines b - 1,
+>               colDiff = colDiff a + colDiff b,
+>               mtext = mtext a <> mtext b}
 >   close (M w h _ s) = M w (h+1) 0 (close s)
 >   render (M _ _ _ s) = render s
 
 Documents
 =========
 
+> class Layout d => Doc d where
+>   (<|>) :: d -> d -> d
+
 Documents can be defined as the free monoid of layouts (i.e. a list of
 layouts). The layout operators can be lifted in the natural manner.
+
+We omit the unit of the monoid in the interface. Indeed, it
+corresponds to a document with cannot be laid out, which turns out to
+be useless as an API for pretty printing.
+
+Thus, we chose as a representation for documents the list of possible
+layouts;
+
+> type D0 = [M]
 
 < instance Doc D0 where
 <   empty = [empty]
@@ -337,18 +390,21 @@ layouts). The layout operators can be lifted in the natural manner.
 <   close xs = map close xs
 <   text s = [text s]
 <   nest n = map (nest n)
-<   render = render . minimum . filter valid
 
+Rendering a document is merely picking the shortest layout among the
+valid ones:
 
-> class Layout d => Doc d where
->   (<|>) :: d -> d -> d
+<   render = render . minimumBy (comparing length) . filter valid
 
-
-> type D0 = [M]
+where
 
 > valid :: M -> Bool
-> valid = ((<= 80) . width)
+> valid m = width m <= 80
 
+
+
+
+Very inefficient! What can we do about it?
 
 
 
@@ -357,7 +413,15 @@ Early filtering out invalid results
 
 -- >   xs <> ys = [ filter valid [x <> y | x <- xs] | y <- ys]
 
-This is because the width can only ever increase.
+This is because width is monotonous:
+
+width (a <> b) > width a  and width (a <> b) > width b
+
+and therefore so is validity: keeping invalid layouts is useless: they
+can never be combined with another layout to produce something valid.
+
+valid (a <> b) ==> valid a and valid b
+
 
 Pruning out dominated results
 -----------------------------
