@@ -63,7 +63,7 @@ data SExpr where
 Using the above representation, the S-Expr `(a b c d)` is encoded as
 follows:
 
-> abcd = SExpr (Atom "a") (Atom "b") (Atom "c") (Atom "d")
+> abcd = SExpr [Atom "a",(Atom "b"),(Atom "c"),Atom "d"]
 
 In a pretty display of an S-Expr, we would like the elements inside of
 an S-Expr to be either concatenated horizontally, or aligned
