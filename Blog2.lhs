@@ -1,21 +1,16 @@
-% The *Real* Prettiest Printer
+% An Insanely Pretty Printer
 % Jean-Philippe Bernardy
-
-This blog post is a literate Haskell file. Here is the header needed
-to compile the file with ghc 7.10
 
 > {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, PostfixOperators, ViewPatterns, RecordWildCards, GADTs, NoMonomorphismRestriction, ScopedTypeVariables #-}
 > module Blog2 where
 
 > import Data.Function
-> import Data.List
 
 What is pretty printing.
+
 Used as a test ground for functional programming.
 
-A look at design mistakes of Hughes and Wadler.
-
-
+A critical look at design choices of Hughes and Wadler.
 
 
 Popular Haskell pretty printers have given me less-than-optimal
@@ -51,10 +46,13 @@ libraries, either:
     [wl-pprint](https://hackage.haskell.org/package/wl-pprint)
     package.
 
-Not. Pretty. Enough.
---------------------
 
-Let us assume we want to pretty print S-Expressions:
+A Pretty API
+------------
+
+
+Let us assume we want to pretty print S-Expressions, represented as
+follows:
 
 ``` {.example}
 data SExpr where
@@ -62,14 +60,20 @@ data SExpr where
   Atom :: String -> SExpr
 ```
 
-We'd like to allow to pretty print an S-Expr either horizontally, like
-so:
+Using the above representation, the S-Expr `(a b c d)` is encoded as
+follows:
+
+> abcd = SExpr (Atom "a") (Atom "b") (Atom "c") (Atom "d")
+
+In a pretty display of an S-Expr, we would like the elements inside of
+an S-Expr to be either concatenated horizontally, or aligned
+vertically. The possible pretty layouts of our example would be either
 
 ``` {.example}
 (a b c d)
 ```
 
-or vertically, like so:
+or
 
 ``` {.example}
 (a
@@ -79,20 +83,28 @@ or vertically, like so:
 ```
 
 The goal of a the pretty printer is to print a given s-expression in
-as few lines as possible, while respecting the above rules and fitting
-within the width of a page.
+as few lines as possible, while respecting the above rules, and
+fitting within the width of a page.
 
-Taking inspiration from from Hughes, we will allow for both vertical
-and horizontal composition. We will also allow for embedding raw text;
-and disjunction between layouts.
+A pretty printing library will give us the means to express the
+specification of possible pretty layouts, and automatically pick the
+prettiest.
+
+Taking inspiration from from Hughes, our library will allow to express
+both vertical (`$$`) and horizontal (`<>`) composition of
+documents. We will also allow for embedding raw text (`text`) and
+automatic choice between layouts (`<|>`). At this stage, we keep the
+representation of documents abstract using a typeclass.
 
 < text  :: String -> d
 < (<>)  :: Doc d => d -> d -> d
 < ($$)  :: Doc d => d -> d -> d
 < (<|>)  :: Doc d => d -> d -> d
 
-We can then define a few useful combinators on top of the above:
 
+We can then define a few useful combinators on top of the above: the
+empty document; concatenation with an intermediate space; vertical and
+horizontal concatenation of multiple documents.
 
 > empty :: Layout d => d
 > empty = text ""
@@ -100,94 +112,134 @@ We can then define a few useful combinators on top of the above:
 > (<+>) :: Layout d => d -> d -> d
 > x <+> y = x <> text " " <> y
 
-> sep,hsep,vcat :: Doc d => [d] -> d
+> hsep,vcat :: Doc d => [d] -> d
 > vcat = foldr1 ($$)
 > hsep = foldr1 (<+>)
 
+We can then define automatic choice between horizontal and vertical
+concatenation:
 
+> sep :: Doc d => [d] -> d
 > sep [] = empty
 > sep xs = hsep xs <|> vcat xs
 
-> pretty :: SExpr -> D0
+Turning S-Expressions into document is then child's play:
+
+> pretty :: Doc d => SExpr -> d
 > pretty (Atom s) = text s
 > pretty (SExpr xs) = text "(" <> (sep $ map pretty xs) <> text ")"
 
-let's suppose we want to pretty print the
-following s-expr:
+A Pretty Rendering
+------------------
 
-``` {.example}
-abcd = SExpr $ map (Atom . (:[])) "abcd"
-abcd4 = SExpr [abcd,abcd,abcd,abcd]
-testData = SExpr [Atom "axbxcxd", abcd4] 
-```
+We have given a syntax for describing documents, but what should be
+its semantics?  What does it mean to pretty print a document?
+
+Let us use an example to try and answer the question. Suppose we want
+to pretty print the following s-expr:
+
+> testData = SExpr [SExpr [Atom "12345", abcd4],
+>                   SExpr [Atom "12345678", abcd4]]
+>   where abcd4 = SExpr [abcd,abcd,abcd,abcd]
 
 Printed on a wide page, we'd like to get:
 
 ``` {.example}
-(axbxcxd ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d)))
+(1234567 ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d)))
 ```
 
-Printed on a narrow page, we'd like to get:
+Printed on a 21-column-wide page, we'd like to get:
 
 ``` {.example}
 ---------------
-123456678901234
-(axbxcxd
- ((a b c d)
-  (a b c d)
-  (a b c d)
-  (a b c d)
-  (a b c d))
+12345678901234567890
+((12345 ((a b c d)
+         (a b c d)
+         (a b c d)
+         (a b c d)
+         (a b c d)))
+ (12345678
+  ((a b c d)
+   (a b c d)
+   (a b c d)
+   (a b c d)
+   (a b c d))))
 ```
 
-NOT This :
+Note that, using Hughes' library, we would get the following
+less-than-pretty output:
 
 ``` {.example}
-123456678901234
-(axbxcxd ((a
-           b
-           c
-           d)
-          (a
-           b
-           c
-           d)
-          (a
-           b
-           c
-           d)
-          (a
-           b
-           c
-           d)
-          (a
-           b
-           c
-           d)))
----------------
+12345678901234567890
+((12345 ((a b c d)
+         (a b c d)
+         (a b c d)
+         (a b c d)
+         (a b c d)))
+ (12345678 ((a
+             b
+             c
+             d)
+            (a
+             b
+             c
+             d)
+            (a
+             b
+             c
+             d)
+            (a
+             b
+             c
+             d)
+            (a
+             b
+             c
+             d))))
 ```
 
-The thing is, Hughes states that "it would be unreasonably inefficient
+
+Why the long tail? Hughes states that "it would be unreasonably inefficient
 for a pretty-printer do decide whether or not to split the first line of
 a document on the basis of the content of the last." (sec. 7.4 of his
 paper). Therefore, he chooses a greedy algorithm, which tries to fit as
 much as possible on a single line, without regard for what comes next.
-In our example, the algorithm fits `(axbxcxd ((a`, but then it has
+In our example, the algorithm fits `(1234567 ((a`, but then it has
 committed to a very deep indentation level, which forces a
-less-than-pretty outcome for the remainder of the document.
+long rendering for the remainder of the document.
 
-Wadler's design fares somewhat better. It does not suffer from the above
-problem... *by default*. That is, it lacks the capability to express
-that sub-documents should be vertically aligned --- compositionally.
+
+One may wonder what would happen with Wadler's API. The answer is that
+it cannot even express the layout we are after. Indeed, one can only
+specify a *constant* amount of indentation, not one that depends on
+the contents of a document.  This means that Wadler's API lacks the
+capability to express that a multi-line sub-documents should be laid
+out to the right of a document. The best one can hope on our example
+is thus:
+
+
+``` {.example}
+123456678901234
+((12345
+  ((a b c d)
+   (a b c d)
+   (a b c d)
+   (a b c d)
+   (a b c d)))
+ (12345678
+  ((a b c d)
+   (a b c d)
+   (a b c d)
+   (a b c d)
+   (a b c d))))
+```
+
 
 (See sec ??? for a discussion)
 
-Layouts
-=======
 
-
-Refinement of the API
----------------------
+A Prettier API
+--------------
 
 > spaces :: Layout d => Int -> d
 > spaces n = text $ replicate n ' '
@@ -222,9 +274,11 @@ thought:
 Hughes: "translate [to the right] the second operand, so that is tabs
 against the last character of the first operand"
 
->   xs <> (y:ys) = xs0 ++ [x ++ y] ++ nest (length x) ys
+>   xs <> (y:ys) = xs0 ++ [x ++ y] ++ map (indent ++) ys
 >      where xs0 = init xs
 >            x = last xs
+>            n = length x
+>            indent = replicate n ' '
 
 The trained eye will detect that, given the above semantics,
 horizontal concatenation is nearly a special case of horizontal
@@ -357,13 +411,14 @@ Putting all this reasoning into our implementation, we get:
 
 > instance Layout M where
 >   text s = M (length s) 0 (length s) (text s)
->   (M w1 h1 c1 s1) <> (M w2 h2 c2 s2) = M (max w1 (w2 + c1)) (h1 + h2 - 1) (c1 + c2) (s1 <> s2)
 >   a <> b = M {width = max (width a) (width b + colDiff a),
 >               mlines = mlines a + mlines b - 1,
 >               colDiff = colDiff a + colDiff b,
 >               mtext = mtext a <> mtext b}
 >   close (M w h _ s) = M w (h+1) 0 (close s)
 >   render (M _ _ _ s) = render s
+
+-- >   (M w1 h1 c1 s1) <> (M w2 h2 c2 s2) = M (max w1 (w2 + c1)) (h1 + h2 - 1) (c1 + c2) (s1 <> s2)
 
 Documents
 =========
@@ -452,7 +507,6 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
       close d1 ≺ close d2
       nest k d1 ≺ nest k d2
 
-
 > merge :: Ord a => [a] -> [a] -> [a]
 > merge [] xs = xs
 > merge xs [] = xs
@@ -466,7 +520,7 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
 > mergeAll (x:xs) = merge x (mergeAll xs)
 
 > instance Layout D0 where
->   xs <> ys = bests $ [ filter valid [x <> y | x <- xs] | y <- ys]
+>   xs <> ys = bests [ filter valid [x <> y | x <- xs] | y <- ys]
 >   close xs = map close xs
 >   text s = [text s]
 >   render (x:_) = render x
@@ -484,6 +538,28 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
 >                        then pareto' acc xs
 >                        else pareto' (x:acc) xs
 
+Last Width
+==========
+
+> data D1 = D1 {minLW :: Int, doc0 :: Int -> D0}
+> 
+> instance Layout D1 where
+>   D1 w1 xs1 <> D1 w2 xs2 = D1 (w1 + w2) (\w ->
+>                                           let xs = xs1 w
+>                                               ys = xs2 (w - w1)
+>                                               val a = width a <= w
+>                                           in bests [filter val [x <> y | x <- xs] | y <- ys])
+>   text t = D1 (length t) (\w -> [text t | length t <= w])
+>   close (D1 _ xs1) = D1 0 (\w -> close (xs1 w))
+>   render (D1 _ x) = render (x 80)
+
+-- >   close xs = map close xs
+-- >   text s = [text s]
+-- >   render (x:_) = render x
+
+> instance Doc D1 where
+>   D1 w1 x1 <|> D1 w2 x2 = D1 (min w1 w2) (\w -> x1 w <|> x2 w)
+
 Nesting and hanging
 ===================
 
@@ -500,8 +576,15 @@ Note that we pick the narrowest result fitting on min. lines lines!
 
 
 
+< minLastW (a <|> b) = min (minLastW a) (minLastW b)
+< minLastW (close a) = 0
+< minLastW (a <> b) = minLastW a + minLastW b
+< minLastW (text t) = length t
 
-
+< minWidth (a <|> b) = min (minWidth a) (minWidth b)
+< minWidth (close a) = minWidth a
+< minWidth (a <> b) = minLastW a + minWidth b
+< minWidth (text t) = length t
 
 
 
@@ -566,9 +649,7 @@ instance Doc D2 where
 > 
 > 
 > 
-> abcd = SExpr $ map (Atom . (:[])) "abcd"
-> abcd4 = SExpr [abcd,abcd,abcd,abcd]
-> testData = SExpr [Atom "axbxcxd", abcd4]
+
 > testData2 = SExpr (replicate 10 testData)
 > testData4 = SExpr (replicate 10 testData2)
 > testData8 = SExpr (replicate 10 testData4)
