@@ -13,8 +13,7 @@ instance Monoid Doc where
 globalWidth = 40
 
 
-data Var = None -- zero
-         | Level -- current indentation level
+data Var = Level -- current indentation level
          | CurCol -- current column
   deriving (Eq, Show, Ord)
 
@@ -74,7 +73,6 @@ infix 0 .<=.
 (.<=.) (Expr k v) n = case v of
   CurCol -> cond UnBound (Bound $ n - k)
   Level -> cond (Bound $ n - k) UnBound
-  None -> if k >= 0 then true else Cond (Bound (-1))(Bound (-1))
 
 -- Assert that an expression should be lower than a given bound.
 (<=.) :: Expr -> Bound Int -> Condition
@@ -97,7 +95,7 @@ spacing s = text s
 align (Doc d) = Doc [M (onCol c) n (s' s) (\i c -> t c c) | M c n s t <- d]
   where
         -- The final column. If it was based on the level, it is now
-        -- based on the cur col. (The None case cannot happen!)
+        -- based on the cur col. 
         s' (Expr k v) = Expr k CurCol
         -- We set the level to the column. So, if there was a
         -- condition on the level, it becomes a condition on the
@@ -155,7 +153,6 @@ instance Show Expr where
     op x y = case y of
       ('-':y') -> x ++ " - " ++ y'
       _ -> x ++ " + " ++ y
-    sho None = ""
     sho Level = "ı"
     sho CurCol = "γ"
 
