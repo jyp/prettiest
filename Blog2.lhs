@@ -136,19 +136,22 @@ We have given a syntax for describing documents, but what should be
 its semantics?  What does it mean to pretty print a document?
 
 Let us use an example to try and answer the question. Suppose we want
-to pretty print the following s-expr:
+to pretty print the following s-expr (which is specially crafted to
+demonstrate issues with both Hughes and Wadler libraries):
 
 > testData = SExpr [SExpr [Atom "12345", abcd4],
 >                   SExpr [Atom "12345678", abcd4]]
 >   where abcd4 = SExpr [abcd,abcd,abcd,abcd]
 
-Printed on a wide page, we'd like to get:
+Printed on a 80-column-wide page, we'd like to get:
 
 ``` {.example}
-(1234567 ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d)))
+12345678901234567890123456789012345678901234567890123456789012345678901234567890
+((12345 ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d)))
+ (12345678 ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d))))
 ```
 
-Printed on a 21-column-wide page, we'd like to get:
+Printed on a 20-column-wide page, we'd like to get:
 
 ``` {.example}
 ---------------
@@ -166,8 +169,7 @@ Printed on a 21-column-wide page, we'd like to get:
    (a b c d))))
 ```
 
-Note that, using Hughes' library, we would get the following
-less-than-pretty output:
+Note that, using Hughes' library, we would get the following output:
 
 ``` {.example}
 12345678901234567890
@@ -198,7 +200,6 @@ less-than-pretty output:
              d))))
 ```
 
-
 Why the long tail? Hughes states that "it would be unreasonably inefficient
 for a pretty-printer do decide whether or not to split the first line of
 a document on the basis of the content of the last." (sec. 7.4 of his
@@ -206,20 +207,22 @@ paper). Therefore, he chooses a greedy algorithm, which tries to fit as
 much as possible on a single line, without regard for what comes next.
 In our example, the algorithm fits `(1234567 ((a`, but then it has
 committed to a very deep indentation level, which forces a
-long rendering for the remainder of the document.
+sub-optimal rendering for the remainder of the document.
 
 
-One may wonder what would happen with Wadler's API. The answer is that
-it cannot even express the layout we are after. Indeed, one can only
-specify a *constant* amount of indentation, not one that depends on
-the contents of a document.  This means that Wadler's API lacks the
-capability to express that a multi-line sub-documents should be laid
-out to the right of a document. The best one can hope on our example
-is thus:
+One may wonder what would happen with Wadler's libary. Unfortunately,
+its API cannot even express the layout we are after! Indeed, one can
+only specify a *constant* amount of indentation, not one that depends
+on the contents of a document.  This means that Wadler's library lacks
+the capability to express that a multi-line sub-documents should be
+laid out to the right of a document, they must be put below them.
+Thus, with an appropriate specification, Wadler would render our
+example as follows; putting a spurious line break after the token
+12345678.
 
 
 ``` {.example}
-123456678901234
+12345678901234567890
 ((12345
   ((a b c d)
    (a b c d)
@@ -234,19 +237,11 @@ is thus:
    (a b c d))))
 ```
 
-
 (See sec ??? for a discussion)
 
 
 A Prettier API
 --------------
-
-> spaces :: Layout d => Int -> d
-> spaces n = text $ replicate n ' '
-
-> nest :: Layout d => Int -> d -> d
-> nest n y = spaces n <> y
-
 
 Define both a minimal API and its semantics for layouts (without
 disjunction).
@@ -562,6 +557,12 @@ Last Width
 
 Nesting and hanging
 ===================
+
+> spaces :: Layout d => Int -> d
+> spaces n = text $ replicate n ' '
+
+> nest :: Layout d => Int -> d -> d
+> nest n y = spaces n <> y
 
 > hang :: Doc d => Int -> d -> d -> d
 > hang n x y = (x <> y) <|> (x $$ nest n y)

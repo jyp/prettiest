@@ -12,8 +12,13 @@ instance Monoid Doc where
 
 globalWidth = 40
 
-data Var = None | Level | CurCol
+
+data Var = None -- zero
+         | Level -- current indentation level
+         | CurCol -- current column
   deriving (Eq, Show, Ord)
+
+-- | Expr k v is a representation of v + k
 data Expr = Expr Int Var deriving Eq
 
 (.+) :: Int -> Expr -> Expr
@@ -31,6 +36,7 @@ e `after` _ = e
 data Bound x = UnBound | Bound x
   deriving (Eq,Show)
 
+-- a <= b : a is more lax than b
 instance Ord x => Ord (Bound x) where
   UnBound <= _ = True
   _ <= UnBound = False
@@ -42,21 +48,27 @@ instance Ord x => Monoid (Bound x) where
   Bound x `mappend` Bound y = Bound (min x y)
   mempty = UnBound
 
+-- A bound on the the level and the current column
 data Condition = Cond (Bound Int) (Bound Int) -- level; curCol bound
   deriving Eq
 
+-- If there is a bound on the current column, then it applies to the
+-- level as wel, because current column <= level
 cond :: Bound Int -> Bound Int -> Condition
 cond x y = Cond (x <> y) y
 
 true :: Condition
 true = Cond UnBound UnBound
 
+-- Is a condition feasible?
 feasible :: Condition -> Bool
 feasible (Cond lvl col) = all (>= 0) [x | Bound x <- [lvl,col]]
 
+-- Substitute the cur col by a value in a condition.
 apply :: Expr -> Condition -> Condition
 apply newCurCol (Cond lvl col) = (level <=. lvl) /\ (newCurCol <=. col)
 
+-- Is an expression less than a constant?
 infix 0 .<=.
 (.<=.) :: Expr -> Int -> Condition
 (.<=.) (Expr k v) n = case v of
@@ -64,6 +76,7 @@ infix 0 .<=.
   Level -> cond (Bound $ n - k) UnBound
   None -> if k >= 0 then true else Cond (Bound (-1))(Bound (-1))
 
+-- Assert that an expression should be lower than a given bound.
 (<=.) :: Expr -> Bound Int -> Condition
 _ <=. UnBound = true
 x <=. Bound y = x .<=. y
@@ -71,9 +84,9 @@ x <=. Bound y = x .<=. y
 (/\) :: Condition -> Condition -> Condition
 Cond lvl1 col1 /\ Cond lvl2 col2 = Cond (lvl1 <> lvl2) (col1 <> col2)
 
-data M = M {mcond :: Condition,
-            mlines :: Int,
-            mNewCurCol :: Expr,
+data M = M {mcond :: Condition, -- condition that must be satisfied to lay this
+            mlines :: Int, -- number of lines
+            mNewCurCol :: Expr, -- new current column at the end of the layout
             mtext :: Int -> Int -> (Int,String)}
 
 newtype Doc = Doc {fromDoc :: [M]} deriving Show
@@ -82,13 +95,25 @@ text    s = Doc [M (newCurCol .<=. globalWidth) 0 newCurCol $ \_ c -> (c + lengt
   where newCurCol = (length s .+ curCol)
 spacing s = text s
 align (Doc d) = Doc [M (onCol c) n (s' s) (\i c -> t c c) | M c n s t <- d]
-  where s' (Expr k v) = Expr k CurCol
+  where
+        -- The final column. If it was based on the level, it is now
+        -- based on the cur col. (The None case cannot happen!)
+        s' (Expr k v) = Expr k CurCol
+        -- We set the level to the column. So, if there was a
+        -- condition on the level, it becomes a condition on the
+        -- column.
         onCol (Cond lvl col) = Cond UnBound (lvl <> col)
-nest n (Doc d) = Doc [M (adjust c) n s $ \i c -> t (i+n) c | M c n s t <- d]
-  where adjust (Cond lvl col) = (n .+ level <=. lvl) /\ (curCol <=. col)
+nest n (Doc d) = Doc [M (onCol c) n (s' s) $ \i c -> t (i+n) c | M c n s t <- d]
+  where onCol (Cond lvl col) = (n .+ level <=. lvl) /\ (curCol <=. col)
+        -- The final column?
+        -- If it a function of the current column, it so remains.
+        -- If it was a function of the current level, it should be updated.
+        s' (Expr k CurCol) = Expr k CurCol
+        s' (Expr k Level) = Expr (k + n) Level
+
 nil = Doc [M true 0 curCol $ \_ c -> (c,"")]
 line = Doc [M true 1 level $ \i _ -> (i,"\n" ++ replicate i ' ')]
-Doc d1 .<> Doc d2 = Doc $ pareto $ 
+Doc d1 .<> Doc d2 = Doc $ pareto $
       [M c' (n1+n2)  (s2 `after` s1) $ \i c -> let (col',x') = t1 i c
                                                    (c'',x'') = t2 i col'
                                                in (c'',x'++x'')
