@@ -269,6 +269,20 @@ thought:
 Hughes: "translate [to the right] the second operand, so that is tabs
 against the last character of the first operand"
 
+aaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaa    <>    bbbbbbbbbbbbbbbb
+aaaaaaaaaa                   bbbbbb
+
+
+= 
+
+aaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaa
+aaaaaaaaaabbbbbbbbbbbbbbbb
+          bbbbbb
+
+>   [] <> ys = ys
+>   xs <> [] = xs
 >   xs <> (y:ys) = xs0 ++ [x ++ y] ++ map (indent ++) ys
 >      where xs0 = init xs
 >            x = last xs
@@ -555,17 +569,83 @@ Last Width
 > instance Doc D1 where
 >   D1 w1 x1 <|> D1 w2 x2 = D1 (min w1 w2) (\w -> x1 w <|> x2 w)
 
-Nesting and hanging
-===================
+Hughes-Style nesting
+====================
 
-> spaces :: Layout d => Int -> d
-> spaces n = text $ replicate n ' '
+Hughes proposes a nest conbinator.
+Mostly used for "hanging":
+
+> hang :: Doc d => Int -> d -> d -> d
+> hang n x y = (x <> y) <|> (x $$ nest n y)
+
+His nesting is optional, but in the context of hang, it does not need to be.
 
 > nest :: Layout d => Int -> d -> d
 > nest n y = spaces n <> y
 
-> hang :: Doc d => Int -> d -> d -> d
-> hang n x y = (x <> y) <|> (x $$ nest n y)
+
+Wadler-Style Nesting
+====================
+
+
+> data M2 = M2 {heigh :: Int,
+>               width1 :: Int, hasReset :: Bool,
+>               width2 :: Int, lW2 :: Int,
+>               l1, l2 :: L}
+
+aaaaaaaaaa               cccccccccccc
+aaaaa                    ccccc
+-----------------   <>   -------------
+bbbbbbbbbbbbbbbb         ddddddd
+bbbbbb                   ddd
+
+=
+
+aaaaaaaaaa
+aaaaa
+-------------------
+bbbbbbbbbbbbbbbb
+bbbbbbcccccccccccc
+      ccccc
+ddddddd
+ddd
+
+> instance Layout M2 where
+>   M2 y w1 True w2 lw a b <> M2 z x1 r x2 lx c d = M2 (z+y) w1 True (maximum [w2,lw+x1,x2]) (if r then lx else lw + lx) a ((b <> c) ++ d)
+
+
+aaaaaaaaaa               cccccccccccc
+aaaaa                    ccccc
+                    <>   -------------
+                         ddddddd
+                         ddd
+
+
+aaaaaaaaaa
+aaaaacccccccccccc
+     ccccc
+-----------------
+ddddddd
+ddd
+
+
+>   M2 y w1 False _ lw a _ <> M2 z x1 r x2 lx c d = M2 (z+y) (max w1 (lw + x1)) r x2 (if r then lx else lw + lx) (a <> c) d
+>   text s = M2 0 (length s) False 0 (length s) [s] []
+>   close (M2 x w1 r w2 0 a b) = M2 (x+1) w1 r w2 0 (if r then a else close a) (if r then close b else b)
+>   close d = tabulate (d <> line)
+>   render (M2 _ _ _ _ _ a b) = render (a ++ b)
+
+> spaces :: Layout d => Int -> d
+> spaces n = text $ replicate n ' '
+
+> tab n = M2 1 0 True n n [] [replicate n ' ']
+> nest n d = tab n <> d
+
+> tabulate (M2 h w1 r w2 lw a b) = M2 h (max w1 w2) False 0 lw (a ++ b) []
+
+> line = M2 1 0 True 0 0 [] [[]]
+
+-- > hang n x y = (x <> y) <|> (x <> nest n y)
 
 
 4. Ribbon length
