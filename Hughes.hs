@@ -136,7 +136,8 @@ pretty (SExpr xs) = text "(" .<> (sep $ map pretty xs) .<> text ")"
 
 abcd = SExpr $ map (Atom . (:[])) "abcd"
 abcd4 = SExpr [abcd,abcd,abcd,abcd]
-testData = SExpr [Atom "axbxcxd", abcd4]
+testData = SExpr [SExpr [Atom "12345", abcd4],
+                  SExpr [Atom "12345678", abcd4]]
 testData2 = SExpr (replicate 10 testData)
 testData4 = SExpr (replicate 10 testData2)
 testData8 = SExpr (replicate 10 testData4)
