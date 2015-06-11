@@ -659,17 +659,12 @@ His nesting is optional, but in the context of hang, it does not need to be.
 Wadler-Style Nesting
 ====================
 
-can't do this:
 
-While the example is specially crafted, the pattern occurs often. Consider:
-
-someFunction (first element,
-              second element,
-              third element)
-
-> data M2 = M2 {heigh :: Int,
->               width1 :: Int, hasReset :: Bool,
->               width2 :: Int, lW2 :: Int,
+> data M2 = M2 {heigh :: Int, -- minimize
+>               width1 :: Int, -- minimize
+>               hasReset :: Bool, -- Better if True.
+>               width2 :: Int, -- Note: this does not need to be minimized, just < 80
+>               lW2 :: Int, -- minimize
 >               l1, l2 :: L}
 
 aaaaaaaaaa               cccccccccccc
