@@ -63,7 +63,7 @@ data SExpr where
 Using the above representation, the S-Expr `(a b c d)` is encoded as
 follows:
 
-> abcd = SExpr [Atom "a",(Atom "b"),(Atom "c"),Atom "d"]
+> abcd = SExpr [Atom "a",Atom "b",Atom "c",Atom "d"]
 
 In a pretty display of an S-Expr, we would like the elements inside of
 an S-Expr to be either concatenated horizontally, or aligned
@@ -125,7 +125,9 @@ concatenation:
 
 Turning S-Expressions into document is then child's play:
 
-> pretty :: Doc d => SExpr -> d
+-- > pretty :: Doc d => SExpr -> d
+
+> pretty :: SExpr -> D0
 > pretty (Atom s) = text s
 > pretty (SExpr xs) = text "(" <> (sep $ map pretty xs) <> text ")"
 
@@ -203,7 +205,31 @@ Note that, using Hughes' library, we would get the following output:
 Why the long tail? Hughes states that "it would be unreasonably inefficient
 for a pretty-printer do decide whether or not to split the first line of
 a document on the basis of the content of the last." (sec. 7.4 of his
-paper). Therefore, he chooses a greedy algorithm, which tries to fit as
+paper).
+
+That's right! For example:
+
+aaaaaaa bbbbbbbbbb
+        x
+        ...
+        ...
+        ...
+        x
+        ccccccccc d
+                  d
+                  d
+                  d
+
+aaaaaaa
+  bbbbbbbbbb
+  x
+  ...
+  ...
+  ...
+  x
+  ccccccccc d d d d
+
+Therefore, he chooses a greedy algorithm, which tries to fit as
 much as possible on a single line, without regard for what comes next.
 In our example, the algorithm fits `(1234567 ((a`, but then it has
 committed to a very deep indentation level, which forces a
@@ -239,6 +265,13 @@ example as follows; putting a spurious line break after the token
 
 (See sec ??? for a discussion)
 
+
+Common pattern:
+
+someVal = someFunction [listElement x,
+                        listElement y,
+                        listElement z,
+                        listElement w]
 
 A Prettier API
 --------------
@@ -547,27 +580,39 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
 >                        then pareto' acc xs
 >                        else pareto' (x:acc) xs
 
-Last Width
+Min Width 
+==============
+
+
+Min Last Width
 ==========
 
-> data D1 = D1 {minLW :: Int, doc0 :: Int -> D0}
+
+aaaaaaaaaaaaaaaaaaa
+aaaaaaaaaabbbbbbbbbbbbbbbb
+          bbbbbb
+
+
+> data D1 = D1 {minW :: Int, minLW :: Int, doc0 :: Int -> Int -> D0}
 > 
 > instance Layout D1 where
->   D1 w1 xs1 <> D1 w2 xs2 = D1 (w1 + w2) (\w ->
->                                           let xs = xs1 w
->                                               ys = xs2 (w - w1)
->                                               val a = width a <= w
+>   D1 m1 w1 xs1 <> D1 m2 w2 xs2 = D1 (w1 + m2)
+>                                     (w1 + w2)
+>                                     (\w lw ->
+>                                           let xs = xs1 w (w - m2)
+>                                               ys = xs2 (w - w1) (min lw (w - w1))
+>                                               val a = (width a <= w) && (colDiff a <= lw)
 >                                           in bests [filter val [x <> y | x <- xs] | y <- ys])
->   text t = D1 (length t) (\w -> [text t | length t <= w])
->   close (D1 _ xs1) = D1 0 (\w -> close (xs1 w))
->   render (D1 _ x) = render (x 80)
+>   text t = D1 (length t) (length t) (\w lw -> [text t | length t <= w])
+>   close (D1 m _ xs1) = D1 m 0 (\w lw -> close (xs1 w w))
+>   render (D1 _ _ x) = render (x 80 80)
 
 -- >   close xs = map close xs
 -- >   text s = [text s]
 -- >   render (x:_) = render x
 
 > instance Doc D1 where
->   D1 w1 x1 <|> D1 w2 x2 = D1 (min w1 w2) (\w -> x1 w <|> x2 w)
+>   D1 m1 w1 x1 <|> D1 m2 w2 x2 = D1 (min m1 m2) (min w1 w2) (\w lw -> x1 w lw <|> x2 w lw)
 
 Hughes-Style nesting
 ====================
@@ -587,6 +632,13 @@ His nesting is optional, but in the context of hang, it does not need to be.
 Wadler-Style Nesting
 ====================
 
+can't do this:
+
+While the example is specially crafted, the pattern occurs often. Consider:
+
+someFunction (first element,
+              second element,
+              third element)
 
 > data M2 = M2 {heigh :: Int,
 >               width1 :: Int, hasReset :: Bool,
@@ -639,7 +691,8 @@ ddd
 > spaces n = text $ replicate n ' '
 
 > tab n = M2 1 0 True n n [] [replicate n ' ']
-> nest n d = tab n <> d
+
+-- > nest n d = tab n <> d
 
 > tabulate (M2 h w1 r w2 lw a b) = M2 h (max w1 w2) False 0 lw (a ++ b) []
 
@@ -765,3 +818,44 @@ alpha
 \i0 -> [(i3,t1 ++ t2 ++ t3) | (i1,t1) <- d1 i0, (i2,t2) <- d2 i1, (i3,t3) <- d3 i2]
 
 \end{spec}
+
+
+Why does the semi-greedy version does not work?
+===============================================
+
+- We have printed more tokens.
+- Current column is less.
+
+
+1 2 3 4
+  5 6 7
+      8
+      9
+      0
+      a
+
+1 2 3
+    4 5
+    6 7
+    8 9
+    0 a
+
+aaaaaaa bbbbbbbbbb
+        x
+        ...
+        ...
+        ...
+        x
+        ccccccccc d
+                  d
+                  d
+                  d
+
+aaaaaaa
+  bbbbbbbbbb
+  x
+  ...
+  ...
+  ...
+  x
+  ccccccccc d d d d
