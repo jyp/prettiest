@@ -2,7 +2,6 @@
 % Jean-Philippe Bernardy
 
 > {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, PostfixOperators, ViewPatterns, RecordWildCards, GADTs, NoMonomorphismRestriction, ScopedTypeVariables #-}
-> module Blog2 where
 
 > import Data.Function
 
@@ -125,9 +124,9 @@ concatenation:
 
 Turning S-Expressions into document is then child's play:
 
--- > pretty :: Doc d => SExpr -> d
+-- > pretty :: SExpr -> D0
 
-> pretty :: SExpr -> D0
+> pretty :: Doc d => SExpr -> d
 > pretty (Atom s) = text s
 > pretty (SExpr xs) = text "(" <> (sep $ map pretty xs) <> text ")"
 
@@ -266,7 +265,7 @@ example as follows; putting a spurious line break after the token
 (See sec ??? for a discussion)
 
 
-Common pattern:
+It's actually a common pattern:
 
 someVal = someFunction [listElement x,
                         listElement y,
@@ -329,8 +328,11 @@ empty line to the left hand side layout and compose horizontally:
 
 >   close xs = xs ++ [""]
 
+>   meter a = (height a, width' a, lastW a)
+
 > ($$) :: Layout d => d -> d -> d
 > a $$ b = close a <> b
+
 
 One might argue that this choice of API is not really simpler. Yet,
 we will stick with it, for two reasons:
@@ -348,6 +350,7 @@ To sum up, our API for layouts is the following:
 >   text :: String -> d
 >   close :: d -> d
 >   render :: d -> String
+>   meter :: d -> (Int,Int,Int)
 
 Algebra
 -------
@@ -454,11 +457,12 @@ Putting all this reasoning into our implementation, we get:
 > instance Layout M where
 >   text s = M (length s) 0 (length s) (text s)
 >   a <> b = M {width = max (width a) (width b + colDiff a),
->               mlines = mlines a + mlines b - 1,
+>               mlines = mlines a + mlines b,
 >               colDiff = colDiff a + colDiff b,
 >               mtext = mtext a <> mtext b}
 >   close (M w h _ s) = M w (h+1) 0 (close s)
 >   render (M _ _ _ s) = render s
+>   meter (M w h lw _) = (h,w,lw)
 
 -- >   (M w1 h1 c1 s1) <> (M w2 h2 c2 s2) = M (max w1 (w2 + c1)) (h1 + h2 - 1) (c1 + c2) (s1 <> s2)
 
@@ -566,6 +570,7 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
 >   close xs = map close xs
 >   text s = [text s]
 >   render (x:_) = render x
+>   meter  (x:_) = meter x
 
 > instance Doc D0 where
 >   xs <|> ys = bests [xs,ys]
@@ -580,12 +585,8 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
 >                        then pareto' acc xs
 >                        else pareto' (x:acc) xs
 
-Min Width 
-==============
-
-
-Min Last Width
-==========
+Min Width and min last width
+============================
 
 
 aaaaaaaaaaaaaaaaaaa
@@ -593,10 +594,14 @@ aaaaaaaaaabbbbbbbbbbbbbbbb
           bbbbbb
 
 
-> data D1 = D1 {minW :: Int, minLW :: Int, doc0 :: Int -> Int -> D0}
+> data D1 = D1 {minW :: Int, -- min width
+>               minLW :: Int, -- min last width
+>               doc0 :: Int -> -- available width
+>                       Int -> -- available last width (invar: less than the above.)
+>                       D0}
 > 
 > instance Layout D1 where
->   D1 m1 w1 xs1 <> D1 m2 w2 xs2 = D1 (w1 + m2)
+>   D1 m1 w1 xs1 <> D1 m2 w2 xs2 = D1 (max m1 (w1 + m2))
 >                                     (w1 + w2)
 >                                     (\w lw ->
 >                                           let xs = xs1 w (w - m2)
@@ -606,6 +611,7 @@ aaaaaaaaaabbbbbbbbbbbbbbbb
 >   text t = D1 (length t) (length t) (\w lw -> [text t | length t <= w])
 >   close (D1 m _ xs1) = D1 m 0 (\w lw -> close (xs1 w w))
 >   render (D1 _ _ x) = render (x 80 80)
+>   meter  (D1 _ _ x) = meter (x 80 80)
 
 -- >   close xs = map close xs
 -- >   text s = [text s]
@@ -613,6 +619,27 @@ aaaaaaaaaabbbbbbbbbbbbbbbb
 
 > instance Doc D1 where
 >   D1 m1 w1 x1 <|> D1 m2 w2 x2 = D1 (min m1 m2) (min w1 w2) (\w lw -> x1 w lw <|> x2 w lw)
+
+> data D2 = (:<>) D2 D2 | Text String | Close D2 |  D2 :<|> D2
+>   deriving Eq
+
+> instance Layout D2 where
+>   text = Text
+>   close = Close
+>   -- (a :<> b) <> c = a :<> (b <> c)
+>   a <> b = a :<> b
+>   render = render . fold
+>   meter = meter . fold
+
+> fold :: D2 -> D1
+> fold (Text s) = text s
+> fold (Close a) = close (fold a)
+> fold (a :<> b) = fold a <> fold b
+> fold (a :<|> b) = fold a <|> fold b
+
+> instance Doc D2 where
+>   (a :<> b) <|> (a' :<> b') | a == a' = a <> (b <|> b')
+>   a <|> a' = a :<|> a'
 
 Hughes-Style nesting
 ====================
@@ -686,6 +713,7 @@ ddd
 >   close (M2 x w1 r w2 0 a b) = M2 (x+1) w1 r w2 0 (if r then a else close a) (if r then close b else b)
 >   close d = tabulate (d <> line)
 >   render (M2 _ _ _ _ _ a b) = render (a ++ b)
+>   meter (M2 _ _ _ _ _ a b) = error "stupid idea"
 
 > spaces :: Layout d => Int -> d
 > spaces n = text $ replicate n ' '
@@ -773,16 +801,6 @@ instance Doc D2 where
 
 
 > x </> y = x $$ y
-> 
-> -- foldSeq k f [] = k
-> -- foldSeq k f [x] = x
-> -- foldSeq k f xs = foldSeq k f l `f` foldSeq k f r
-> --   where (l,r) = splitAt (length xs `div` 2) xs
-> 
-> 
-> 
-> 
-> 
 
 > testData2 = SExpr (replicate 10 testData)
 > testData4 = SExpr (replicate 10 testData2)
@@ -823,8 +841,9 @@ alpha
 Why does the semi-greedy version does not work?
 ===============================================
 
-- We have printed more tokens.
-- Current column is less.
+- At line 2:
+  - We have printed more tokens.
+  - Current column is less.
 
 
 1 2 3 4
@@ -834,28 +853,19 @@ Why does the semi-greedy version does not work?
       0
       a
 
+But this layout turns out to be shorter:
+
 1 2 3
     4 5
     6 7
     8 9
     0 a
 
-aaaaaaa bbbbbbbbbb
-        x
-        ...
-        ...
-        ...
-        x
-        ccccccccc d
-                  d
-                  d
-                  d
 
-aaaaaaa
-  bbbbbbbbbb
-  x
-  ...
-  ...
-  ...
-  x
-  ccccccccc d d d d
+
+> main :: IO ()
+> main = do
+>   print $ meter $ mms
+>   where mms :: D1
+>         mms = pretty testData8
+>           -- = [mlines | M {..} <- doc0 (pretty testData4) 80 80]
