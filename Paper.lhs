@@ -1,49 +1,42 @@
 % An Insanely Pretty Printer
 % Jean-Philippe Bernardy
 
-> {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, PostfixOperators, ViewPatterns, RecordWildCards, GADTs, NoMonomorphismRestriction, ScopedTypeVariables #-}
+> {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, PostfixOperators, ViewPatterns, RecordWildCards, GADTs, NoMonomorphismRestriction, ScopedTypeVariables, InstanceSigs #-}
 
 > import Data.Function
+> import Data.List (intercalate)
 
-What is pretty printing.
+Pretty printing is the rendering of data structures in a way which
+makes it pleasant to read. I propose that two principles are essential
+to pretty printing:
 
-Used as a test ground for functional programming.
+ 1. clever use of layout to make it easy for a human to recognise the
+organisation of data.
 
-A critical look at design choices of Hughes and Wadler.
+ 2. optimisation of the amount of space used
+
+The data structures in question are often program representations,
+sometimes generated using meta-programming.
 
 
-Popular Haskell pretty printers have given me less-than-optimal
-results.  This is especially disappointing, as they seem to be the
-epitome of functional programs, blessed with the
-correct-by-construction methodology of program development.  In this
-note I review why I find the current solutions sub-optimal, and propose
-a satisfactory alternative.
+There is a tradition to use pretty printing as a showcase for
+functional programming design techniques. The design of a pretty
+printing library, by Hughes is still considered a reference of
+. Wadler has built on and simplified Hughes design, and the result
+appeared as chapter of of a book dedicated to "beautiful code".  In
+addition of esthetical and pedagogical value, Hughes and Wadler's
+provide practical implementations which form the basis of pretty
+printing packages which remain popular today:
 
-The state of the art.
-=====================
+* [pretty](https://hackage.haskell.org/package/pretty)
+* [wl-pprint](https://hackage.haskell.org/package/wl-pprint)
 
-Even today, pretty printing in Haskell is mostly backed by two classic
-libraries, either:
-
-1.  The Hughes-Peyton Jones library. The design is [described by
-    Hughes](http://belle.sourceforge.net/doc/hughes95design.pdf) in
-    *The Design of a Pretty-printing Library*. It has then been
-    adopted (and modified) by Peyton Jones, and was distributed with GHC
-    for a long time, making it the *de-facto* standard pretty printer.
-    It is now available on Hackage in the
-    [pretty](https://hackage.haskell.org/package/pretty) package. I believe that
-    this remains the dominant design, perhaps disputed by...
-
-2.  The Wadler-Leijen library. In the penultimate chapter of *The Fun
-    of Programming*, Wadler re-constructs a pretty printing library
-    from scratch. Keeping true to Hughes in particular and the general
-    functional programming tradition in general, Wadler starts by
-    specifying his library using equational laws, and derives an
-    implementation. Leijen took Wadler's implementation and modified it
-    to increase its expressivity (but more on that later). The result is
-    available in the eponymous
-    [wl-pprint](https://hackage.haskell.org/package/wl-pprint)
-    package.
+In this paper, I propose an alternative design of a pretty printing
+library. I'll take a critical look at design choices of Hughes and
+Wadler. I will a library which abiding to the principles of pretty
+printing as defined above, and is also reasonably efficient. Finally I
+will draw general conclusion on how to improve on functional
+programming methodologies.
 
 
 A Pretty API
@@ -62,11 +55,13 @@ data SExpr where
 Using the above representation, the S-Expr `(a b c d)` is encoded as
 follows:
 
+> abcd :: SExpr
 > abcd = SExpr [Atom "a",Atom "b",Atom "c",Atom "d"]
 
-In a pretty display of an S-Expr, we would like the elements inside of
-an S-Expr to be either concatenated horizontally, or aligned
-vertically. The possible pretty layouts of our example would be either
+Let us specify pretty printing of S-Expr as follows. In a pretty
+display of an S-Expr, we would like the elements to be either
+concatenated horizontally, or aligned vertically. The possible pretty
+layouts of our example would be either
 
 ``` {.example}
 (a b c d)
@@ -81,19 +76,19 @@ or
  d)
 ```
 
-The goal of a the pretty printer is to print a given s-expression in
-as few lines as possible, while respecting the above rules, and
-fitting within the width of a page.
+The goal of the pretty printer is to print a given s-expression in as
+few lines as possible, while respecting the above rules, and fitting
+within the width of a page.
 
 A pretty printing library will give us the means to express the
 specification of possible pretty layouts, and automatically pick the
 prettiest.
 
-Taking inspiration from from Hughes, our library will allow to express
-both vertical (`$$`) and horizontal (`<>`) composition of
-documents. We will also allow for embedding raw text (`text`) and
-automatic choice between layouts (`<|>`). At this stage, we keep the
-representation of documents abstract using a typeclass.
+As Hughes', our library will allow to express both vertical (`$$`) and
+horizontal (`<>`) composition of documents, as well as embedding raw
+text (`text`) and automatic choice between layouts (`<|>`). At this
+stage, we keep the representation of documents abstract using a
+typeclass.
 
 < text  :: String -> d
 < (<>)  :: Doc d => d -> d -> d
@@ -140,6 +135,7 @@ Let us use an example to try and answer the question. Suppose we want
 to pretty print the following s-expr (which is specially crafted to
 demonstrate issues with both Hughes and Wadler libraries):
 
+> testData :: SExpr
 > testData = SExpr [SExpr [Atom "12345", abcd4],
 >                   SExpr [Atom "12345678", abcd4]]
 >   where abcd4 = SExpr [abcd,abcd,abcd,abcd]
@@ -170,7 +166,7 @@ Printed on a 20-column-wide page, we'd like to get:
    (a b c d))))
 ```
 
-Note that, using Hughes' library, we would get the following output:
+Unfortunately Hughes' library, we would get the following output:
 
 ``` {.example}
 12345678901234567890
@@ -201,50 +197,28 @@ Note that, using Hughes' library, we would get the following output:
              d))))
 ```
 
-Why the long tail? Hughes states that "it would be unreasonably inefficient
-for a pretty-printer do decide whether or not to split the first line of
-a document on the basis of the content of the last." (sec. 7.4 of his
-paper).
-
-That's right! For example:
-
-aaaaaaa bbbbbbbbbb
-        x
-        ...
-        ...
-        ...
-        x
-        ccccccccc d
-                  d
-                  d
-                  d
-
-aaaaaaa
-  bbbbbbbbbb
-  x
-  ...
-  ...
-  ...
-  x
-  ccccccccc d d d d
-
-Therefore, he chooses a greedy algorithm, which tries to fit as
-much as possible on a single line, without regard for what comes next.
-In our example, the algorithm fits `(1234567 ((a`, but then it has
-committed to a very deep indentation level, which forces a
-sub-optimal rendering for the remainder of the document.
+I find the above result disappointing: it uses way more space than
+necessary.  But, why the long tail? Hughes states that "it would be
+unreasonably inefficient for a pretty-printer do decide whether or not
+to split the first line of a document on the basis of the content of
+the last." (sec. 7.4 of his paper).  Therefore, he chooses a greedy
+algorithm, which tries to fit as much as possible on a single line,
+without regard for what comes next.  In our example, the algorithm
+fits `(12345678 ((a`, but then it has committed to a very deep
+indentation level, which forces to display the remainder of the
+document in a narrow space. My opinion is thus that Hughes fails to
+abide by to the second principle of pretty printing: space
+optimisation.
 
 
 One may wonder what would happen with Wadler's libary. Unfortunately,
 its API cannot even express the layout we are after! Indeed, one can
 only specify a *constant* amount of indentation, not one that depends
 on the contents of a document.  This means that Wadler's library lacks
-the capability to express that a multi-line sub-documents should be
-laid out to the right of a document, they must be put below them.
+the capability to express that a multi-line sub-document $b$ should be
+laid out to the right of a document $a$: $a$ must be put below $b$.
 Thus, with an appropriate specification, Wadler would render our
-example as follows; putting a spurious line break after the token
-12345678.
-
+example as follows: 
 
 ``` {.example}
 12345678901234567890
@@ -262,86 +236,153 @@ example as follows; putting a spurious line break after the token
    (a b c d))))
 ```
 
-(See sec ??? for a discussion)
+It's not too bad! But it inserts a spurious line break after the token
+12345678. While this may be acceptable to some, I find it
+disappointing for two reasons. First, spurious line breaks may appear
+in many situations. Second, the element which is rejected to a next
+can only be indented by a constant amount. Let us say we would like to
+pretty print the following ml-style snippet:
 
+Pattern = expression [listElement x,
+                      listElement y,
+                      listElement z,
+                      listElement w]
 
-It's actually a common pattern:
+Wadler will force us to lay it out like so:
 
-someVal = someFunction [listElement x,
-                        listElement y,
-                        listElement z,
-                        listElement w]
+Pattern = expression
+  [listElement x,
+   listElement y,
+   listElement z,
+   listElement w]
+
+Aligning the argument of the expression below the equal sign is bad:
+it obscures the structure of the program. The first principle of
+pretty printing is not respected. In fact, the lack of a combinator
+for alignment proved too constraining for Leijen. Indeed, in his
+implemenation of Wadler's design (which is a de-facto standard) he,
+added such a combinator. But, also using a greedy algorithm, it
+necessarily suffers from the same issues as Hughes library.
+
+Because of the limitations of greediness, I will give up on it. I will
+retain the ability to express vertical alignment of sub-documents,
+minimize space usage and make a the algorithm fast enough to be usable
+in practice.
+
 
 A Prettier API
 --------------
 
-Define both a minimal API and its semantics for layouts (without
-disjunction).
+Before getting into the business of making a fast (enough)
+implementation, I'll refine the API for pretty layouts, and give a
+semantics for it. At this stage, we ignore disjuction (`<|>`) between
+possible layouts.
 
-Interpret a layout as a non-empty list of lines to print.
+Let us start with a methological warning. I recommend that designing
+an API and a semantics should be done as a single creative
+act. Indeed, without any underlying meaning, it is difficult to choose
+a sensible API. At the same time, building a model can be done only if
+one has a rough sketch of how it should be used. 
 
-> type L = [String]
+Basing a library on the API is sometimes called a "deep embedding",
+and the semantics a "shallow embedding".
+
+The process of gradually refining API and semantics is difficult to
+present in a coherent way. Fortunately, in our case, a straightforward
+semantics fits the bill.
+
+Recall that we have inherited from Hughes a draft API:
+
+< text  :: String -> d
+< (<>)  :: Doc d => d -> d -> d
+< ($$)  :: Doc d => d -> d -> d
+
+Let us interpret a layout as a non-empty list of lines to print. I'll
+simply use the type of lists and remember on the side the invariant.
+
+> type L = [String] -- non empty.
+
+
 
 > instance Layout L where
 
-Preparing a layout for printing is as easy as appending a newline
-character to each item of the list and concatenate them:
+Preparing a layout for printing is as easy as concatenation with
+newlines:
 
->   render xs = concatMap (++ "\n") xs
+>   render :: L -> String
+>   render = intercalate "\n"
 
-The interpretation of embeded strings is thus immediate:
+Embedding a string is thus immediate:
 
+>   text :: String -> L
 >   text s = [s]
 
-Interpretating the horizontal concatenation requires barely more
+The interpretation of vertical concatenation ($$) requires barely more
 thought:
 
-<  xs $$ ys = xs ++ ys
+<   ($$) :: L -> L -> L
+<   xs $$ ys = xs ++ ys
 
-Hughes: "translate [to the right] the second operand, so that is tabs
-against the last character of the first operand"
+What does horizontal concatenation (<>) mean? We will stick to Hughes'
+advice: "translate [to the right] the second operand, so that is tabs
+against the last character of the first operand". We can represent the
+situation diagramatically as follows:
 
-aaaaaaaaaaaaaaaaaaa
+````
+                             bbbbbbbbbbbbbbbb
+aaaaaaaaaaaaaaaaaaa          bbbbbbbbbbbbbbbb
 aaaaaaaaaaaaaaaaaaa    <>    bbbbbbbbbbbbbbbb
 aaaaaaaaaa                   bbbbbb
 
-
-= 
+=
 
 aaaaaaaaaaaaaaaaaaa
 aaaaaaaaaaaaaaaaaaa
 aaaaaaaaaabbbbbbbbbbbbbbbb
+          bbbbbbbbbbbbbbbb
+          bbbbbbbbbbbbbbbb
           bbbbbb
+````
 
->   [] <> ys = ys
->   xs <> [] = xs
+Thus we handle the last line of the first layout and the first line of
+the second layout specially, as follows:
+
+>   (<>) :: L -> L -> L
 >   xs <> (y:ys) = xs0 ++ [x ++ y] ++ map (indent ++) ys
 >      where xs0 = init xs
 >            x = last xs
 >            n = length x
 >            indent = replicate n ' '
 
-The trained eye will detect that, given the above semantics,
-horizontal concatenation is nearly a special case of horizontal
-composition. That is, instead of composing vertically, one can add an
-empty line to the left hand side layout and compose horizontally:
+The trained eye will detect that, given the above semantics, vertical
+concatenation is (nearly) a special case of horizontal composition. That is,
+instead of composing vertically, one can add an empty line (close) to the
+left-hand-side layout and compose horizontally.
 
+TODO: close ==> flush
+
+<   ($$) :: L -> L -> L
+<   a $$ b = close a <> b
+
+where
+
+>   close :: L -> L
 >   close xs = xs ++ [""]
 
 >   meter a = (height a, width' a, lastW a)
 
-> ($$) :: Layout d => d -> d -> d
-> a $$ b = close a <> b
 
+One might argue that replacing ($$) by `close` does not make the API
+shorter, and maybe not even simpler. Yet, we will stick this choice,
+for two reasons:
 
-One might argue that this choice of API is not really simpler. Yet,
-we will stick with it, for two reasons:
+1. The new API clearly separates the concerns of concatenation and
+left-flushing documents.
 
-1. The horizontal composition has a nicer algebraic structure, and
-
-2. the efficient implementation is shorter with a single concatenation
-operator.
-
+2. The horizontal composition (<>) has a nicer algebraic structure
+than ($$). The vertical composition ($$) has no unit, while (<>) forms
+a monoid with the empty layout. (Due to a more complicated semantics,
+Hughes operator (<>) does not form a monoid.)
 
 To sum up, our API for layouts is the following:
 
@@ -350,7 +391,9 @@ To sum up, our API for layouts is the following:
 >   text :: String -> d
 >   close :: d -> d
 >   render :: d -> String
->   meter :: d -> (Int,Int,Int)
+
+> class Metric m where
+>   meter :: m -> (Int,Int,Int)
 
 Algebra
 -------
@@ -462,6 +505,8 @@ Putting all this reasoning into our implementation, we get:
 >               mtext = mtext a <> mtext b}
 >   close (M w h _ s) = M w (h+1) 0 (close s)
 >   render (M _ _ _ s) = render s
+
+> instance Metric M where
 >   meter (M w h lw _) = (h,w,lw)
 
 -- >   (M w1 h1 c1 s1) <> (M w2 h2 c2 s2) = M (max w1 (w2 + c1)) (h1 + h2 - 1) (c1 + c2) (s1 <> s2)
@@ -864,3 +909,30 @@ But this layout turns out to be shorter:
 >   where mms :: D1
 >         mms = pretty testData8
 >           -- = [mlines | M {..} <- doc0 (pretty testData4) 80 80]
+
+
+
+That's right! For example:
+
+aaaaaaa bbbbbbbbbb
+        x
+        ...
+        ...
+        ...
+        x
+        ccccccccc d
+                  d
+                  d
+                  d
+
+aaaaaaa
+  bbbbbbbbbb
+  x
+  ...
+  ...
+  ...
+  x
+  ccccccccc d d d d
+
+> ($$) :: Layout d => d -> d -> d
+> a $$ b = close a <> b
