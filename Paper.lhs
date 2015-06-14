@@ -1,17 +1,17 @@
 % An Insanely Pretty Printer
 % Jean-Philippe Bernardy
 
-> {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, PostfixOperators, ViewPatterns, RecordWildCards, GADTs, NoMonomorphismRestriction, ScopedTypeVariables, InstanceSigs #-}
+> {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, PostfixOperators, ViewPatterns, RecordWildCards, GADTs, NoMonomorphismRestriction, ScopedTypeVariables, InstanceSigs, GeneralizedNewtypeDeriving #-}
 
 > import Data.Function
-> import Data.List (intercalate)
+> import Data.List (intercalate, minimumBy)
 
-Pretty printing is the rendering of data structures in a way which
-makes it pleasant to read. I propose that two principles are essential
-to pretty printing:
+A pretty printing algorithm renders data structures in a way which
+makes them pleasant to read. I propose that two principles are
+essential to pretty printing:
 
  1. clever use of layout to make it easy for a human to recognise the
-organisation of data.
+organisation of data
 
  2. optimisation of the amount of space used
 
@@ -20,23 +20,23 @@ sometimes generated using meta-programming.
 
 
 There is a tradition to use pretty printing as a showcase for
-functional programming design techniques. The design of a pretty
-printing library, by Hughes is still considered a reference of
-. Wadler has built on and simplified Hughes design, and the result
-appeared as chapter of of a book dedicated to "beautiful code".  In
-addition of esthetical and pedagogical value, Hughes and Wadler's
-provide practical implementations which form the basis of pretty
-printing packages which remain popular today:
+functional programming design techniques. Hughes' paper on pretty
+printing remains a reference of functional programming design.  Wadler
+has built on and simplified Hughes design, and the result appeared as
+chapter of of a book dedicated to "beautiful code".  In addition of
+esthetical and pedagogical value, Hughes and Wadler's provide
+practical implementations which form the basis of pretty printing
+packages which remain popular today:
 
 * [pretty](https://hackage.haskell.org/package/pretty)
 * [wl-pprint](https://hackage.haskell.org/package/wl-pprint)
 
 In this paper, I propose an alternative design of a pretty printing
 library. I'll take a critical look at design choices of Hughes and
-Wadler. I will a library which abiding to the principles of pretty
-printing as defined above, and is also reasonably efficient. Finally I
-will draw general conclusion on how to improve on functional
-programming methodologies.
+Wadler. I will present a library which abides to the principles of
+pretty printing as defined above, and which is also reasonably
+efficient. Finally I will draw general conclusion on how to improve on
+functional programming methodologies.
 
 
 A Pretty API
@@ -218,7 +218,7 @@ on the contents of a document.  This means that Wadler's library lacks
 the capability to express that a multi-line sub-document $b$ should be
 laid out to the right of a document $a$: $a$ must be put below $b$.
 Thus, with an appropriate specification, Wadler would render our
-example as follows: 
+example as follows:
 
 ``` {.example}
 12345678901234567890
@@ -282,7 +282,7 @@ Let us start with a methological warning. I recommend that designing
 an API and a semantics should be done as a single creative
 act. Indeed, without any underlying meaning, it is difficult to choose
 a sensible API. At the same time, building a model can be done only if
-one has a rough sketch of how it should be used. 
+one has a rough sketch of how it should be used.
 
 Basing a library on the API is sometimes called a "deep embedding",
 and the semantics a "shallow embedding".
@@ -369,7 +369,8 @@ where
 >   close :: L -> L
 >   close xs = xs ++ [""]
 
->   meter a = (height a, width' a, lastW a)
+> instance Metric L where
+>   meter = measure
 
 
 One might argue that replacing ($$) by `close` does not make the API
@@ -392,11 +393,16 @@ To sum up, our API for layouts is the following:
 >   close :: d -> d
 >   render :: d -> String
 
-> class Metric m where
->   meter :: m -> (Int,Int,Int)
+Additionally, as mentioned above, layouts follow a number of algebraic
+laws:
 
-Algebra
--------
+- text is homomorphism for concatenation:
+
+< prop_text s t = text s <> text t == text (s ++ t)
+
+Which justifies the definition we gave previously for the empty document:
+
+< empty = text ""
 
 - Layouts form a monoid with empty and <>
 
@@ -409,110 +415,32 @@ Algebra
 > prop_assoc :: (Doc a, Eq a) => a -> a -> a -> Bool
 > prop_assoc a b c = (a <> b) <> c == a <> (b <> c)
 
-- closing can be pushed in concatenation:
+- flushing can be pushed in concatenation:
 
 > prop_close :: (Doc a, Eq a) => a -> a -> Bool
-> prop_close a b = ((a <> b)%) == a <> (b%)
+> prop_close a b = flush (flush a <> b) == flush a <> flush b
 
-> (%) :: Doc d => d -> d
-> (%) = close
-
-- text is a monoid homomorphism
-
-< prop_text s t = text s <> text t == text (s ++ t)
+> flush = close
 
 
-Precomputing metrics
---------------------
+Note that laws may only *partially* specify the behaviour, while a
+semantic model will always fully constrain it.
 
-It will be useful to compute its metrics: width and the index of the
-last line. Indeed, recall that the pretty printer searches for the layout
+(exercise: is the above set of laws fully constraining the semantic model?)
 
-1. has as few lines as possible and
-2. whose width does not exceed a certain size
-
-
-Given the chosen interpretation of layouts, these metrics are easy to
-compute:
-
-> height :: L -> Int
-> height = length
-
-> width' :: L -> Int
-> width' = maximum . map length
-
-However, we do not want to recompute these values over and over, so
-they should be precomputed and tupled with the layout data.  The
-traditional approach is to re-cast computation of the attributes as
-recursive equations over the API. For the height metric, we have:
-
-< height (a <> b) = height a + height b - 1
-< height (text _) = 1
-< height (close a) = 1 + height a
-
-< height (xs <> (y:ys)) = length (init xs ++ [last xs ++ y] ++ nest (length x) ys)
-<                       = length (init xs)  +  length [last xs ++ y]  + length (nest (length (last xs)) ys)
-<                       = length xs - 1     +  1                      + length (map _ ys)
-<                       = length xs                                   + length ys
-<                       = length xs                                   + length (y:ys) - 1
+Notice that Hughes and Wadler give the semantics via laws first and
+come up with a compositional interpretation second. This is fine,
+precisely because laws do not fully constrain the design; there is
+room for wiggle. However, a compositional semantics is often an even
+better guide which should not be an afterthought.
 
 
-< width (xs <> (y:ys))
-  Assuming x = last xs
-           lx = length x
-<  = maximum $ map length (init xs ++ [x ++ y] ++ nest lx ys)
-<  = maximum $ map length (init xs ++ [x ++ y] ++ nest lx ys)
-<  = maximum $ init (map length xs) ++ [length (x ++ y)] ++ map length (nest lx ys)
-<  = maximum $ init (map length xs) ++ [length x + length y] ++ map (lx +) (map length ys)
-  By monotonicity of maximum
-<  = maximum $ (map length xs) ++ [length x + length y] ++ map (lx +) (map length ys)
-<  = maximum $ (map length xs) ++  map (lx +) (map length (y:ys))
-<  = max (maximum (map length xs)) (maximum (map (lx +) (map length (y:ys))))
-<  = max (maximum (map length xs)) (lx + (maximum (map length (y:ys))))
-<  = max (width xs)  (lx + width (y:ys))
-
-Thus efficient computation of the width of a layout depends on the
-width of the last line of a layout. This new metric can be defined as follows.
-
-> lastW :: L -> Int
-> lastW = length . last
-
-It can be efficently computed:
-
-< lastW  (text t) = length t
-< lastW  (a <> b) = lastW a + lastW b
-< lastW  (close a) = 0
-
-And thus, so can be the width of a layout:
-
-< width' (text t) = length t
-< width' (a <> b) = max (width a) (lastW a + width b)
-< width' (close a) = width' a
-
-Putting all this reasoning into our implementation, we get:
-
-> data M = M {width :: Int,
->             mlines :: Int,
->             colDiff :: Int,
->             mtext :: L}
->   deriving (Show)
-
-> instance Layout M where
->   text s = M (length s) 0 (length s) (text s)
->   a <> b = M {width = max (width a) (width b + colDiff a),
->               mlines = mlines a + mlines b,
->               colDiff = colDiff a + colDiff b,
->               mtext = mtext a <> mtext b}
->   close (M w h _ s) = M w (h+1) 0 (close s)
->   render (M _ _ _ s) = render s
-
-> instance Metric M where
->   meter (M w h lw _) = (h,w,lw)
-
--- >   (M w1 h1 c1 s1) <> (M w2 h2 c2 s2) = M (max w1 (w2 + c1)) (h1 + h2 - 1) (c1 + c2) (s1 <> s2)
 
 Documents
 =========
+
+Proceed to extend the API with choice between layouts and specify the
+problem formally.
 
 > class Layout d => Doc d where
 >   (<|>) :: d -> d -> d
@@ -525,33 +453,103 @@ corresponds to a document with cannot be laid out, which turns out to
 be useless as an API for pretty printing.
 
 Thus, we chose as a representation for documents the list of possible
-layouts;
+layouts.
 
-> type D0 = [M]
+> newtype F a = F {fromF :: [a]}
+>   deriving (Functor,Applicative)
 
-< instance Doc D0 where
-<   empty = [empty]
-<   xs <> ys = concat [ [x <> y | x <- xs] | y <- ys]
-<   xs <|> ys = xs ++ ys
-<   close xs = map close xs
-<   text s = [text s]
-<   nest n = map (nest n)
+> instance Doc (F L) where
+>   F xs <|> F ys = F (xs ++ ys)
+
+> instance Layout (F L) where
+>   text = pure . text
+>   close = fmap close
+>   xs <> ys = (<>) <$> xs <*> ys
 
 Rendering a document is merely picking the shortest layout among the
 valid ones:
 
-<   render = render . minimumBy (comparing length) . filter valid
+>   render = render . minimumBy (compare `on` length) . filter valid . fromF
 
 where
 
-> valid :: M -> Bool
-> valid m = width m <= 80
+> valid :: L -> Bool
+> valid xs = maximum (map length xs) <= 80
+
+
+An alternative semantics
+------------------------
+
+At time point, a classic functional pearl would derive an
+implementation via a series of calculational steps. While this may
+very well be done, I will instead proceed to give insight into how I
+actually designed the library.
+
+Let us remember that we want to select the layout with minimal use of
+space. Hence, from an algorithm point of view, all that matters is the
+space that a layout takes. Let us define an abstract semantics for
+documents which focuses on such space.
+
+This semantics can be guessed by looking at the diagram for
+composition of layouts. All that matters is the maximum width of the
+layout, the width of its last line and its height (and because layouts
+can't be empty we will start counting from 0).
+
+
+        max width
+    <-------------->
+    bbbbbbbbbbbbbbbb  ^
+    bbbbbbbbbbbbbbbb  |  height
+    bbbbbbbbbbbbbbbb  v
+    bbbbbbbbbbbb
+    <---------->
+     last width
+
+> measure :: L -> M
+> measure xs = M {maxWidth = maximum $ map length $ xs,
+>                 height = length xs - 1,
+>                 lastWidth = length $ last $ xs}
+
+> data M = M {maxWidth  :: Int,
+>             height    :: Int,
+>             lastWidth :: Int}
+>   deriving (Show)
 
 
 
 
-Very inefficient! What can we do about it?
+> instance Layout M where
+>   text s = M (length s) 0 (length s)
+>   a <> b = M {maxWidth = max (maxWidth a) (maxWidth b + lastWidth a),
+>               height = height a + height b,
+>               lastWidth = lastWidth a + lastWidth b}
+>   close (M w h _) = M w (h+1) 0
+>   render (M mw h lw) = render $ replicate h (replicate mw 'x') ++ [replicate lw 'x']
 
+The equations above are correct if they make `measure` a layout
+homomorphism (ignoring of course render):
+
+< measure (a <> b) = measure a <> measure b
+< measure (close a) = close (measure a)
+
+         max mw1 (lw2 + w2)
+    <----------------------->
+         mw1
+    <------------>
+    aaaaaaaaaaaaaa             ^       ^
+    aaaaaaaaaaaaaa             | h1    |
+    aaaaaaaaaaaaaa             |       |
+    aaaaaaaaaaaaaa             v       | h1 + h2
+    aaaaaaaaabbbbbbbbbbbbbbbb  ^       |
+    <------->bbbbbbbbbbbbbbbb  |  h2   |
+       lw1   bbbbbbbbbbbbbbbb  v       v
+             bbbbbbbbbbbb
+             <-------------->
+                   mw2
+             <---------->
+                 lw2
+   <-------------------->
+        lw1 + lw2
 
 
 Early filtering out invalid results
@@ -572,9 +570,6 @@ valid (a <> b) ==> valid a and valid b
 Pruning out dominated results
 -----------------------------
 
-
-> measure :: M -> (Int, Int, Int)
-> measure (M w h c _) = (h,w,c)
 
 > class Poset a where
 >   (≺) :: a -> a -> Bool
@@ -610,11 +605,15 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
 > mergeAll [] = []
 > mergeAll (x:xs) = merge x (mergeAll xs)
 
+> type D0 = [M]
+>
 > instance Layout D0 where
 >   xs <> ys = bests [ filter valid [x <> y | x <- xs] | y <- ys]
 >   close xs = map close xs
 >   text s = [text s]
 >   render (x:_) = render x
+
+> instance Metric D0 where
 >   meter  (x:_) = meter x
 
 > instance Doc D0 where
@@ -644,18 +643,20 @@ aaaaaaaaaabbbbbbbbbbbbbbbb
 >               doc0 :: Int -> -- available width
 >                       Int -> -- available last width (invar: less than the above.)
 >                       D0}
-> 
+>
 > instance Layout D1 where
 >   D1 m1 w1 xs1 <> D1 m2 w2 xs2 = D1 (max m1 (w1 + m2))
 >                                     (w1 + w2)
 >                                     (\w lw ->
 >                                           let xs = xs1 w (w - m2)
 >                                               ys = xs2 (w - w1) (min lw (w - w1))
->                                               val a = (width a <= w) && (colDiff a <= lw)
+>                                               val a = (maxWidth a <= w) && (lastWidth a <= lw)
 >                                           in bests [filter val [x <> y | x <- xs] | y <- ys])
 >   text t = D1 (length t) (length t) (\w lw -> [text t | length t <= w])
 >   close (D1 m _ xs1) = D1 m 0 (\w lw -> close (xs1 w w))
 >   render (D1 _ _ x) = render (x 80 80)
+
+> instance Metric D1 where
 >   meter  (D1 _ _ x) = meter (x 80 80)
 
 -- >   close xs = map close xs
@@ -674,6 +675,8 @@ aaaaaaaaaabbbbbbbbbbbbbbbb
 >   -- (a :<> b) <> c = a :<> (b <> c)
 >   a <> b = a :<> b
 >   render = render . fold
+
+> instance Metric D2 where
 >   meter = meter . fold
 
 > fold :: D2 -> D1
@@ -753,7 +756,7 @@ ddd
 >   close (M2 x w1 r w2 0 a b) = M2 (x+1) w1 r w2 0 (if r then a else close a) (if r then close b else b)
 >   close d = tabulate (d <> line)
 >   render (M2 _ _ _ _ _ a b) = render (a ++ b)
->   meter (M2 _ _ _ _ _ a b) = error "stupid idea"
+
 
 > spaces :: Layout d => Int -> d
 > spaces n = text $ replicate n ' '
@@ -804,7 +807,7 @@ instance Doc D0 where
   empty = \i -> (i,"")
   d1 <> d2 = \i0 -> let (i1,t1) = d1 i0
                         (i2,t2) = d2 i1
-                    in (i2,t1 ++ t2) 
+                    in (i2,t1 ++ t2)
   close d = \i -> let (_,t) = d i in (i,t ++ "\n" ++ replicate i ' ')
   text s i = (c,s)
     where c = i + length s
@@ -936,3 +939,63 @@ aaaaaaa
 
 > ($$) :: Layout d => d -> d -> d
 > a $$ b = close a <> b
+
+
+> class Metric m where
+>   meter :: m -> M
+
+> instance Metric M where
+>   meter = id
+
+However, we do not want to recompute these values over and over, so
+they should be precomputed and tupled with the layout data.  The
+traditional approach is to re-cast computation of the attributes as
+recursive equations over the API. For the height metric, we have:
+
+< height (a <> b) = height a + height b - 1
+< height (text _) = 1
+< height (close a) = 1 + height a
+
+< height (xs <> (y:ys)) = length (init xs ++ [last xs ++ y] ++ nest (length x) ys)
+<                       = length (init xs)  +  length [last xs ++ y]  + length (nest (length (last xs)) ys)
+<                       = length xs - 1     +  1                      + length (map _ ys)
+<                       = length xs                                   + length ys
+<                       = length xs                                   + length (y:ys) - 1
+
+
+< width (xs <> (y:ys))
+  Assuming x = last xs
+           lx = length x
+<  = maximum $ map length (init xs ++ [x ++ y] ++ nest lx ys)
+<  = maximum $ map length (init xs ++ [x ++ y] ++ nest lx ys)
+<  = maximum $ init (map length xs) ++ [length (x ++ y)] ++ map length (nest lx ys)
+<  = maximum $ init (map length xs) ++ [length x + length y] ++ map (lx +) (map length ys)
+  By monotonicity of maximum
+<  = maximum $ (map length xs) ++ [length x + length y] ++ map (lx +) (map length ys)
+<  = maximum $ (map length xs) ++  map (lx +) (map length (y:ys))
+<  = max (maximum (map length xs)) (maximum (map (lx +) (map length (y:ys))))
+<  = max (maximum (map length xs)) (lx + (maximum (map length (y:ys))))
+<  = max (width xs)  (lx + width (y:ys))
+
+Thus efficient computation of the width of a layout depends on the
+width of the last line of a layout. This new metric can be defined as follows.
+
+> lastW :: L -> Int
+> lastW = length . last
+
+It can be efficently computed:
+
+< lastW  (text t) = length t
+< lastW  (a <> b) = lastW a + lastW b
+< lastW  (close a) = 0
+
+And thus, so can be the width of a layout:
+
+< width' (text t) = length t
+< width' (a <> b) = max (width a) (lastW a + width b)
+< width' (close a) = width' a
+
+Putting all this reasoning into our implementation, we get:
+
+
+-- >   (M w1 h1 c1 s1) <> (M w2 h2 c2 s2) = M (max w1 (w2 + c1)) (h1 + h2 - 1) (c1 + c2) (s1 <> s2)
