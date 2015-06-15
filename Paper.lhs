@@ -3,6 +3,8 @@
 
 > {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, PostfixOperators, ViewPatterns, RecordWildCards, GADTs, NoMonomorphismRestriction, ScopedTypeVariables, InstanceSigs, GeneralizedNewtypeDeriving #-}
 
+> module Paper where
+> 
 > import Data.Function
 > import Data.List (intercalate, minimumBy)
 
@@ -453,7 +455,7 @@ Thus, we chose as a representation for documents the list of possible
 layouts.
 
 > newtype F a = F {fromF :: [a]}
->   deriving (Functor,Applicative)
+>   deriving (Functor,Applicative,Show)
 
 > instance Doc (F L) where
 >   F xs <|> F ys = F (xs ++ ys)
@@ -466,9 +468,9 @@ layouts.
 Rendering a document is merely picking the shortest layout among the
 valid ones:
 
--- >   render = render . minimumBy (compare `on` length) . filter valid . fromF
+>   render = render . minimumBy (compare `on` length) . filter valid . fromF
 
->   render = render . minimumBy better . fromF
+-- >   render = render . minimumBy better . fromF
 
 where
 
@@ -523,12 +525,14 @@ can't be empty we will start counting from 0).
 
 
 > instance Layout M where
->   text s = M (length s) 0 (length s)
+>   text s = M 0 (length s) (length s)
 >   a <> b = M {maxWidth = max (maxWidth a) (maxWidth b + lastWidth a),
 >               height = height a + height b,
 >               lastWidth = lastWidth a + lastWidth b}
->   close (M w h _) = M w (h+1) 0
->   render (M mw h lw) = render $ replicate h (replicate mw 'x') ++ [replicate lw 'x']
+>   close a = M {maxWidth = maxWidth a,
+>                height = height a + 1,
+>                lastWidth = 0}
+>   render (M h mw lw) = render $ replicate h (replicate mw 'x') ++ [replicate lw 'x']
 
 The equations above are correct if they make `measure` a layout
 homomorphism (ignoring of course render):
@@ -912,7 +916,7 @@ But this layout turns out to be shorter:
 > main = do
 >   print $ meter $ mms
 >   where mms :: D1
->         mms = pretty testData8
+>         mms = pretty testData4
 >           -- = [mlines | M {..} <- doc0 (pretty testData4) 80 80]
 
 
