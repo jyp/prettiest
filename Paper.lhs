@@ -369,9 +369,6 @@ where
 >   close :: L -> L
 >   close xs = xs ++ [""]
 
-> instance Metric L where
->   meter = measure
-
 
 One might argue that replacing ($$) by `close` does not make the API
 shorter, and maybe not even simpler. Yet, we will stick this choice,
@@ -469,9 +466,16 @@ layouts.
 Rendering a document is merely picking the shortest layout among the
 valid ones:
 
->   render = render . minimumBy (compare `on` length) . filter valid . fromF
+-- >   render = render . minimumBy (compare `on` length) . filter valid . fromF
+
+>   render = render . minimumBy better . fromF
 
 where
+
+> better :: L -> L -> Ordering
+> better a b | not (valid b) = LT
+> better a b | not (valid a) = GT
+> better a b = compare (length a) (length b)
 
 > valid :: L -> Bool
 > valid xs = maximum (map length xs) <= 80
@@ -480,7 +484,7 @@ where
 An alternative semantics
 ------------------------
 
-At time point, a classic functional pearl would derive an
+At this point, a classic functional pearl would derive an
 implementation via a series of calculational steps. While this may
 very well be done, I will instead proceed to give insight into how I
 actually designed the library.
@@ -510,10 +514,10 @@ can't be empty we will start counting from 0).
 >                 height = length xs - 1,
 >                 lastWidth = length $ last $ xs}
 
-> data M = M {maxWidth  :: Int,
->             height    :: Int,
+> data M = M {height    :: Int,
+>             maxWidth  :: Int,
 >             lastWidth :: Int}
->   deriving (Show)
+>   deriving (Show,Eq,Ord)
 
 
 
@@ -551,47 +555,48 @@ homomorphism (ignoring of course render):
    <-------------------->
         lw1 + lw2
 
+> fits :: M -> Bool
+> fits x = maxWidth x <= 80
 
 Early filtering out invalid results
 -----------------------------------
 
--- >   xs <> ys = [ filter valid [x <> y | x <- xs] | y <- ys]
+<   xs <> ys = filter valid [x <> y | x <- xs, y <- ys]
 
 This is because width is monotonous:
 
-width (a <> b) > width a  and width (a <> b) > width b
+width (a <> b) ≥ width a  and width (a <> b) ≥ width b
+width (close a) ≥ with a
 
 and therefore so is validity: keeping invalid layouts is useless: they
 can never be combined with another layout to produce something valid.
 
-valid (a <> b) ==> valid a and valid b
+valid (a <> b)  ==> valid a  and  valid b
+valid (close a) ==> valid a
 
 
 Pruning out dominated results
 -----------------------------
 
+Idea: filter out the results that are dominated by other results.
 
 > class Poset a where
 >   (≺) :: a -> a -> Bool
 
-> instance Eq M where
->   (==)  = (==) `on` measure
-> instance Ord M where
->   compare = compare `on` measure
+measure a ≺ measure b   =>   a ≤ b
 
-> instance Poset M where
->   M c1 l1 s1 _ ≺ M c2 l2 s2 _ = c1 <= c2 && l1 <= l2 && s1 <= s2
-
-Then we need a theorem to restrict the computation to pareto frontiers.
-
-
-Theorem: all operators are monotonous wrt. ≺
+Find an instance `Poset M` such that:
 
 if    d1 ≺  d2 and  d'1 ≺  d'2
 then  (d1 <> d2) ≺  (d'1 <> d'2) and
-      (d1 <|> d2) ≺  (d'1 <|> d'2)
       close d1 ≺ close d2
-      nest k d1 ≺ nest k d2
+
+
+
+> instance Poset M where
+>   M c1 l1 s1 ≺ M c2 l2 s2 = c1 <= c2 && l1 <= l2 && s1 <= s2
+
+
 
 > merge :: Ord a => [a] -> [a] -> [a]
 > merge [] xs = xs
@@ -605,22 +610,18 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
 > mergeAll [] = []
 > mergeAll (x:xs) = merge x (mergeAll xs)
 
-> type D0 = [M]
+> type D0 = [(M,L)]
 >
 > instance Layout D0 where
->   xs <> ys = bests [ filter valid [x <> y | x <- xs] | y <- ys]
+>   xs <> ys = bests [ filter (fits . fst) [x <> y | x <- xs] | y <- ys]
 >   close xs = map close xs
 >   text s = [text s]
 >   render (x:_) = render x
-
-> instance Metric D0 where
->   meter  (x:_) = meter x
 
 > instance Doc D0 where
 >   xs <|> ys = bests [xs,ys]
 
 
-> bests :: [[M]] -> [M]
 > bests = pareto' [] . mergeAll
 
 > pareto' :: Poset a => [a] -> [a] -> [a]
@@ -628,6 +629,7 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
 > pareto' acc (x:xs) = if any (≺ x) acc
 >                        then pareto' acc xs
 >                        else pareto' (x:acc) xs
+> --                        else pareto' (x:filter (not . (x ≺)) acc) xs
 
 Min Width and min last width
 ============================
@@ -650,7 +652,7 @@ aaaaaaaaaabbbbbbbbbbbbbbbb
 >                                     (\w lw ->
 >                                           let xs = xs1 w (w - m2)
 >                                               ys = xs2 (w - w1) (min lw (w - w1))
->                                               val a = (maxWidth a <= w) && (lastWidth a <= lw)
+>                                               val (a,_) = (maxWidth a <= w) && (lastWidth a <= lw)
 >                                           in bests [filter val [x <> y | x <- xs] | y <- ys])
 >   text t = D1 (length t) (length t) (\w lw -> [text t | length t <= w])
 >   close (D1 m _ xs1) = D1 m 0 (\w lw -> close (xs1 w w))
@@ -999,3 +1001,25 @@ Putting all this reasoning into our implementation, we get:
 
 
 -- >   (M w1 h1 c1 s1) <> (M w2 h2 c2 s2) = M (max w1 (w2 + c1)) (h1 + h2 - 1) (c1 + c2) (s1 <> s2)
+
+> instance Metric L where
+>   meter = measure
+
+> instance Metric D0 where
+>   meter  (x:_) = meter x
+
+> instance Metric a => Metric (a,b) where
+>   meter = meter . fst
+
+> instance (Layout a, Layout b) => Layout (a,b) where
+>   text s = (text s, text s)
+>   close (a,b) = (close a, close b)
+>   (a,b) <> (c,d) = (a<>c ,b<>d)
+>   render = render . snd
+
+> instance (Doc a, Doc b) => Doc (a,b) where
+>   (a,b) <|> (c,d) = (a<|>c,b<|>d)
+
+> instance (Poset a) => Poset (a,b) where
+>   (a,_) ≺ (b,_) = a ≺ b
+
