@@ -635,6 +635,18 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
 >                        else pareto' (x:acc) xs
 > --                        else pareto' (x:filter (not . (x ≺)) acc) xs
 
+Because the input is lexicographically sorted, everything which is in
+the frontier can't be dominated; hence no need to refilter the
+frontier when we find a new element.
+
+(x0,y0,z0) <= (x1,y1,z1)
+
+x0 < x1 or
+x0 = x1 and y0 < y0
+x0 = x1 and y0 = y0 and z0 < z1
+
+At least one variable is less.
+
 Min Width and min last width
 ============================
 
