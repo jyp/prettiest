@@ -10,6 +10,8 @@ description:
   This library produces more compact outputs than both
   Wadler-Leijen or Hughes-PJ algorithms, at the expense of computational ressources.
   The API is the same as Wadler-Leijen's.
+  .
+  There is also an insane replacement for Hughes' pretty printer!
 license: GPL
 license-file: LICENSE
 category: Text
@@ -25,5 +27,8 @@ Library
         exposed-modules:
                 Text.PrettyPrint.Compact
                 Text.PrettyPrint.Compact.Core
+                Text.PrettyPrint
+        other-modules:
+                Insane
         build-depends:
                 base >= 3 && < 5

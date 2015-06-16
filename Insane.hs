@@ -127,7 +127,7 @@ instance DOC Doc where
   Doc m1 w1 x1 <|> Doc m2 w2 x2 = Doc (min m1 m2) (min w1 w2) (\w lw -> x1 w lw ++ x2 w lw)
 
 hang :: DOC d => Int -> d -> d -> d
-hang n x y = (x <-> y) <|> (x $$ nest' n y)
+hang n x y = (x <+> y) <|> (x $$ nest' n y)
 
 nest' :: Layout d => Int -> d -> d
 nest' n y = spaces n <-> y
