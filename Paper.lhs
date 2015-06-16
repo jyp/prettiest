@@ -6,7 +6,7 @@
 > module Paper where
 > 
 > import Data.Function
-> import Data.List (intercalate, minimumBy)
+> import Data.List (intercalate, minimumBy, sort)
 
 A pretty printing algorithm renders data structures in a way which
 makes them pleasant to read. I propose that two principles are
@@ -516,23 +516,23 @@ can't be empty we will start counting from 0).
 >                 height = length xs - 1,
 >                 lastWidth = length $ last $ xs}
 
-> data M = M {height    :: Int,
->             maxWidth  :: Int,
->             lastWidth :: Int}
+> data M = M {lastWidth :: Int,
+>             height    :: Int,
+>             maxWidth  :: Int}
 >   deriving (Show,Eq,Ord)
 
 
 
 
 > instance Layout M where
->   text s = M 0 (length s) (length s)
+>   text s = M {height = 0, maxWidth = length s, lastWidth = length s}
 >   a <> b = M {maxWidth = max (maxWidth a) (maxWidth b + lastWidth a),
 >               height = height a + height b,
 >               lastWidth = lastWidth a + lastWidth b}
 >   close a = M {maxWidth = maxWidth a,
 >                height = height a + 1,
 >                lastWidth = 0}
->   render (M h mw lw) = render $ replicate h (replicate mw 'x') ++ [replicate lw 'x']
+>   render (M lw h mw) = render $ replicate h (replicate mw 'x') ++ [replicate lw 'x']
 
 The equations above are correct if they make `measure` a layout
 homomorphism (ignoring of course render):
@@ -605,10 +605,9 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
 > merge :: Ord a => [a] -> [a] -> [a]
 > merge [] xs = xs
 > merge xs [] = xs
-> merge (x:xs) (y:ys) = case compare x y of
->   LT -> x:merge xs (y:ys)
->   EQ -> x:y:merge xs ys
->   GT -> y:merge (x:xs) ys
+> merge (x:xs) (y:ys)
+>   | x <= y = x:merge xs (y:ys)
+>   | otherwise = y:merge (x:xs) ys
  
 > mergeAll :: Ord a => [[a]] -> [a]
 > mergeAll [] = []
@@ -617,9 +616,9 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
 > type D0 = [(M,L)]
 >
 > instance Layout D0 where
->   xs <> ys = bests [ filter (fits . fst) [x <> y | x <- xs] | y <- ys]
->   close xs = map close xs
->   text s = [text s]
+>   xs <> ys = bests [ filter (fits . fst) [x <> y | y <- ys] | x <- xs]
+>   close xs = pareto' [] (sort (map close xs))
+>   text s = [text s | valid (text s)]
 >   render (x:_) = render x
 
 > instance Doc D0 where
@@ -629,7 +628,7 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
 > bests = pareto' [] . mergeAll
 
 > pareto' :: Poset a => [a] -> [a] -> [a]
-> pareto' acc [] = acc
+> pareto' acc [] = reverse acc
 > pareto' acc (x:xs) = if any (≺ x) acc
 >                        then pareto' acc xs
 >                        else pareto' (x:acc) xs
