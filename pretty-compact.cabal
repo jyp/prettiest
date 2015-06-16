@@ -31,4 +31,5 @@ Library
         other-modules:
                 Insane
         build-depends:
-                base >= 3 && < 5
+                        base >= 3 && < 5
+                      , clock >= 0.4.6.0

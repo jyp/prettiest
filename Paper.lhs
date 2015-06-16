@@ -6,7 +6,8 @@
 > module Paper where
 > 
 > import Data.Function
-> import Data.List (intercalate, minimumBy, sort)
+> import Data.List (intercalate, minimumBy, sort, groupBy)
+> import System.Clock
 
 A pretty printing algorithm renders data structures in a way which
 makes them pleasant to read. I propose that two principles are
@@ -442,7 +443,7 @@ problem formally.
 > class Layout d => Doc d where
 >   (<|>) :: d -> d -> d
 
-Documents can be defined as the free monoid of layouts (i.e. a list of
+Documents can be defined as the free commutative monoid of layouts (i.e. a bag of
 layouts). The layout operators can be lifted in the natural manner.
 
 We omit the unit of the monoid in the interface. Indeed, it
@@ -510,13 +511,13 @@ can't be empty we will start counting from 0).
      last width
 
 > measure :: L -> M
-> measure xs = M {maxWidth = maximum $ map length $ xs,
->                 height = length xs - 1,
->                 lastWidth = length $ last $ xs}
+> measure xs = M {maxWidth   = maximum $ map length $ xs,
+>                 height     = length xs - 1,
+>                 lastWidth  = length $ last $ xs}
 
-> data M = M {lastWidth :: Int,
->             height    :: Int,
->             maxWidth  :: Int}
+> data M = M {height     :: Int,
+>             lastWidth  :: Int,
+>             maxWidth   :: Int}
 >   deriving (Show,Eq,Ord)
 
 
@@ -538,7 +539,7 @@ homomorphism (ignoring of course render):
 < measure (a <> b) = measure a <> measure b
 < measure (flush a) = flush (measure a)
 
-         max mw1 (lw2 + w2)
+       max mw1 (lw1 + mw2)
     <----------------------->
          mw1
     <------------>
@@ -615,10 +616,11 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
 >
 > instance Layout D0 where
 >   xs <> ys = bests [ filter (fits . fst) [x <> y | y <- ys] | x <- xs]
->   flush xs = pareto' [] (sort (map flush xs))
->   -- TODO: is sort needed?
+>   flush xs = bests $ map sort $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
+>   -- flush xs = pareto' [] $ sort $ (map flush xs)
 >   text s = [text s | valid (text s)]
 >   render (x:_) = render x
+
 
 > instance Doc D0 where
 >   xs <|> ys = bests [xs,ys]
@@ -627,10 +629,10 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
 > bests = pareto' [] . mergeAll
 
 > pareto' :: Poset a => [a] -> [a] -> [a]
-> pareto' acc [] = reverse acc
+> pareto' acc [] = []
 > pareto' acc (x:xs) = if any (≺ x) acc
 >                        then pareto' acc xs
->                        else pareto' (x:acc) xs
+>                        else x:pareto' (x:acc) xs
 > --                        else pareto' (x:filter (not . (x ≺)) acc) xs
 
 Because the input is lexicographically sorted, everything which is in
@@ -644,6 +646,14 @@ x0 = x1 and y0 < y0
 x0 = x1 and y0 = y0 and z0 < z1
 
 At least one variable is less.
+
+We make sure that concatenation preserve the lexicographic order
+(thanks Nick):
+
+if    d1 <=  d2 and  d'1 <=  d'2
+then  (d1 <> d2) <=  (d'1 <> d'2)
+
+Flush does not, so we have to re-sort the list.
 
 Min Width and min last width
 ============================
@@ -672,15 +682,9 @@ aaaaaaaaaabbbbbbbbbbbbbbbb
 >   flush (D1 m _ xs1) = D1 m 0 (\w lw -> flush (xs1 w w))
 >   render (D1 _ _ x) = render (x 80 80)
 
-> instance Metric D1 where
->   meter  (D1 _ _ x) = meter (x 80 80)
-
--- >   flush xs = map flush xs
--- >   text s = [text s]
--- >   render (x:_) = render x
-
 > instance Doc D1 where
 >   D1 m1 w1 x1 <|> D1 m2 w2 x2 = D1 (min m1 m2) (min w1 w2) (\w lw -> x1 w lw <|> x2 w lw)
+
 
 > data D2 = (:<>) D2 D2 | Text String | Flush D2 |  D2 :<|> D2
 >   deriving Eq
@@ -688,7 +692,6 @@ aaaaaaaaaabbbbbbbbbbbbbbbb
 > instance Layout D2 where
 >   text = Text
 >   flush = Flush
->   -- (a :<> b) <> c = a :<> (b <> c)
 >   a <> b = a :<> b
 >   render = render . fold
 
@@ -925,9 +928,12 @@ But this layout turns out to be shorter:
 > main :: IO ()
 > main = do
 >   -- putStrLn $ render $ mms
+>   t0 <- getTime ProcessCPUTime
 >   print $ meter $ mms
+>   t1 <- getTime ProcessCPUTime
+>   print $ timeSpecAsNanoSecs $ diffTimeSpec t0 t1
 >   where mms :: D0
->         mms = pretty testData8
+>         mms = pretty testData4
 >           -- = [mlines | M {..} <- doc0 (pretty testData4) 80 80]
 
 
@@ -1022,6 +1028,9 @@ Putting all this reasoning into our implementation, we get:
 
 > instance Metric D0 where
 >   meter  (x:_) = meter x
+
+> instance Metric D1 where
+>   meter  (D1 _ _ x) = meter (x 80 80)
 
 > instance Metric a => Metric (a,b) where
 >   meter = meter . fst
