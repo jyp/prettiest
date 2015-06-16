@@ -618,6 +618,7 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
 > instance Layout D0 where
 >   xs <> ys = bests [ filter (fits . fst) [x <> y | y <- ys] | x <- xs]
 >   close xs = pareto' [] (sort (map close xs))
+>   -- TODO: is sort needed?
 >   text s = [text s | valid (text s)]
 >   render (x:_) = render x
 

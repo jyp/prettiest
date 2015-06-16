@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving #-}
 module Insane where
 
-import Data.List (intercalate)
+import Data.List (intercalate,sort)
 
 empty :: Layout d => d
 empty = text ""
@@ -54,19 +54,20 @@ class Layout d => DOC d where
 
 
 data M = M {height    :: Int,
-            maxWidth  :: Int,
-            lastWidth :: Int}
+            lastWidth :: Int,
+            maxWidth  :: Int
+            }
   deriving (Show,Eq,Ord)
 
 instance Layout M where
-  text s = M 0 (length s) (length s)
+  text s = M {height = 0, maxWidth = length s, lastWidth = length s}
   a <-> b = M {maxWidth = max (maxWidth a) (maxWidth b + lastWidth a),
               height = height a + height b,
               lastWidth = lastWidth a + lastWidth b}
   flush a = M {maxWidth = maxWidth a,
                height = height a + 1,
                lastWidth = 0}
-  render (M h mw lw) = render $ replicate h (replicate mw 'x') ++ [replicate lw 'x']
+  render = error "don't use this render"
 
 fits :: M -> Bool
 fits x = maxWidth x <= 80
@@ -83,10 +84,10 @@ instance Poset M where
 merge :: Ord a => [a] -> [a] -> [a]
 merge [] xs = xs
 merge xs [] = xs
-merge (x:xs) (y:ys) = case compare x y of
-  LT -> x:merge xs (y:ys)
-  EQ -> x:y:merge xs ys
-  GT -> y:merge (x:xs) ys
+merge (x:xs) (y:ys)
+  | x <= y = x:merge xs (y:ys)
+  | otherwise = y:merge (x:xs) ys
+ 
 
 mergeAll :: Ord a => [[a]] -> [a]
 mergeAll [] = []
@@ -96,7 +97,7 @@ bests :: forall a. (Ord a, Poset a) => [[a]] -> [a]
 bests = pareto' [] . mergeAll
 
 pareto' :: Poset a => [a] -> [a] -> [a]
-pareto' acc [] = acc
+pareto' acc [] = reverse acc
 pareto' acc (x:xs) = if any (≺ x) acc
                        then pareto' acc xs
                        else pareto' (x:acc) xs
@@ -115,9 +116,10 @@ instance Layout Doc where
                                           let xs = xs1 w (w - m2)
                                               ys = xs2 (w - w1) (min lw (w - w1))
                                               val (a,_) = (maxWidth a <= w) && (lastWidth a <= lw)
-                                          in bests [filter val [x <-> y | x <- xs] | y <- ys])
+                                          in bests [filter val [x <-> y | y <- ys] | x <- xs])
   text t = Doc (length t) (length t) (\w _lw -> [text t | length t <= w])
-  flush (Doc m _ xs1) = Doc m 0 (\w _lw -> map flush (xs1 w w))
+  flush (Doc m _ xs1) = Doc m 0 (\w _lw -> pareto' [] (sort (map flush (xs1 w w))))
+     -- TODO: is sort needed?
   render (Doc _ _ x) = case (x 80 80) of
     [] -> "overflow!"
     l:_ -> render l
