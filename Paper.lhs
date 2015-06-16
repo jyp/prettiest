@@ -669,7 +669,7 @@ aaaaaaaaaabbbbbbbbbbbbbbbb
 >                                           let xs = xs1 w (w - m2)
 >                                               ys = xs2 (w - w1) (min lw (w - w1))
 >                                               val (a,_) = (maxWidth a <= w) && (lastWidth a <= lw)
->                                           in bests [filter val [x <> y | x <- xs] | y <- ys])
+>                                           in bests [filter val [x <> y | y <- ys] | x <- xs])
 >   text t = D1 (length t) (length t) (\w lw -> [text t | length t <= w])
 >   close (D1 m _ xs1) = D1 m 0 (\w lw -> close (xs1 w w))
 >   render (D1 _ _ x) = render (x 80 80)
