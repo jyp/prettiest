@@ -926,9 +926,10 @@ But this layout turns out to be shorter:
 
 > main :: IO ()
 > main = do
+>   -- putStrLn $ render $ mms
 >   print $ meter $ mms
->   where mms :: D1
->         mms = pretty testData4
+>   where mms :: D0
+>         mms = pretty testData8
 >           -- = [mlines | M {..} <- doc0 (pretty testData4) 80 80]
 
 
