@@ -358,21 +358,21 @@ the second layout specially, as follows:
 
 The trained eye will detect that, given the above semantics, vertical
 concatenation is (nearly) a special case of horizontal composition. That is,
-instead of composing vertically, one can add an empty line (close) to the
+instead of composing vertically, one can add an empty line (flush) to the
 left-hand-side layout and compose horizontally.
 
-TODO: close ==> flush
+TODO: flush ==> flush
 
 <   ($$) :: L -> L -> L
-<   a $$ b = close a <> b
+<   a $$ b = flush a <> b
 
 where
 
->   close :: L -> L
->   close xs = xs ++ [""]
+>   flush :: L -> L
+>   flush xs = xs ++ [""]
 
 
-One might argue that replacing ($$) by `close` does not make the API
+One might argue that replacing ($$) by `flush` does not make the API
 shorter, and maybe not even simpler. Yet, we will stick this choice,
 for two reasons:
 
@@ -389,7 +389,7 @@ To sum up, our API for layouts is the following:
 > class Layout d where
 >   (<>) :: d -> d -> d
 >   text :: String -> d
->   close :: d -> d
+>   flush :: d -> d
 >   render :: d -> String
 
 Additionally, as mentioned above, layouts follow a number of algebraic
@@ -416,10 +416,8 @@ Which justifies the definition we gave previously for the empty document:
 
 - flushing can be pushed in concatenation:
 
-> prop_close :: (Doc a, Eq a) => a -> a -> Bool
-> prop_close a b = flush (flush a <> b) == flush a <> flush b
-
-> flush = close
+> prop_flush :: (Doc a, Eq a) => a -> a -> Bool
+> prop_flush a b = flush (flush a <> b) == flush a <> flush b
 
 
 Note that laws may only *partially* specify the behaviour, while a
@@ -462,7 +460,7 @@ layouts.
 
 > instance Layout (F L) where
 >   text = pure . text
->   close = fmap close
+>   flush = fmap flush
 >   xs <> ys = (<>) <$> xs <*> ys
 
 Rendering a document is merely picking the shortest layout among the
@@ -529,7 +527,7 @@ can't be empty we will start counting from 0).
 >   a <> b = M {maxWidth = max (maxWidth a) (maxWidth b + lastWidth a),
 >               height = height a + height b,
 >               lastWidth = lastWidth a + lastWidth b}
->   close a = M {maxWidth = maxWidth a,
+>   flush a = M {maxWidth = maxWidth a,
 >                height = height a + 1,
 >                lastWidth = 0}
 >   render (M lw h mw) = render $ replicate h (replicate mw 'x') ++ [replicate lw 'x']
@@ -538,7 +536,7 @@ The equations above are correct if they make `measure` a layout
 homomorphism (ignoring of course render):
 
 < measure (a <> b) = measure a <> measure b
-< measure (close a) = close (measure a)
+< measure (flush a) = flush (measure a)
 
          max mw1 (lw2 + w2)
     <----------------------->
@@ -570,13 +568,13 @@ Early filtering out invalid results
 This is because width is monotonous:
 
 width (a <> b) ≥ width a  and width (a <> b) ≥ width b
-width (close a) ≥ with a
+width (flush a) ≥ with a
 
 and therefore so is validity: keeping invalid layouts is useless: they
 can never be combined with another layout to produce something valid.
 
 valid (a <> b)  ==> valid a  and  valid b
-valid (close a) ==> valid a
+valid (flush a) ==> valid a
 
 
 Pruning out dominated results
@@ -593,7 +591,7 @@ Find an instance `Poset M` such that:
 
 if    d1 ≺  d2 and  d'1 ≺  d'2
 then  (d1 <> d2) ≺  (d'1 <> d'2) and
-      close d1 ≺ close d2
+      flush d1 ≺ flush d2
 
 
 
@@ -617,7 +615,7 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
 >
 > instance Layout D0 where
 >   xs <> ys = bests [ filter (fits . fst) [x <> y | y <- ys] | x <- xs]
->   close xs = pareto' [] (sort (map close xs))
+>   flush xs = pareto' [] (sort (map flush xs))
 >   -- TODO: is sort needed?
 >   text s = [text s | valid (text s)]
 >   render (x:_) = render x
@@ -671,25 +669,25 @@ aaaaaaaaaabbbbbbbbbbbbbbbb
 >                                               val (a,_) = (maxWidth a <= w) && (lastWidth a <= lw)
 >                                           in bests [filter val [x <> y | y <- ys] | x <- xs])
 >   text t = D1 (length t) (length t) (\w lw -> [text t | length t <= w])
->   close (D1 m _ xs1) = D1 m 0 (\w lw -> close (xs1 w w))
+>   flush (D1 m _ xs1) = D1 m 0 (\w lw -> flush (xs1 w w))
 >   render (D1 _ _ x) = render (x 80 80)
 
 > instance Metric D1 where
 >   meter  (D1 _ _ x) = meter (x 80 80)
 
--- >   close xs = map close xs
+-- >   flush xs = map flush xs
 -- >   text s = [text s]
 -- >   render (x:_) = render x
 
 > instance Doc D1 where
 >   D1 m1 w1 x1 <|> D1 m2 w2 x2 = D1 (min m1 m2) (min w1 w2) (\w lw -> x1 w lw <|> x2 w lw)
 
-> data D2 = (:<>) D2 D2 | Text String | Close D2 |  D2 :<|> D2
+> data D2 = (:<>) D2 D2 | Text String | Flush D2 |  D2 :<|> D2
 >   deriving Eq
 
 > instance Layout D2 where
 >   text = Text
->   close = Close
+>   flush = Flush
 >   -- (a :<> b) <> c = a :<> (b <> c)
 >   a <> b = a :<> b
 >   render = render . fold
@@ -699,7 +697,7 @@ aaaaaaaaaabbbbbbbbbbbbbbbb
 
 > fold :: D2 -> D1
 > fold (Text s) = text s
-> fold (Close a) = close (fold a)
+> fold (Flush a) = flush (fold a)
 > fold (a :<> b) = fold a <> fold b
 > fold (a :<|> b) = fold a <|> fold b
 
@@ -771,8 +769,8 @@ ddd
 
 >   M2 y w1 False _ lw a _ <> M2 z x1 r x2 lx c d = M2 (z+y) (max w1 (lw + x1)) r x2 (if r then lx else lw + lx) (a <> c) d
 >   text s = M2 0 (length s) False 0 (length s) [s] []
->   close (M2 x w1 r w2 0 a b) = M2 (x+1) w1 r w2 0 (if r then a else close a) (if r then close b else b)
->   close d = tabulate (d <> line)
+>   flush (M2 x w1 r w2 0 a b) = M2 (x+1) w1 r w2 0 (if r then a else flush a) (if r then flush b else b)
+>   flush d = tabulate (d <> line)
 >   render (M2 _ _ _ _ _ a b) = render (a ++ b)
 
 
@@ -800,12 +798,12 @@ Note that we pick the narrowest result fitting on min. lines lines!
 
 
 < minLastW (a <|> b) = min (minLastW a) (minLastW b)
-< minLastW (close a) = 0
+< minLastW (flush a) = 0
 < minLastW (a <> b) = minLastW a + minLastW b
 < minLastW (text t) = length t
 
 < minWidth (a <|> b) = min (minWidth a) (minWidth b)
-< minWidth (close a) = minWidth a
+< minWidth (flush a) = minWidth a
 < minWidth (a <> b) = minLastW a + minWidth b
 < minWidth (text t) = length t
 
@@ -826,7 +824,7 @@ instance Doc D0 where
   d1 <> d2 = \i0 -> let (i1,t1) = d1 i0
                         (i2,t2) = d2 i1
                     in (i2,t1 ++ t2)
-  close d = \i -> let (_,t) = d i in (i,t ++ "\n" ++ replicate i ' ')
+  flush d = \i -> let (_,t) = d i in (i,t ++ "\n" ++ replicate i ' ')
   text s i = (c,s)
     where c = i + length s
   nest n d = \i -> d (i+n)
@@ -838,12 +836,12 @@ type D1 = Int -> [(Int,String)]
 instance Doc D1 where
   empty = \i -> [(i,"")]
   d1 <> d2 = \i0 -> [(i2,t1 ++ t2) | (i1,t1) <- d1 i0, (i2,t2) <- d2 i1]
-  close d = \i -> [(i,t ++ "\n" ++ replicate i ' ') | (_,t) <- d i]
+  flush d = \i -> [(i,t ++ "\n" ++ replicate i ' ') | (_,t) <- d i]
   text s i = [(c,s) | c < 80]
     where c = i + length s
   d1 <|> d2 = \i -> d1 i ++ d2 i
   nest n d = \i -> d (i+n)
-  d1 $$ d2 = close d1 <> d2
+  d1 $$ d2 = flush d1 <> d2
   render d = case sortBy (compare `on` fst) (d 0) of
       ((_,s):_) -> Just s
       _ -> Nothing
@@ -853,7 +851,7 @@ type D2 = Int -> [(Int,Int,Int,String)] -- height, max col, col, text
 instance Doc D2 where
   empty = \i -> [(0,i,i,"")]
   d1 <> d2 = \i0 -> [(h1 + h2,max w1 w2,i2,t1 ++ t2) | (h1,w1,i1,t1) <- d1 i0, (h2,w2,i2,t2) <- d2 i1]
-  close d i = [(h+1,w,i,t ++ '\n' : replicate i ' ') | (h,w,_,t) <- d i]
+  flush d i = [(h+1,w,i,t ++ '\n' : replicate i ' ') | (h,w,_,t) <- d i]
   text s i = [(0,c,c,s) | c < 80]
     where c = i + length s
   d1 <|> d2 = \i -> d1 i ++ d2 i
@@ -957,7 +955,7 @@ aaaaaaa
   ccccccccc d d d d
 
 > ($$) :: Layout d => d -> d -> d
-> a $$ b = close a <> b
+> a $$ b = flush a <> b
 
 
 > class Metric m where
@@ -973,7 +971,7 @@ recursive equations over the API. For the height metric, we have:
 
 < height (a <> b) = height a + height b - 1
 < height (text _) = 1
-< height (close a) = 1 + height a
+< height (flush a) = 1 + height a
 
 < height (xs <> (y:ys)) = length (init xs ++ [last xs ++ y] ++ nest (length x) ys)
 <                       = length (init xs)  +  length [last xs ++ y]  + length (nest (length (last xs)) ys)
@@ -1006,13 +1004,13 @@ It can be efficently computed:
 
 < lastW  (text t) = length t
 < lastW  (a <> b) = lastW a + lastW b
-< lastW  (close a) = 0
+< lastW  (flush a) = 0
 
 And thus, so can be the width of a layout:
 
 < width' (text t) = length t
 < width' (a <> b) = max (width a) (lastW a + width b)
-< width' (close a) = width' a
+< width' (flush a) = width' a
 
 Putting all this reasoning into our implementation, we get:
 
@@ -1030,7 +1028,7 @@ Putting all this reasoning into our implementation, we get:
 
 > instance (Layout a, Layout b) => Layout (a,b) where
 >   text s = (text s, text s)
->   close (a,b) = (close a, close b)
+>   flush (a,b) = (flush a, flush b)
 >   (a,b) <> (c,d) = (a<>c ,b<>d)
 >   render = render . snd
 
