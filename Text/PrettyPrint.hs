@@ -23,7 +23,8 @@ vcat = I.vcat
 sep  = I.sep
 
 fsep :: [Doc] -> Doc
-fsep xs = foldr (I.<|>) (hsep xs) [ hsep l $$ fsep r | (l,r) <- drop 1 (chops xs) ]
+fsep xs = sep xs
+  -- foldr (I.<|>) (hsep xs) [ hsep l $$ fsep r | (l,r) <- drop 1 (chops xs) ]
 
 chops :: [a] -> [([a],[a])]
 chops xs = [ splitAt n xs | n <- [0..length xs-1] ]
