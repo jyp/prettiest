@@ -3,8 +3,6 @@
 
 > {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, PostfixOperators, ViewPatterns, RecordWildCards, GADTs, NoMonomorphismRestriction, ScopedTypeVariables, InstanceSigs, GeneralizedNewtypeDeriving #-}
 
-> module Paper where
-> 
 > import Data.Function
 > import Data.List (intercalate, minimumBy, sort, groupBy)
 > import System.Clock
@@ -34,12 +32,13 @@ packages which remain popular today:
 * [pretty](https://hackage.haskell.org/package/pretty)
 * [wl-pprint](https://hackage.haskell.org/package/wl-pprint)
 
-In this paper, I propose an alternative design of a pretty printing
-library. I'll take a critical look at design choices of Hughes and
-Wadler. I will present a library which abides to the principles of
-pretty printing as defined above, and which is also reasonably
-efficient. Finally I will draw general conclusion on how to improve on
-functional programming methodologies.
+In this paper, I propose a new design for a pretty printing
+library. This design in inspired by Hughes and Wadler's examples, but
+subtly different.  I'll take a critical look at design choices of
+Hughes and Wadler. I will present a library which abides to the
+principles of pretty printing as defined above, and which is also
+reasonably efficient. Finally I will draw general conclusion on how to
+improve on functional programming methodologies.
 
 
 A Pretty API
@@ -214,7 +213,7 @@ abide by to the second principle of pretty printing: space
 optimisation.
 
 
-One may wonder what would happen with Wadler's libary. Unfortunately,
+One may wonder what would happen with Wadler's library. Unfortunately,
 its API cannot even express the layout we are after! Indeed, one can
 only specify a *constant* amount of indentation, not one that depends
 on the contents of a document.  This means that Wadler's library lacks
@@ -558,6 +557,25 @@ homomorphism (ignoring of course render):
    <-------------------->
         lw1 + lw2
 
+
+
+    l1 + max d1  (l2 + d2)
+    <-------------------------->
+        l1    d1
+    <-------><--->
+    aaaaaaaaaaaaaa             ^       ^
+    aaaaaaaaaaaaaa             | h1    |
+    aaaaaaaaaaaaaa             |       |
+    aaaaaaaaaaaaaa             v       | h1 + h2
+    aaaaaaaaabbbbbbbbbbbbbbbb  ^       |
+    <------->bbbbbbbbbbbbbbbb  |  h2   |
+       l1    bbbbbbbbbbbbbbbb  v       v
+             bbbbbbbbbbbb
+             <----------><-->
+                 l2        d2
+   <-------------------->
+          l1 + l2
+
 > fits :: M -> Bool
 > fits x = maxWidth x <= 80
 
@@ -607,10 +625,32 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
 > merge (x:xs) (y:ys)
 >   | x <= y = x:merge xs (y:ys)
 >   | otherwise = y:merge (x:xs) ys
- 
+
 > mergeAll :: Ord a => [[a]] -> [a]
+
 > mergeAll [] = []
 > mergeAll (x:xs) = merge x (mergeAll xs)
+
+This one is 1% faster or so.
+
+-- > mergeAll = mergeTree . mkTree
+
+> data Tree a = Tip | Leaf a | Bin (Tree a) (Tree a)
+
+> split :: [a] -> ([a],[a])
+> split [] = ([],[])
+> split [x] = ([x],[])
+> split (x:y:xs) = let (a,b) = split xs in (x:a,y:b)
+
+> mkTree :: [[a]] -> Tree [a]
+> mkTree [] = Tip
+> mkTree [x] = Leaf x
+> mkTree xs =let (a,b) = split xs in Bin (mkTree a) (mkTree b)
+
+> mergeTree :: Ord a => Tree [a] -> [a]
+> mergeTree (Leaf x) = x
+> mergeTree Tip = []
+> mergeTree (Bin a b) = merge (mergeTree a) (mergeTree b)
 
 > type D0 = [(M,L)]
 >
@@ -729,7 +769,7 @@ Wadler-Style Nesting
 
 > data M2 = M2 {heigh :: Int, -- minimize
 >               width1 :: Int, -- minimize
->               hasReset :: Bool, -- Better if True.
+>               hasReset :: Bool, -- Both must be considerer
 >               width2 :: Int, -- Note: this does not need to be minimized, just < 80
 >               lW2 :: Int, -- minimize
 >               l1, l2 :: L}
@@ -933,7 +973,7 @@ But this layout turns out to be shorter:
 >   t1 <- getTime ProcessCPUTime
 >   print $ timeSpecAsNanoSecs $ diffTimeSpec t0 t1
 >   where mms :: D0
->         mms = pretty testData4
+>         mms = pretty testData8
 >           -- = [mlines | M {..} <- doc0 (pretty testData4) 80 80]
 
 
