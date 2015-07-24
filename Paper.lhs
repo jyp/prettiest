@@ -48,11 +48,11 @@ A Pretty API
 Let us assume we want to pretty print S-Expressions, represented as
 follows:
 
-``` {.example}
-data SExpr where
-  SExpr :: [SExpr] -> SExpr
-  Atom :: String -> SExpr
-```
+
+> data SExpr where
+>   SExpr :: [SExpr] -> SExpr
+>   Atom :: String -> SExpr
+>  deriving Show
 
 Using the above representation, the S-Expr `(a b c d)` is encoded as
 follows:
@@ -908,11 +908,6 @@ instance Doc D2 where
 > testData4 = SExpr (replicate 10 testData2)
 > testData8 = SExpr (replicate 10 testData4)
 
-> data SExpr where
->   SExpr :: [SExpr] -> SExpr
->   Atom :: String -> SExpr
->  deriving Show
-
 
 \begin{spec}
 (d1 <> d2) <> d3 == d1 <> (d2 <> d3)
@@ -1086,4 +1081,6 @@ Putting all this reasoning into our implementation, we get:
 
 > instance (Poset a) => Poset (a,b) where
 >   (a,_) ≺ (b,_) = a ≺ b
+
+
 
