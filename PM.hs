@@ -89,8 +89,7 @@ programming methodologies.
 
 We justify our choice of API (set of combinators) by examining a
 simple yet typical pretty printing task.  Let us assume we want to
-pretty print S-Expressions, represented as follows:
-
+pretty print S-Expressions, and that they are represented as follows:
 
 @haskell«
 data SExpr where
@@ -98,6 +97,96 @@ data SExpr where
    Atom :: String -> SExpr
   deriving Show
 »
+
+> data SExpr where
+>   SExpr :: [SExpr] -> SExpr
+>   Atom :: String -> SExpr
+>  deriving Show
+
+Using the above representation, the S-Expr @teletype«(a b c d)» has the
+following encoding:
+
+> abcd :: SExpr
+> abcd = SExpr [Atom "a",Atom "b",Atom "c",Atom "d"]
+
+Let us specify pretty printing of S-Expr as follows. In a pretty
+display of an S-Expr, we would like the elements to be either
+concatenated horizontally, or aligned vertically. The possible pretty
+layouts of our example would be either
+
+@verbatim«
+(a b c d)
+»
+
+or
+
+@verbatim«
+(a
+ b
+ c
+ d)
+»
+
+The goal of the pretty printer is to print a given s-expression in as
+few lines as possible, while respecting the above rules, and fitting
+within the width of a page.
+
+Traditionally, a function pretty printing library gives us the means to express the
+specification of possible pretty layouts, and automatically pick the
+prettiest. 
+We will not depart from the tradition. As Hughes', our library will allow to express both vertical (`$$`) and
+horizontal (`<>`) composition of documents, as well as embedding raw
+text (`text`) and provide automatic choice between layouts (`<|>`). At this
+stage, we keep the representation of documents abstract using a
+typeclass, provide the above combinators, as well as means of @hask«render»ing a document:
+
+@haskell«
+text   :: Doc d => String -> d
+(<>)   :: Doc d => d -> d -> d
+($$)   :: Doc d => d -> d -> d
+(<|>)  :: Doc d => d -> d -> d
+render :: Doc d => d -> String
+»
+
+We can then define a few useful combinators on top of the above: the
+@haskell«empty» document; concatenation with an intermediate space @haskell«(<+>)»; vertical and
+horizontal concatenation of multiple documents.
+
+@haskell«
+empty :: Layout d => d
+empty = text ""
+
+(<+>) :: Layout d => d -> d -> d
+x <+> y = x <> text " " <> y
+
+hsep,vcat :: Doc d => [d] -> d
+vcat = foldr1 ($$)
+hsep = foldr1 (<+>)
+»
+
+We can furthermore define automatic choice between horizontal and vertical
+concatenation:
+
+@haskell«
+sep :: Doc d => [d] -> d
+sep [] = empty
+sep xs = hsep xs <|> vcat xs
+»
+
+Turning S-Expressions into a pretty document is then child's play:
+
+@haskell«
+pretty :: Doc d => SExpr -> d
+pretty (Atom s) = text s
+pretty (SExpr xs) = text "(" <> (sep $ map pretty xs) <> text ")"
+»
+
+@sec_semantics<-section«A Pretty Rendering»
+
+We have given a syntax for describing documents, but what should be
+its semantics?  What does it mean to pretty print a document? Technically,
+what is the specification of @hask«render»?
+
 
 
 »
