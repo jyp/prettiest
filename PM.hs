@@ -5,7 +5,10 @@ import MarXup.Latex
 import MarXup.Latex.Bib
 import MarXup.Latex.Math (newtheorem, deflike)
 import MarXup.Tex
+import MarXup.Diagram
 import MarXup.LineUp.Haskell
+import MarXup.Verbatim
+import MarXup.Latex.Math (ensureMath)
 
 main = renderTex "Prettiest.tex" (preamble (header >> mainText))
 
@@ -268,13 +271,13 @@ Unfortunately, in this case, and using Hughes' library, we would get the followi
 
 The above output uses way more space than
 necessary, violating @pcp_compact.  
-Why is that? Hughes states that @q«it would be
+Why is that? Hughes states that @qu«it would be
 unreasonably inefficient for a pretty-printer do decide whether or not
 to split the first line of a document on the basis of the content of
 the last.» (sec. 7.4 of his paper).  Therefore, he chooses a greedy
 algorithm, which tries to fit as much as possible on a single line,
 without regard for what comes next.  In our example, the algorithm
-fits @texttt«(12345678 ((a», but then it has committed to a very deep
+fits @teletype«(12345678 ((a», but then it has committed to a very deep
 indentation level, which forces to display the remainder of the
 document in a narrow space.
 
@@ -304,7 +307,7 @@ example as follows:
 »
 
 It's not too bad! But it inserts a spurious line break after the atom
-@texttt«12345678». While this may be acceptable to some, I find it
+@teletype«12345678». While this may be acceptable to some, I find it
 disappointing for two reasons. First, spurious line breaks may appear
 in many situations. Second, the element which is rejected to a next
 can only be indented by a constant amount. Let us say we would like to
@@ -391,13 +394,38 @@ advice: "translate [to the right] the second operand, so that is tabs
 against the last character of the first operand". We can represent the
 situation diagramatically as follows:
 
-abstrLayout p0 h w lw = do
-  polygon [p0
-          ,p0+(w :- 0)
-          ,p0+(w :- h*lineHeight)
-          ,p0+(lw :- h*lineHeight)
-          ,p0+(lw :- (h+1)*lineHeight)
-          ,p0+(0 :- (h+1)*lineHeight)]
-  
+@horizCat
 
 »
+
+lineHeight = 10
+
+abstrLayout :: Point -> Expr -> Expr -> Expr -> Diagram (Point,Point)
+abstrLayout p0 h w lw = do
+  let points@[_nw,_ne,_se,after,_sse,below]
+        = map (p0+)
+          [0
+          ,w `Point` 0
+          ,w  `Point` negate (h*lineHeight)
+          ,lw `Point` negate (h*lineHeight)
+          ,lw `Point` negate ((h+1)*lineHeight)
+          ,0  `Point` negate ((h+1)*lineHeight)]
+
+  draw $ path $ polygon $ points
+  return (after,below)
+
+horizCat :: Dia
+horizCat = do
+  p0 <- point
+  (after,_) <- abstrLayout p0 3 30 10
+  abstrLayout after 3 30 10
+  return () 
+
+haskell_ = haskell
+
+verbatim :: Verbatim () -> TeX
+verbatim (Verbatim s _) =
+    env "verbatim" (tex s)
+
+hask = ensureMath . cmd "mathsf"
+
