@@ -10,7 +10,7 @@ import MarXup.LineUp.Haskell
 import MarXup.Verbatim
 import MarXup.Latex.Math (ensureMath)
 
-main = renderTex "Prettiest.tex" (preamble (header >> mainText))
+main = renderTex "Prettiest" (preamble (header >> mainText))
 
 classUsed = SIGPlan
 
@@ -21,17 +21,19 @@ preamble body = do
   usepackage "graphicx" []
   usepackage "polytable" []
   newtheorem "principle" "Principle"
+  title "An Insanely Pretty Printer"
+  authorinfo Plain [AuthorInfo "Jean-Philippe Bernardy" "bernardy@chalmers.se" "CTH"]
   env "document" body
 
 principle :: TeX -> TeX -> Tex SortedLabel
-principle title = deflike "Principle" "principle" title
+principle titl = deflike "Principle" "principle" titl
 
 
 header :: Tex ()
 header = do
   maketitle
   -- abstract
-  keywords classUsed $ [ "Pearl", "Pretty Printing"]
+  -- keywords classUsed $ [ "Pearl", "Pretty Printing"]
 
 
 bibliographyAll :: TeX
@@ -404,12 +406,12 @@ abstrLayout :: Point -> Expr -> Expr -> Expr -> Diagram (Point,Point)
 abstrLayout p0 h w lw = do
   let points@[_nw,_ne,_se,after,_sse,below]
         = map (p0+)
-          [0
+          [0 `Point` 0
           ,w `Point` 0
-          ,w  `Point` negate (h*lineHeight)
-          ,lw `Point` negate (h*lineHeight)
-          ,lw `Point` negate ((h+1)*lineHeight)
-          ,0  `Point` negate ((h+1)*lineHeight)]
+          ,w  `Point` negate (lineHeight*-h)
+          ,lw `Point` negate (lineHeight*-h)
+          ,lw `Point` negate (lineHeight*-(h+1))
+          ,0  `Point` negate (lineHeight*-(h+1))]
 
   draw $ path $ polygon $ points
   return (after,below)
@@ -417,6 +419,7 @@ abstrLayout p0 h w lw = do
 horizCat :: Dia
 horizCat = do
   p0 <- point
+  p0 .=. Point 0 0
   (after,_) <- abstrLayout p0 3 30 10
   abstrLayout after 3 30 10
   return () 

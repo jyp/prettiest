@@ -11,3 +11,11 @@ cabal-dev
 cabal.sandbox.config
 cabal.config
 /blog.html
+/Prettiest.aux
+/Prettiest.boxes
+/Prettiest.log
+/Prettiest.pdf
+/Prettiest.ptb
+/Prettiest.tex
+/PM
+/texput.log

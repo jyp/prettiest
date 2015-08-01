@@ -1,5 +1,15 @@
 
-default: blog.html
+
+default: Prettiest.pdf
+
+Prettiest.pdf: PM.hs
+	ghc --make PM
+        ./PM
+        pdflatex Prettiest
+        ./PM
+        pdflatex Prettiest
+
+blog: blog.html
 
 # %.html: %.org
 # pandoc --email-obfuscation=references --smart --standalone --css=home.css --from=org --to=html --output=$@ $<
