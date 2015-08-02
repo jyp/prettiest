@@ -15,7 +15,7 @@ main = renderTex "Prettiest" (preamble (header >> mainText))
 classUsed = SIGPlan
 
 preamble body = do
-  documentClass "article" []
+  documentClass "../PaperTools/latex/sigplanconf" []
   usepackage "inputenc" ["utf8x"]
   usepackage "tikz" []
   usepackage "graphicx" []
@@ -353,7 +353,7 @@ semantics for it.
 
 Recall that we have inherited from Hughes a draft API:
 
-@haskell_«
+@spec«
 text  :: String -> d
 (<>)  :: Doc d => d -> d -> d
 ($$)  :: Doc d => d -> d -> d
@@ -398,33 +398,54 @@ situation diagramatically as follows:
 
 @horizCat
 
+
+
 »
 
 lineHeight = 10
 
-abstrLayout :: Point -> Expr -> Expr -> Expr -> Diagram (Point,Point)
-abstrLayout p0 h w lw = do
-  let points@[_nw,_ne,_se,after,_sse,below]
+abstrLayout :: Expr -> Diagram (Object,Point)
+abstrLayout lastWidth = do
+  bx <- box
+  let points@[_nw,_ne,_se,after,_sse,_sw]
         = map (p0+)
-          [0 `Point` 0
-          ,w `Point` 0
-          ,w  `Point` negate (lineHeight*-h)
-          ,lw `Point` negate (lineHeight*-h)
-          ,lw `Point` negate (lineHeight*-(h+1))
-          ,0  `Point` negate (lineHeight*-(h+1))]
+          [bx NW
+          ,bx NE
+          ,bx SE + Point 0 lineHeight
+          ,bx SW + Point lastWidth lineHeight
+          ,bx SW + Point lastWidth 0
+          ,bx SW]
+      p = polygon point
+  polygon p
+  return (Object p bx, after)
 
-  draw $ path $ polygon $ points
-  return (after,below)
+twoLayouts :: Diagram (Object,Point,Object)
+twoLayouts = do
+  (a,aa) <- abstrLayout 30
+  (b,_) <- abstrLayout 30
+  width a === 200
+  width b === 150
+  height a === 6 *- lineHeight
+  height b === 6 *- lineHeight
+  return (a,aa,b)
+
 
 horizCat :: Dia
 horizCat = do
-  p0 <- point
-  p0 .=. Point 0 0
-  (after,_) <- abstrLayout p0 3 30 10
-  abstrLayout after 3 30 10
+  (a,mid,b) <- twoLayouts
+  op <- labelObj "<>"
+  let lhsObjs = [a,op,b] 
+  spread hdist lhsObjs
+  align ypart $ map (#Center) $ lhsObjs
+  lhs <- boundingBox lhsObjs
+  
+  (a',mid',b') <- twoLayouts
+  b'#NW .=. mid'
+
+  hdist lhs a' === 20
   return () 
 
-haskell_ = haskell
+spec = haskell
 
 verbatim :: Verbatim () -> TeX
 verbatim (Verbatim s _) =
