@@ -398,6 +398,398 @@ situation diagramatically as follows:
 
 @horizCat
 
+Thus we handle the last line of the first layout and the first line of
+the second layout specially, as follows:
+
+>   (<>) :: L -> L -> L
+>   xs <> (y:ys) = xs0 ++ [x ++ y] ++ map (indent ++) ys
+>      where xs0 = init xs
+>            x = last xs
+>            n = length x
+>            indent = replicate n ' '
+
+The trained eye will detect that, given the above semantics, vertical
+concatenation is (nearly) a special case of horizontal composition. That is,
+instead of composing vertically, one can add an empty line (flush) to the
+left-hand-side layout and compose horizontally.
+
+TODO: flush ==> flush
+
+<   ($$) :: L -> L -> L
+<   a $$ b = flush a <> b
+
+where
+
+>   flush :: L -> L
+>   flush xs = xs ++ [""]
+
+
+One might argue that replacing ($$) by `flush` does not make the API
+shorter, and maybe not even simpler. Yet, we will stick this choice,
+for two reasons:
+
+1. The new API clearly separates the concerns of concatenation and
+left-flushing documents.
+
+2. The horizontal composition (<>) has a nicer algebraic structure
+than ($$). The vertical composition ($$) has no unit, while (<>) forms
+a monoid with the empty layout. (Due to a more complicated semantics,
+Hughes operator (<>) does not form a monoid.)
+
+To sum up, our API for layouts is the following:
+
+> class Layout d where
+>   (<>) :: d -> d -> d
+>   text :: String -> d
+>   flush :: d -> d
+>   render :: d -> String
+
+Additionally, as mentioned above, layouts follow a number of algebraic
+laws:
+
+- text is homomorphism for concatenation:
+
+< prop_text s t = text s <> text t == text (s ++ t)
+
+Which justifies the definition we gave previously for the empty document:
+
+< empty = text ""
+
+- Layouts form a monoid with empty and <>
+
+> prop_leftUnit :: (Doc a, Eq a) => a -> Bool
+> prop_leftUnit a = empty <> a == a
+
+> prop_rightUnit :: (Doc a, Eq a) => a -> Bool
+> prop_rightUnit a = a <> empty == a
+
+> prop_assoc :: (Doc a, Eq a) => a -> a -> a -> Bool
+> prop_assoc a b c = (a <> b) <> c == a <> (b <> c)
+
+- flushing can be pushed in concatenation:
+
+> prop_flush :: (Doc a, Eq a) => a -> a -> Bool
+> prop_flush a b = flush (flush a <> b) == flush a <> flush b
+
+
+Note that laws may only *partially* specify the behaviour, while a
+semantic model will always fully constrain it.
+
+(exercise: is the above set of laws fully constraining the semantic model?)
+
+Notice that Hughes and Wadler give the semantics via laws first and
+come up with a compositional interpretation second. This is fine,
+precisely because laws do not fully constrain the design; there is
+room for wiggle. However, a compositional semantics is often an even
+better guide which should not be an afterthought.
+
+
+
+Documents
+=========
+
+Proceed to extend the API with choice between layouts and specify the
+problem formally.
+
+> class Layout d => Doc d where
+>   (<|>) :: d -> d -> d
+
+Documents can be defined as the free commutative monoid of layouts (i.e. a bag of
+layouts). The layout operators can be lifted in the natural manner.
+
+We omit the unit of the monoid in the interface. Indeed, it
+corresponds to a document with cannot be laid out, which turns out to
+be useless as an API for pretty printing.
+
+Thus, we chose as a representation for documents the list of possible
+layouts.
+
+> newtype F a = F {fromF :: [a]}
+>   deriving (Functor,Applicative,Show)
+
+> instance Doc (F L) where
+>   F xs <|> F ys = F (xs ++ ys)
+
+> instance Layout (F L) where
+>   text = pure . text
+>   flush = fmap flush
+>   xs <> ys = (<>) <$> xs <*> ys
+
+Rendering a document is merely picking the shortest layout among the
+valid ones:
+
+>   render = render . minimumBy (compare `on` length) . filter valid . fromF
+
+-- >   render = render . minimumBy better . fromF
+
+where
+
+> better :: L -> L -> Ordering
+> better a b | not (valid b) = LT
+> better a b | not (valid a) = GT
+> better a b = compare (length a) (length b)
+
+> valid :: L -> Bool
+> valid xs = maximum (map length xs) <= 80
+
+
+An alternative semantics
+------------------------
+
+At this point, a classic functional pearl would derive an
+implementation via a series of calculational steps. While this may
+very well be done, I will instead proceed to give insight into how I
+actually designed the library.
+
+Let us remember that we want to select the layout with minimal use of
+space. Hence, from an algorithm point of view, all that matters is the
+space that a layout takes. Let us define an abstract semantics for
+documents which focuses on such space.
+
+This semantics can be guessed by looking at the diagram for
+composition of layouts. All that matters is the maximum width of the
+layout, the width of its last line and its height (and because layouts
+can't be empty we will start counting from 0).
+
+
+        max width
+    <-------------->
+    bbbbbbbbbbbbbbbb  ^
+    bbbbbbbbbbbbbbbb  |  height
+    bbbbbbbbbbbbbbbb  v
+    bbbbbbbbbbbb
+    <---------->
+     last width
+
+> measure :: L -> M
+> measure xs = M {maxWidth   = maximum $ map length $ xs,
+>                 height     = length xs - 1,
+>                 lastWidth  = length $ last $ xs}
+
+> data M = M {height     :: Int,
+>             lastWidth  :: Int,
+>             maxWidth   :: Int}
+>   deriving (Show,Eq,Ord)
+
+
+
+
+> instance Layout M where
+>   text s = M {height = 0, maxWidth = length s, lastWidth = length s}
+>   a <> b = M {maxWidth = max (maxWidth a) (maxWidth b + lastWidth a),
+>               height = height a + height b,
+>               lastWidth = lastWidth a + lastWidth b}
+>   flush a = M {maxWidth = maxWidth a,
+>                height = height a + 1,
+>                lastWidth = 0}
+>   render (M lw h mw) = render $ replicate h (replicate mw 'x') ++ [replicate lw 'x']
+
+The equations above are correct if they make `measure` a layout
+homomorphism (ignoring of course render):
+
+< measure (a <> b) = measure a <> measure b
+< measure (flush a) = flush (measure a)
+
+       max mw1 (lw1 + mw2)
+    <----------------------->
+         mw1
+    <------------>
+    aaaaaaaaaaaaaa             ^       ^
+    aaaaaaaaaaaaaa             | h1    |
+    aaaaaaaaaaaaaa             |       |
+    aaaaaaaaaaaaaa             v       | h1 + h2
+    aaaaaaaaabbbbbbbbbbbbbbbb  ^       |
+    <------->bbbbbbbbbbbbbbbb  |  h2   |
+       lw1   bbbbbbbbbbbbbbbb  v       v
+             bbbbbbbbbbbb
+             <-------------->
+                   mw2
+             <---------->
+                 lw2
+   <-------------------->
+        lw1 + lw2
+
+
+
+    l1 + max d1  (l2 + d2)
+    <-------------------------->
+        l1    d1
+    <-------><--->
+    aaaaaaaaaaaaaa             ^       ^
+    aaaaaaaaaaaaaa             | h1    |
+    aaaaaaaaaaaaaa             |       |
+    aaaaaaaaaaaaaa             v       | h1 + h2
+    aaaaaaaaabbbbbbbbbbbbbbbb  ^       |
+    <------->bbbbbbbbbbbbbbbb  |  h2   |
+       l1    bbbbbbbbbbbbbbbb  v       v
+             bbbbbbbbbbbb
+             <----------><-->
+                 l2        d2
+   <-------------------->
+          l1 + l2
+
+> fits :: M -> Bool
+> fits x = maxWidth x <= 80
+
+Early filtering out invalid results
+-----------------------------------
+
+<   xs <> ys = filter valid [x <> y | x <- xs, y <- ys]
+
+This is because width is monotonous:
+
+width (a <> b) ≥ width a  and width (a <> b) ≥ width b
+width (flush a) ≥ with a
+
+and therefore so is validity: keeping invalid layouts is useless: they
+can never be combined with another layout to produce something valid.
+
+valid (a <> b)  ==> valid a  and  valid b
+valid (flush a) ==> valid a
+
+
+Pruning out dominated results
+-----------------------------
+
+Idea: filter out the results that are dominated by other results.
+
+> class Poset a where
+>   (≺) :: a -> a -> Bool
+
+measure a ≺ measure b   =>   a ≤ b
+
+Find an instance `Poset M` such that:
+
+if    d1 ≺  d2 and  d'1 ≺  d'2
+then  (d1 <> d2) ≺  (d'1 <> d'2) and
+      flush d1 ≺ flush d2
+
+
+
+> instance Poset M where
+>   M c1 l1 s1 ≺ M c2 l2 s2 = c1 <= c2 && l1 <= l2 && s1 <= s2
+
+
+
+> merge :: Ord a => [a] -> [a] -> [a]
+> merge [] xs = xs
+> merge xs [] = xs
+> merge (x:xs) (y:ys)
+>   | x <= y = x:merge xs (y:ys)
+>   | otherwise = y:merge (x:xs) ys
+
+> mergeAll :: Ord a => [[a]] -> [a]
+
+> mergeAll [] = []
+> mergeAll (x:xs) = merge x (mergeAll xs)
+
+This one is 1% faster or so.
+
+-- > mergeAll = mergeTree . mkTree
+
+> data Tree a = Tip | Leaf a | Bin (Tree a) (Tree a)
+
+> split :: [a] -> ([a],[a])
+> split [] = ([],[])
+> split [x] = ([x],[])
+> split (x:y:xs) = let (a,b) = split xs in (x:a,y:b)
+
+> mkTree :: [[a]] -> Tree [a]
+> mkTree [] = Tip
+> mkTree [x] = Leaf x
+> mkTree xs =let (a,b) = split xs in Bin (mkTree a) (mkTree b)
+
+> mergeTree :: Ord a => Tree [a] -> [a]
+> mergeTree (Leaf x) = x
+> mergeTree Tip = []
+> mergeTree (Bin a b) = merge (mergeTree a) (mergeTree b)
+
+> type D0 = [(M,L)]
+>
+> instance Layout D0 where
+>   xs <> ys = bests [ filter (fits . fst) [x <> y | y <- ys] | x <- xs]
+>   flush xs = bests $ map sort $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
+>   -- flush xs = pareto' [] $ sort $ (map flush xs)
+>   text s = [text s | valid (text s)]
+>   render (x:_) = render x
+
+
+> instance Doc D0 where
+>   xs <|> ys = bests [xs,ys]
+
+
+> bests = pareto' [] . mergeAll
+
+> pareto' :: Poset a => [a] -> [a] -> [a]
+> pareto' acc [] = []
+> pareto' acc (x:xs) = if any (≺ x) acc
+>                        then pareto' acc xs
+>                        else x:pareto' (x:acc) xs
+> --                        else pareto' (x:filter (not . (x ≺)) acc) xs
+
+Because the input is lexicographically sorted, everything which is in
+the frontier can't be dominated; hence no need to refilter the
+frontier when we find a new element.
+
+(x0,y0,z0) <= (x1,y1,z1)
+
+x0 < x1 or
+x0 = x1 and y0 < y0
+x0 = x1 and y0 = y0 and z0 < z1
+
+At least one variable is less.
+
+We make sure that concatenation preserve the lexicographic order
+(thanks Nick):
+
+if    d1 <=  d2 and  d'1 <=  d'2
+then  (d1 <> d2) <=  (d'1 <> d'2)
+
+Flush does not, so we have to re-sort the list.
+
+Hughes-Style nesting
+====================
+
+Hughes proposes a nest conbinator.
+Mostly used for "hanging":
+
+> hang :: Doc d => Int -> d -> d -> d
+> hang n x y = (x <> y) <|> (x $$ nest n y)
+
+His nesting is optional, but in the context of hang, it does not need to be.
+
+> nest :: Layout d => Int -> d -> d
+> nest n y = spaces n <> y
+
+
+Wadler-Style Nesting
+====================
+
+Already discussed.
+
+4. Ribbon length
+
+Note that we pick the narrowest result fitting on min. lines lines!
+
+5. Using something better than strings for text
+
+
+
+
+< minLastW (a <|> b) = min (minLastW a) (minLastW b)
+< minLastW (flush a) = 0
+< minLastW (a <> b) = minLastW a + minLastW b
+< minLastW (text t) = length t
+
+< minWidth (a <|> b) = min (minWidth a) (minWidth b)
+< minWidth (flush a) = minWidth a
+< minWidth (a <> b) = minLastW a + minWidth b
+< minWidth (text t) = length t
+
+
+
+
+
 
 
 »
