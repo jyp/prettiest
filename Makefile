@@ -4,10 +4,10 @@ default: Prettiest.pdf
 
 Prettiest.pdf: PM.hs
 	ghc --make PM
-        ./PM
-        pdflatex Prettiest
-        ./PM
-        pdflatex Prettiest
+	./PM
+	pdflatex Prettiest
+	./PM
+	pdflatex Prettiest
 
 blog: blog.html
 
