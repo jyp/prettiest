@@ -3,26 +3,29 @@
 import MarXup
 import MarXup.Latex
 import MarXup.Latex.Bib
-import MarXup.Latex.Math (newtheorem, deflike)
+import MarXup.Latex.Math (newtheorem, deflike, thmlike, definition, mathpreamble)
 import MarXup.Tex
 import MarXup.Diagram
 import MarXup.LineUp.Haskell
 import MarXup.Verbatim
 import MarXup.Latex.Math (ensureMath)
+import Control.Monad (forM_)
 
-main = renderTex "Prettiest" (preamble (header >> mainText))
-
-classUsed = SIGPlan
+main :: IO ()
+main = renderTex SIGPlan "Prettiest" (preamble (header >> mainText))
 
 preamble body = do
   documentClass "../PaperTools/latex/sigplanconf" []
-  usepackage "inputenc" ["utf8x"]
+  stdPreamble
   usepackage "tikz" []
-  usepackage "graphicx" []
   usepackage "polytable" []
+  usepackage "url" []
+  mathpreamble
+  cmd "input" $ tex "../PaperTools/latex/unicodedefs"
   newtheorem "principle" "Principle"
+
   title "An Insanely Pretty Printer"
-  authorinfo Plain [AuthorInfo "Jean-Philippe Bernardy" "bernardy@chalmers.se" "CTH"]
+  authorinfo [AuthorInfo "Jean-Philippe Bernardy" "bernardy@chalmers.se" "CTH"]
   env "document" body
 
 principle :: TeX -> TeX -> Tex SortedLabel
@@ -31,10 +34,10 @@ principle titl = deflike "Principle" "principle" titl
 
 header :: Tex ()
 header = do
-  maketitle
+  -- maketitle
   -- abstract
-  -- keywords classUsed $ [ "Pearl", "Pretty Printing"]
-
+  keywords $ [ "Pearl", "Pretty Printing"]
+  return ()
 
 bibliographyAll :: TeX
 bibliographyAll = do
@@ -53,7 +56,7 @@ mainText = «
 »
 
 
-A pretty printing algorithm renders data structures in a way which
+A pretty printer is a program that renders data structures in a way which
 makes them pleasant to read. (The data structures in question are
 often represent programs, but not always.) I propose the following
 three laws of pretty printing:
@@ -61,29 +64,29 @@ three laws of pretty printing:
 @pcp_visibility<-principle«Visibility»«Pretty printer shall
 layout all its output within the width of the page.»
 
-@pcp_compact<-principle«compactness»«A pretty printer shall minimize the amount of
+@pcp_compact<-principle«Compactness»«A pretty printer shall minimize the amount of
 space used to display the data.»
 
-@pcp_layout<-principle«layout»« A pretty printer shall make clever use of layout, to make it easy
+@pcp_layout<-principle«Layout»« A pretty printer shall make clever use of layout, to make it easy
              for a human to recognise the hierarchical organisation of data.»
 
-Furthermore, the first law takes precedence over the second one, which itself takes precedence over the third.
+The first principle takes precedence over the second one, which itself takes precedence over the third one.
 
 
-Even though they are not stated as such, these laws guide classic
-functional pretty printing libraries, such as Hughes' and Wadler's.
-Indeed, the functional programming community often uses pretty
-printing to showcase proper program design: Hughes' pretty printer
+The functional programming community often uses pretty
+printing to showcase proper program design: the pretty printer of @citet"hughes_design_1995"
 remains an influential example of functional programming design, while
-Wadler's has appeared as chapter of of a book dedicated to "beautiful
-code".
+@citet"wadler_prettier_2003" has appeared as chapter of of a book dedicated to the @qu"fun of programming".
+Even though Hughes and Wadler are not explicit about it, it is apparent that (some of) the principles stated above
+guide the design of their libraries.
+
 
 In addition of esthetical and pedagogical value, Hughes and Wadler's
 provide practical implementations which form the basis of pretty
 printing packages which remain popular today:
 
-* [pretty](https://hackage.haskell.org/package/pretty)
-* [wl-pprint](https://hackage.haskell.org/package/wl-pprint)
+@descList[(«pretty», url«https://hackage.haskell.org/package/pretty»)
+         ,(«wl-print», url«https://hackage.haskell.org/package/wl-pprint»)]
 
 In this paper, I propose a new design for a pretty printing
 library. The interface is inspired by Hughes and Wadler's, but is
@@ -91,8 +94,8 @@ subtly different. In contrast to Hughes and Wadler, my primary goal is
 to abide by the principles of pretty printing as defined above;
 efficiency is a secondary concern. (Yet the final result is reasonably
 efficient.)  As Hughes and Wadler, I will aim at using a
-mathematically-oriented methodology and a clean design. Additionally,
-will draw general conclusions on how to improve on functional
+mathematically-supported methodology and a clean design. Finally,
+I will draw general conclusions on how to improve on functional
 programming methodologies.
 
 @sec_api<-section«A Pretty API»
@@ -107,19 +110,14 @@ data SExpr where
    Atom :: String -> SExpr
   deriving Show
 »
-
-> data SExpr where
->   SExpr :: [SExpr] -> SExpr
->   Atom :: String -> SExpr
->  deriving Show
-
 Using the above representation, the S-Expr @teletype«(a b c d)» has the
 following encoding:
 
-> abcd :: SExpr
-> abcd = SExpr [Atom "a",Atom "b",Atom "c",Atom "d"]
-
-Let us specify pretty printing of S-Expr as follows. In a pretty
+@haskell«
+abcd :: SExpr
+abcd = SExpr [Atom "a",Atom "b",Atom "c",Atom "d"]
+»
+Let us specify pretty printing of an S-Expr as follows. In a pretty
 display of an S-Expr, we would like the elements to be either
 concatenated horizontally, or aligned vertically. The possible pretty
 layouts of our example would be either
@@ -127,7 +125,6 @@ layouts of our example would be either
 @verbatim«
 (a b c d)
 »
-
 or
 
 @verbatim«
@@ -137,30 +134,41 @@ or
  d)
 »
 
-The goal of the pretty printer is to print a given s-expression in as
-few lines as possible, while respecting the above rules, and fitting
-within the width of a page.
+The above rules embody .
 
-Traditionally, a function pretty printing library gives us the means to express the
-specification of possible pretty layouts, and automatically pick the
-prettiest. 
-We will not depart from the tradition. As Hughes', our library will allow to express both vertical (`$$`) and
-horizontal (`<>`) composition of documents, as well as embedding raw
-text (`text`) and provide automatic choice between layouts (`<|>`). At this
-stage, we keep the representation of documents abstract using a
-typeclass, provide the above combinators, as well as means of @hask«render»ing a document:
+The goal of the pretty printer is to render a given S-Expr
+@itemList[«according to the above rules, which embody @pcp_layout,»
+         ,«in as few lines as possible (@pcp_compact) and»
+         ,«within the width of a page (@pcp_visibility)»]
+
+
+Traditionally, a pretty printing library gives us the means to express
+the specification of possible pretty layouts: it is up to the user to
+reify (@pcp_layout) on the data structure of interest. The printer
+will then automatically pick the smallest (@pcp_compact) which fits
+the page (@pcp_visibility).
+
+We will not depart from the tradition. Our library will provide an API
+to decribe layout which is similar to Hughes's: we can express both
+vertical (@hask«$$») and horizontal (@hask«<>») composition of
+documents, as well as embedding raw @hask«text» and provide
+automatic choice between layouts (@hask«<|>»). At this stage, we keep
+the representation of documents abstract using a typeclass, which
+provides the above combinators, as well as means of @hask«render»ing a
+document:
 
 @haskell«
-text   :: Doc d => String -> d
-(<>)   :: Doc d => d -> d -> d
-($$)   :: Doc d => d -> d -> d
-(<|>)  :: Doc d => d -> d -> d
-render :: Doc d => d -> String
+text    :: Doc d => String -> d
+(<>)    :: Doc d => d -> d -> d
+($$)    :: Doc d => d -> d -> d
+(<|>)   :: Doc d => d -> d -> d
+render  :: Doc d => d -> String
 »
 
 We can then define a few useful combinators on top of the above: the
-@haskell«empty» document; concatenation with an intermediate space @haskell«(<+>)»; vertical and
-horizontal concatenation of multiple documents.
+@haskell«empty» document; concatenation with an intermediate space
+@haskell«(<+>)»; vertical and horizontal concatenation of multiple
+documents.
 
 @haskell«
 empty :: Layout d => d
@@ -174,8 +182,8 @@ vcat = foldr1 ($$)
 hsep = foldr1 (<+>)
 »
 
-We can furthermore define automatic choice between horizontal and vertical
-concatenation:
+We can furthermore define automatic choice between horizontal and
+vertical concatenation:
 
 @haskell«
 sep :: Doc d => [d] -> d
@@ -183,7 +191,7 @@ sep [] = empty
 sep xs = hsep xs <|> vcat xs
 »
 
-Turning S-Expressions into a pretty document is then child's play:
+Turning S-expressions into a pretty document is then child's play:
 
 @haskell«
 pretty :: Doc d => SExpr -> d
@@ -198,28 +206,29 @@ its semantics?  What does it mean to pretty print a document? Technically,
 what is the specification of @hask«render»?
 
 Let us use an example to try and answer the question. Suppose we want
-to pretty print the following s-expr (which is specially crafted to
+to pretty print the following S-Expr (which is specially crafted to
 demonstrate issues with both Hughes and Wadler libraries):
 
-> testData :: SExpr
-> testData = SExpr [SExpr [Atom "12345", abcd4],
->                   SExpr [Atom "12345678", abcd4]]
->   where abcd4 = SExpr [abcd,abcd,abcd,abcd]
-
-We would like elements inside an S-Expr to be either
-aligned vertically (for legibility, @pcp_layout),
-or concatenated horizontally (for compactness, @pcp_compact).
-The second option will be preferred over the first, as long
-as the text fits within the page width.
-
+@haskell«
+testData :: SExpr
+testData = SExpr [SExpr [Atom "12345", abcd4],
+                  SExpr [Atom "12345678", abcd4]]
+  where abcd4 = SExpr [abcd,abcd,abcd,abcd]
+»
+Remember that would like elements inside an S-Expr to be either
+aligned vertically or concatenated horizontally (for legibility,
+@pcp_layout), The second option will be preferred over the first
+(@pcp_compact), as long as the text fits within the page width
+(@pcp_visibility).
 Thus, printed on a 80-column-wide page, we'd like to get:
 
+@eighty<-figure_«Example expression printed on 80 columns»«
 @verbatim«
 12345678901234567890123456789012345678901234567890123456789012345678901234567890
 
 ((12345 ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d)))
  (12345678 ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d))))
-»
+»»
 
 (The first line is a helper showing the column of a given character.)
 Printed on a 20-column-wide page, we'd like to get:
@@ -370,27 +379,33 @@ works, so we can jump straight to the semantics and derive the laws from it.
 Let us interpret a layout as a non-empty list of lines to print. I'll
 simply use the type of lists and remember on the side the invariant.
 
-> type L = [String] -- non empty.
+@haskell«
+type L = [String] -- non empty.
+»
 
-> instance Layout L where
-
+@haskell«
+instance Layout L where
+»
 Preparing a layout for printing is as easy as concatenation with
 newlines:
 
->   render :: L -> String
->   render = intercalate "\n"
-
+@haskell«
+  render :: L -> String
+  render = intercalate "\n"
+»
 Embedding a string is thus immediate:
 
->   text :: String -> L
->   text s = [s]
-
+@haskell«
+  text :: String -> L
+  text s = [s]
+»
 The interpretation of vertical concatenation ($$) requires barely more
 thought:
 
-<   ($$) :: L -> L -> L
-<   xs $$ ys = xs ++ ys
-
+@haskell«
+  ($$) :: L -> L -> L
+  xs $$ ys = xs ++ ys
+»
 What does horizontal concatenation (<>) mean? We will stick to Hughes'
 advice: "translate [to the right] the second operand, so that is tabs
 against the last character of the first operand". We can represent the
@@ -401,13 +416,14 @@ situation diagramatically as follows:
 Thus we handle the last line of the first layout and the first line of
 the second layout specially, as follows:
 
->   (<>) :: L -> L -> L
->   xs <> (y:ys) = xs0 ++ [x ++ y] ++ map (indent ++) ys
->      where xs0 = init xs
->            x = last xs
->            n = length x
->            indent = replicate n ' '
-
+@haskell«
+  (<>) :: L -> L -> L
+  xs <> (y:ys) = xs0 ++ [x ++ y] ++ map (indent ++) ys
+     where xs0 = init xs
+           x = last xs
+           n = length x
+           indent = replicate n blankChar
+»
 The trained eye will detect that, given the above semantics, vertical
 concatenation is (nearly) a special case of horizontal composition. That is,
 instead of composing vertically, one can add an empty line (flush) to the
@@ -415,14 +431,16 @@ left-hand-side layout and compose horizontally.
 
 TODO: flush ==> flush
 
-<   ($$) :: L -> L -> L
-<   a $$ b = flush a <> b
-
+@spec«
+  ($$) :: L -> L -> L
+  a $$ b = flush a <> b
+»
 where
 
->   flush :: L -> L
->   flush xs = xs ++ [""]
-
+@haskell«
+  flush :: L -> L
+  flush xs = xs ++ [""]
+»
 
 One might argue that replacing ($$) by `flush` does not make the API
 shorter, and maybe not even simpler. Yet, we will stick this choice,
@@ -438,41 +456,53 @@ Hughes operator (<>) does not form a monoid.)
 
 To sum up, our API for layouts is the following:
 
-> class Layout d where
->   (<>) :: d -> d -> d
->   text :: String -> d
->   flush :: d -> d
->   render :: d -> String
-
+@haskell«
+class Layout d where
+  (<>) :: d -> d -> d
+  text :: String -> d
+  flush :: d -> d
+  render :: d -> String
+»
 Additionally, as mentioned above, layouts follow a number of algebraic
 laws:
 
 - text is homomorphism for concatenation:
 
-< prop_text s t = text s <> text t == text (s ++ t)
+@spec«
+prop_text s t = text s <> text t == text (s ++ t)
+»
 
 Which justifies the definition we gave previously for the empty document:
 
-< empty = text ""
+@spec«
+empty = text ""
+»
 
 - Layouts form a monoid with empty and <>
 
-> prop_leftUnit :: (Doc a, Eq a) => a -> Bool
-> prop_leftUnit a = empty <> a == a
+@haskell«
+prop_leftUnit :: (Doc a, Eq a) => a -> Bool
+prop_leftUnit a = empty <> a == a
+»
 
-> prop_rightUnit :: (Doc a, Eq a) => a -> Bool
-> prop_rightUnit a = a <> empty == a
+@haskell«
+prop_rightUnit :: (Doc a, Eq a) => a -> Bool
+prop_rightUnit a = a <> empty == a
+»
 
-> prop_assoc :: (Doc a, Eq a) => a -> a -> a -> Bool
-> prop_assoc a b c = (a <> b) <> c == a <> (b <> c)
+@haskell«
+prop_assoc :: (Doc a, Eq a) => a -> a -> a -> Bool
+prop_assoc a b c = (a <> b) <> c == a <> (b <> c)
+»
 
 - flushing can be pushed in concatenation:
 
-> prop_flush :: (Doc a, Eq a) => a -> a -> Bool
-> prop_flush a b = flush (flush a <> b) == flush a <> flush b
+@haskell«
+prop_flush :: (Doc a, Eq a) => a -> a -> Bool
+prop_flush a b = flush (flush a <> b) == flush a <> flush b
+»
 
-
-Note that laws may only *partially* specify the behaviour, while a
+Note that laws may only @emph«partially» specify the behaviour, while a
 semantic model will always fully constrain it.
 
 (exercise: is the above set of laws fully constraining the semantic model?)
@@ -491,9 +521,10 @@ Documents
 Proceed to extend the API with choice between layouts and specify the
 problem formally.
 
-> class Layout d => Doc d where
->   (<|>) :: d -> d -> d
-
+@haskell«
+class Layout d => Doc d where
+  (<|>) :: d -> d -> d
+»
 Documents can be defined as the free commutative monoid of layouts (i.e. a bag of
 layouts). The layout operators can be lifted in the natural manner.
 
@@ -504,34 +535,45 @@ be useless as an API for pretty printing.
 Thus, we chose as a representation for documents the list of possible
 layouts.
 
-> newtype F a = F {fromF :: [a]}
->   deriving (Functor,Applicative,Show)
+@haskell«
+newtype F a = F {fromF :: [a]}
+  deriving (Functor,Applicative,Show)
+»
 
-> instance Doc (F L) where
->   F xs <|> F ys = F (xs ++ ys)
+@haskell«
+instance Doc (F L) where
+  F xs <|> F ys = F (xs ++ ys)
+»
 
-> instance Layout (F L) where
->   text = pure . text
->   flush = fmap flush
->   xs <> ys = (<>) <$> xs <*> ys
+@haskell«
+instance Layout (F L) where
+  text = pure . text
+  flush = fmap flush
+  xs <> ys = (<>) <$> xs <*> ys
+»
 
 Rendering a document is merely picking the shortest layout among the
 valid ones:
 
->   render = render . minimumBy (compare `on` length) . filter valid . fromF
+@haskell«
+  render = render . minimumBy (compare `on` length) . filter valid . fromF
+»
 
 -- >   render = render . minimumBy better . fromF
 
 where
 
-> better :: L -> L -> Ordering
-> better a b | not (valid b) = LT
-> better a b | not (valid a) = GT
-> better a b = compare (length a) (length b)
+@haskell«
+better :: L -> L -> Ordering
+better a b | not (valid b) = LT
+better a b | not (valid a) = GT
+better a b = compare (length a) (length b)
+»
 
-> valid :: L -> Bool
-> valid xs = maximum (map length xs) <= 80
-
+@haskell«
+valid :: L -> Bool
+valid xs = maximum (map length xs) <= 80
+»
 
 An alternative semantics
 ------------------------
@@ -552,111 +594,85 @@ layout, the width of its last line and its height (and because layouts
 can't be empty we will start counting from 0).
 
 
-        max width
-    <-------------->
-    bbbbbbbbbbbbbbbb  ^
-    bbbbbbbbbbbbbbbb  |  height
-    bbbbbbbbbbbbbbbb  v
-    bbbbbbbbbbbb
-    <---------->
-     last width
+TODO: diagram
 
-> measure :: L -> M
-> measure xs = M {maxWidth   = maximum $ map length $ xs,
->                 height     = length xs - 1,
->                 lastWidth  = length $ last $ xs}
+@haskell«
+measure :: L -> M
+measure xs = M {maxWidth   = maximum $ map length $ xs,
+                height     = length xs - 1,
+                lastWidth  = length $ last $ xs}
+»
 
-> data M = M {height     :: Int,
->             lastWidth  :: Int,
->             maxWidth   :: Int}
->   deriving (Show,Eq,Ord)
+@haskell«
+data M = M {height     :: Int,
+            lastWidth  :: Int,
+            maxWidth   :: Int}
+  deriving (Show,Eq,Ord)
+»
 
 
 
-
-> instance Layout M where
->   text s = M {height = 0, maxWidth = length s, lastWidth = length s}
->   a <> b = M {maxWidth = max (maxWidth a) (maxWidth b + lastWidth a),
->               height = height a + height b,
->               lastWidth = lastWidth a + lastWidth b}
->   flush a = M {maxWidth = maxWidth a,
->                height = height a + 1,
->                lastWidth = 0}
->   render (M lw h mw) = render $ replicate h (replicate mw 'x') ++ [replicate lw 'x']
+@haskell«
+instance Layout M where
+  text s = M {height = 0, maxWidth = length s, lastWidth = length s}
+  a <> b = M {maxWidth = max (maxWidth a) (maxWidth b + lastWidth a),
+              height = height a + height b,
+              lastWidth = lastWidth a + lastWidth b}
+  flush a = M {maxWidth = maxWidth a,
+               height = height a + 1,
+               lastWidth = 0}
+  render (M lw h mw) = render $ replicate h (replicate mw 'x') ++ [replicate lw 'x']
+»
 
 The equations above are correct if they make `measure` a layout
 homomorphism (ignoring of course render):
 
-< measure (a <> b) = measure a <> measure b
-< measure (flush a) = flush (measure a)
+@spec«
+measure (a <> b) = measure a <> measure b
+measure (flush a) = flush (measure a)
+»
 
-       max mw1 (lw1 + mw2)
-    <----------------------->
-         mw1
-    <------------>
-    aaaaaaaaaaaaaa             ^       ^
-    aaaaaaaaaaaaaa             | h1    |
-    aaaaaaaaaaaaaa             |       |
-    aaaaaaaaaaaaaa             v       | h1 + h2
-    aaaaaaaaabbbbbbbbbbbbbbbb  ^       |
-    <------->bbbbbbbbbbbbbbbb  |  h2   |
-       lw1   bbbbbbbbbbbbbbbb  v       v
-             bbbbbbbbbbbb
-             <-------------->
-                   mw2
-             <---------->
-                 lw2
-   <-------------------->
-        lw1 + lw2
+TODO: diagram
 
-
-
-    l1 + max d1  (l2 + d2)
-    <-------------------------->
-        l1    d1
-    <-------><--->
-    aaaaaaaaaaaaaa             ^       ^
-    aaaaaaaaaaaaaa             | h1    |
-    aaaaaaaaaaaaaa             |       |
-    aaaaaaaaaaaaaa             v       | h1 + h2
-    aaaaaaaaabbbbbbbbbbbbbbbb  ^       |
-    <------->bbbbbbbbbbbbbbbb  |  h2   |
-       l1    bbbbbbbbbbbbbbbb  v       v
-             bbbbbbbbbbbb
-             <----------><-->
-                 l2        d2
-   <-------------------->
-          l1 + l2
-
-> fits :: M -> Bool
-> fits x = maxWidth x <= 80
-
+@haskell«
+fits :: M -> Bool
+fits x = maxWidth x <= 80
+»
 Early filtering out invalid results
 -----------------------------------
 
-<   xs <> ys = filter valid [x <> y | x <- xs, y <- ys]
+@spec«
+xs <> ys = filter valid [x <> y | x <- xs, y <- ys]
+»
 
 This is because width is monotonous:
 
+@spec«
 width (a <> b) ≥ width a  and width (a <> b) ≥ width b
 width (flush a) ≥ with a
+»
 
 and therefore so is validity: keeping invalid layouts is useless: they
 can never be combined with another layout to produce something valid.
 
+@spec«
 valid (a <> b)  ==> valid a  and  valid b
 valid (flush a) ==> valid a
-
+»
 
 Pruning out dominated results
 -----------------------------
 
 Idea: filter out the results that are dominated by other results.
 
-> class Poset a where
->   (≺) :: a -> a -> Bool
+@haskell«
+class Poset a where
+  (≺) :: a -> a -> Bool
+»
 
+@spec«
 measure a ≺ measure b   =>   a ≤ b
+»
 
 Find an instance `Poset M` such that:
 
@@ -666,66 +682,55 @@ then  (d1 <> d2) ≺  (d'1 <> d'2) and
 
 
 
-> instance Poset M where
->   M c1 l1 s1 ≺ M c2 l2 s2 = c1 <= c2 && l1 <= l2 && s1 <= s2
+@haskell«
+instance Poset M where
+  M c1 l1 s1 ≺ M c2 l2 s2 = c1 <= c2 && l1 <= l2 && s1 <= s2
+»
 
 
+@haskell«
+merge :: Ord a => [a] -> [a] -> [a]
+merge [] xs = xs
+merge xs [] = xs
+merge (x:xs) (y:ys)
+  | x <= y = x:merge xs (y:ys)
+  | otherwise = y:merge (x:xs) ys
+»
 
-> merge :: Ord a => [a] -> [a] -> [a]
-> merge [] xs = xs
-> merge xs [] = xs
-> merge (x:xs) (y:ys)
->   | x <= y = x:merge xs (y:ys)
->   | otherwise = y:merge (x:xs) ys
-
-> mergeAll :: Ord a => [[a]] -> [a]
-
-> mergeAll [] = []
-> mergeAll (x:xs) = merge x (mergeAll xs)
-
-This one is 1% faster or so.
-
--- > mergeAll = mergeTree . mkTree
-
-> data Tree a = Tip | Leaf a | Bin (Tree a) (Tree a)
-
-> split :: [a] -> ([a],[a])
-> split [] = ([],[])
-> split [x] = ([x],[])
-> split (x:y:xs) = let (a,b) = split xs in (x:a,y:b)
-
-> mkTree :: [[a]] -> Tree [a]
-> mkTree [] = Tip
-> mkTree [x] = Leaf x
-> mkTree xs =let (a,b) = split xs in Bin (mkTree a) (mkTree b)
-
-> mergeTree :: Ord a => Tree [a] -> [a]
-> mergeTree (Leaf x) = x
-> mergeTree Tip = []
-> mergeTree (Bin a b) = merge (mergeTree a) (mergeTree b)
-
-> type D0 = [(M,L)]
->
-> instance Layout D0 where
->   xs <> ys = bests [ filter (fits . fst) [x <> y | y <- ys] | x <- xs]
->   flush xs = bests $ map sort $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
->   -- flush xs = pareto' [] $ sort $ (map flush xs)
->   text s = [text s | valid (text s)]
->   render (x:_) = render x
+@haskell«
+mergeAll :: Ord a => [[a]] -> [a]
+mergeAll [] = []
+mergeAll (x:xs) = merge x (mergeAll xs)
+»
 
 
-> instance Doc D0 where
->   xs <|> ys = bests [xs,ys]
+@haskell«
+type D0 = [(M,L)]
 
+instance Layout D0 where
+  xs <> ys = bests [ filter (fits . fst) [x <> y | y <- ys] | x <- xs]
+  flush xs = bests $ map sort $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
+  -- flush xs = pareto' [] $ sort $ (map flush xs)
+  text s = [text s | valid (text s)]
+  render (x:_) = render x
+»
 
-> bests = pareto' [] . mergeAll
+@haskell«
+instance Doc D0 where
+  xs <|> ys = bests [xs,ys]
+»
 
-> pareto' :: Poset a => [a] -> [a] -> [a]
-> pareto' acc [] = []
-> pareto' acc (x:xs) = if any (≺ x) acc
->                        then pareto' acc xs
->                        else x:pareto' (x:acc) xs
-> --                        else pareto' (x:filter (not . (x ≺)) acc) xs
+@haskell«
+bests = pareto' [] . mergeAll
+»
+
+@haskell«
+pareto' :: Poset a => [a] -> [a] -> [a]
+pareto' acc [] = []
+pareto' acc (x:xs) = if any (≺ x) acc
+                       then pareto' acc xs
+                       else x:pareto' (x:acc) xs
+»
 
 Because the input is lexicographically sorted, everything which is in
 the frontier can't be dominated; hence no need to refilter the
@@ -753,14 +758,16 @@ Hughes-Style nesting
 Hughes proposes a nest conbinator.
 Mostly used for "hanging":
 
-> hang :: Doc d => Int -> d -> d -> d
-> hang n x y = (x <> y) <|> (x $$ nest n y)
-
+@haskell«
+hang :: Doc d => Int -> d -> d -> d
+hang n x y = (x <> y) <|> (x $$ nest n y)
+»
 His nesting is optional, but in the context of hang, it does not need to be.
 
-> nest :: Layout d => Int -> d -> d
-> nest n y = spaces n <> y
-
+@haskell«
+nest :: Layout d => Int -> d -> d
+nest n y = spaces n <> y
+»
 
 Wadler-Style Nesting
 ====================
@@ -773,69 +780,57 @@ Note that we pick the narrowest result fitting on min. lines lines!
 
 5. Using something better than strings for text
 
-
-
-
-< minLastW (a <|> b) = min (minLastW a) (minLastW b)
-< minLastW (flush a) = 0
-< minLastW (a <> b) = minLastW a + minLastW b
-< minLastW (text t) = length t
-
-< minWidth (a <|> b) = min (minWidth a) (minWidth b)
-< minWidth (flush a) = minWidth a
-< minWidth (a <> b) = minLastW a + minWidth b
-< minWidth (text t) = length t
-
-
-
-
-
-
-
 »
 
-lineHeight = 10
+lineHeight = 6
 
 abstrLayout :: Expr -> Diagram (Object,Point)
 abstrLayout lastWidth = do
   bx <- box
   let points@[_nw,_ne,_se,after,_sse,_sw]
-        = map (p0+)
-          [bx NW
-          ,bx NE
-          ,bx SE + Point 0 lineHeight
-          ,bx SW + Point lastWidth lineHeight
-          ,bx SW + Point lastWidth 0
-          ,bx SW]
-      p = polygon point
-  polygon p
+        = [bx # NW
+          ,bx # NE
+          ,bx # SE + Point 0 lineHeight
+          ,bx # SW + Point lastWidth lineHeight
+          ,bx # SW + Point lastWidth 0
+          ,bx # SW]
+      p = polygon points
+  path p
   return (Object p bx, after)
+
+lw1 = 12
+lw2 = 18
 
 twoLayouts :: Diagram (Object,Point,Object)
 twoLayouts = do
-  (a,aa) <- abstrLayout 30
-  (b,_) <- abstrLayout 30
-  width a === 200
-  width b === 150
-  height a === 6 *- lineHeight
-  height b === 6 *- lineHeight
+  (a,aa) <- draw $ abstrLayout lw1
+  (b,_) <- draw $ abstrLayout lw2
+  width a === 48
+  width b === 56
+  height a === 4 *- lineHeight
+  height b === 3 *- lineHeight
   return (a,aa,b)
-
 
 horizCat :: Dia
 horizCat = do
   (a,mid,b) <- twoLayouts
   op <- labelObj "<>"
   let lhsObjs = [a,op,b] 
-  spread hdist lhsObjs
+  spread hdist 10 lhsObjs
   align ypart $ map (#Center) $ lhsObjs
   lhs <- boundingBox lhsObjs
   
+  eq <- labelObj "="
+  
   (a',mid',b') <- twoLayouts
-  b'#NW .=. mid'
+  b' # NW .=. mid'
 
-  hdist lhs a' === 20
+  lhs # S .=. a' # N + Point 0 20
+
+  -- (cat,_) <- draw $ abstrLayout (lw1 + lw2)
+
   return () 
+
 
 spec = haskell
 
@@ -843,5 +838,9 @@ verbatim :: Verbatim () -> TeX
 verbatim (Verbatim s _) =
     env "verbatim" (tex s)
 
-hask = ensureMath . cmd "mathsf"
+-- hask = ensureMath . cmd "mathsf"
+hask = haskell
 
+
+url :: TeX -> TeX
+url = cmd "url"
