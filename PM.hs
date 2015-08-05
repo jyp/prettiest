@@ -166,8 +166,8 @@ render  :: Doc d => d -> String
 »
 
 We can then define a few useful combinators on top of the above: the
-@haskell«empty» document; concatenation with an intermediate space
-@haskell«(<+>)»; vertical and horizontal concatenation of multiple
+@hask«empty» document; concatenation with an intermediate space
+@hask«(<+>)»; vertical and horizontal concatenation of multiple
 documents.
 
 @haskell«
@@ -220,9 +220,11 @@ aligned vertically or concatenated horizontally (for legibility,
 @pcp_layout), The second option will be preferred over the first
 (@pcp_compact), as long as the text fits within the page width
 (@pcp_visibility).
-Thus, printed on a 80-column-wide page, we'd like to get:
+Thus, on a 80-column-wide page, we would like to get the result displayed in @fig_eighty.
 
-@eighty<-figure_«Example expression printed on 80 columns»«
+@fig_eighty<-figure_«
+Example expression printed on 80 columns. The first line is a helper showing the column of a given character.
+»«
 @verbatim«
 12345678901234567890123456789012345678901234567890123456789012345678901234567890
 
@@ -230,8 +232,7 @@ Thus, printed on a 80-column-wide page, we'd like to get:
  (12345678 ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d))))
 »»
 
-(The first line is a helper showing the column of a given character.)
-Printed on a 20-column-wide page, we'd like to get:
+Printed on a 20-column-wide page, we would like to get the following output:
 
 @verbatim«
 12345678901234567890
@@ -248,8 +249,7 @@ Printed on a 20-column-wide page, we'd like to get:
    (a b c d)
    (a b c d))))
 »
-
-Unfortunately, in this case, and using Hughes' library, we would get the following output:
+Unfortunately, in this case, and using Hughes' library, we would get the following output instead:
 
 @verbatim«
 12345678901234567890
@@ -296,8 +296,8 @@ One may wonder what would happen with Wadler's library. Unfortunately,
 its API cannot even express the layout we are after! Indeed, one can
 only specify a @emph«constant» amount of indentation, not one that depends
 on the contents of a document.  This means that Wadler's library lacks
-the capability to express that a multi-line sub-document $b$ should be
-laid out to the right of a document $a$: $a$ must be put below $b$.
+the capability to express that a multi-line sub-document @hask«b» should be
+laid out to the right of a document @hask«a»: @hask«a» must be put below @hask«b».
 Thus, with an appropriate specification, Wadler would render our
 example as follows:
 
@@ -317,10 +317,11 @@ example as follows:
    (a b c d))))
 »
 
-It's not too bad! But it inserts a spurious line break after the atom
+It's not too bad... but it inserts a spurious line break after the atom
 @teletype«12345678». While this may be acceptable to some, I find it
 disappointing for two reasons. First, spurious line breaks may appear
-in many situations. Second, the element which is rejected to a next
+in many situations, so the rendering may be much longer than necessary violating @pcp_compact.
+Second, and more importantly, the element which is rejected to a next
 can only be indented by a constant amount. Let us say we would like to
 pretty print the following ml-style snippet:
 @verbatim«
@@ -839,7 +840,8 @@ verbatim (Verbatim s _) =
     env "verbatim" (tex s)
 
 -- hask = ensureMath . cmd "mathsf"
-hask = haskell
+hask :: Verbatim a -> Tex ()
+hask = ensureMath . haskellInline
 
 
 url :: TeX -> TeX
