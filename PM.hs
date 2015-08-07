@@ -44,16 +44,19 @@ bibliographyAll = do
   bibliographystyle "abbrvnat"
   bibliography  "/home/bernardy/repo/PaperTools/bibtex/jp"
 
-mainText :: Tex ()
-mainText = «
-
-@intro<-section«Introduction»
-
+haskellPreamble :: Tex ()
+haskellPreamble = «
 @haskell«
   import Data.Function
   import Data.List (intercalate, minimumBy, sort, groupBy)
   import System.Clock
-»
+»»
+
+mainText :: Tex ()
+mainText = «
+
+@sec_intro<-section«Introduction»
+
 
 
 A pretty printer is a program that renders data structures in a way which
@@ -98,7 +101,7 @@ mathematically-supported methodology and a clean design. Finally,
 I will draw general conclusions on how to improve on functional
 programming methodologies.
 
-@sec_api<-section«A Pretty API»
+@sec_api<-section«API (Syntax)»
 
 We justify our choice of API (set of combinators) by examining a
 simple yet typical pretty printing task.  Let us assume we want to
@@ -133,8 +136,6 @@ or
  c
  d)
 »
-
-The above rules embody .
 
 The goal of the pretty printer is to render a given S-Expr
 @itemList[«according to the above rules, which embody @pcp_layout,»
@@ -199,7 +200,7 @@ pretty (Atom s) = text s
 pretty (SExpr xs) = text "(" <> (sep $ map pretty xs) <> text ")"
 »
 
-@sec_semantics<-section«A Pretty Rendering»
+@sec_informal_semantics<-section«The meaning of pretty (informally)»
 
 We have given a syntax for describing documents, but what should be
 its semantics?  What does it mean to pretty print a document? Technically,
@@ -215,12 +216,6 @@ testData = SExpr [SExpr [Atom "12345", abcd4],
                   SExpr [Atom "12345678", abcd4]]
   where abcd4 = SExpr [abcd,abcd,abcd,abcd]
 »
-Remember that would like elements inside an S-Expr to be either
-aligned vertically or concatenated horizontally (for legibility,
-@pcp_layout), The second option will be preferred over the first
-(@pcp_compact), as long as the text fits within the page width
-(@pcp_visibility).
-Thus, on a 80-column-wide page, we would like to get the result displayed in @fig_eighty.
 
 @fig_eighty<-figure_«
 Example expression printed on 80 columns. The first line is a helper showing the column of a given character.
@@ -232,6 +227,14 @@ Example expression printed on 80 columns. The first line is a helper showing the
  (12345678 ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d))))
 »»
 
+Remember that would like elements inside an S-Expr to be either
+aligned vertically or concatenated horizontally (for legibility,
+@pcp_layout), The second option will be preferred over the first
+(@pcp_compact), as long as the text fits within the page width
+(@pcp_visibility).
+Interpreting the above (so far informal) specification yields the
+following results.  On a 80-column-wide page, we would get the result
+displayed in @fig_eighty.
 Printed on a 20-column-wide page, we would like to get the following output:
 
 @verbatim«
@@ -249,7 +252,12 @@ Printed on a 20-column-wide page, we would like to get the following output:
    (a b c d)
    (a b c d))))
 »
-Unfortunately, in this case, and using Hughes' library, we would get the following output instead:
+
+@subsection«The liminations of Hughes and Wadler»
+
+Let us take a moment to survey the state of the art.  On a 20-column
+page and using Hughes' library, we would get the following output
+instead:
 
 @verbatim«
 12345678901234567890
@@ -280,26 +288,28 @@ Unfortunately, in this case, and using Hughes' library, we would get the followi
              d))))
 »
 
-The above output uses way more space than
-necessary, violating @pcp_compact.  
-Why is that? Hughes states that @qu«it would be
+The above output uses way more space than necessary, violating
+@pcp_compact.  Why is that? Hughes states that @qu«it would be
 unreasonably inefficient for a pretty-printer do decide whether or not
 to split the first line of a document on the basis of the content of
 the last.» (sec. 7.4 of his paper).  Therefore, he chooses a greedy
-algorithm, which tries to fit as much as possible on a single line,
-without regard for what comes next.  In our example, the algorithm
-fits @teletype«(12345678 ((a», but then it has committed to a very deep
+algorithm, which processes the input line by line, trying to fit as
+much as possible on the current line, without regard for what comes
+next.  In our example, the algorithm can fit @teletype«(12345678 ((a»
+on the sixth line, but then it has committed to a very deep
 indentation level, which forces to display the remainder of the
-document in a narrow space.
+document in a narrow space, wasting space.
 
-One may wonder what would happen with Wadler's library. Unfortunately,
-its API cannot even express the layout we are after! Indeed, one can
-only specify a @emph«constant» amount of indentation, not one that depends
-on the contents of a document.  This means that Wadler's library lacks
-the capability to express that a multi-line sub-document @hask«b» should be
-laid out to the right of a document @hask«a»: @hask«a» must be put below @hask«b».
-Thus, with an appropriate specification, Wadler would render our
-example as follows:
+How does Wadler's library fare on the example? Unfortunately, we
+cannot answer the question in a strict sense. Indeed, Wadler's API is
+to restrictive to even @emph«express» the layout we are after! That
+is, one can only specify a @emph«constant» amount of indentation, not
+one that depends on the contents of a document.  This means that
+Wadler's library lacks the capability to express that a multi-line
+sub-document @hask«b» should be laid out to the right of a document
+@hask«a» (even if @hask«a» is single-line).  Instead, @hask«a» must be
+put below @hask«b». Because of this restriction the best output that Wadler's library
+can produce is the following:
 
 @verbatim«
 12345678901234567890
@@ -317,12 +327,12 @@ example as follows:
    (a b c d))))
 »
 
-It's not too bad... but it inserts a spurious line break after the atom
-@teletype«12345678». While this may be acceptable to some, I find it
-disappointing for two reasons. First, spurious line breaks may appear
-in many situations, so the rendering may be much longer than necessary violating @pcp_compact.
-Second, and more importantly, the element which is rejected to a next
-can only be indented by a constant amount. Let us say we would like to
+It's not too bad... but there is a spurious line break after the atom
+@teletype«12345678». While Wadler's restriction may be acceptable to some, I find it
+unsatisfying for two reasons. First, spurious line breaks may appear
+in many places, so the rendering may be much longer than necessary, thereby violating @pcp_compact.
+Second, and more importantly, a document which is laid out below another cannot
+be properly indented in general. Let us say we would like to
 pretty print the following ml-style snippet:
 @verbatim«
 Pattern = expression [listElement x,
@@ -330,7 +340,9 @@ Pattern = expression [listElement x,
                       listElement z,
                       listElement w]
 »
-Wadler will force us to lay it out like so:
+If the list does not fit on a single line, it must be put below
+@qu"expression". For legibility, it must be indented. However, the
+amount of indentation can only be a constant, so a typical output is:
 @verbatim«
 Pattern = expression
   [listElement x,
@@ -339,56 +351,55 @@ Pattern = expression
    listElement w]
 »
 Aligning the argument of the expression below the equal sign is bad:
-it obscures the structure of the program.
-@pcp_layout is not respected. In fact, the lack of a combinator
-for alignment proved too constraining for Leijen. Indeed, in his
-implemenation of Wadler's design (which is a de-facto standard implementation) he
-an alignment combinator. But, also using a greedy algorithm, it
-necessarily suffers from the same issues as Hughes library.
+it obscures the structure of the program; @pcp_layout is not
+respected. In sum, the lack of a combinator for relative indentation
+is a serious drawback. In fact, the  de-facto standard 
+implemenation of Wadler's design, by Daan Leijen @emph«does» feature
+an alignment combinator. However, it also uses a greedy algorithm, and thus
+suffers from the same issue as Hughes library.
 
-Because of the limitations of greediness, I propose to give up on it.
-In exchange for its lack of greediness,
-the library which I present in the rest of the paper
-guarantees to find the smallest output, while 
-retaining the ability to express vertical alignment of sub-documents.
+In sum, we have to make a choice between respecting all the principles
+of pretty printing or provide a greedy algorithm. Hughes does not
+fully respect @pcp_compact. Wadler does not fully respect
+@pcp_layout. Here, I decide to respect both, but I give up on
+greediness.
 Yet, the final algorithm that I will arrive at is fast enough for use
 in common pretty printing tasks.
 
-@subsection«A Prettier API»
+Before attacking the problem of making a fast (enough) implementation,
+I'll refine the API for defining pretty layouts, and give formal
+semantics for it.
 
-Before getting into the problem of making a fast (enough)
-implementation, I'll refine the API for defining pretty layouts, and give 
-formal
-semantics for it. 
+@section«A prettier API»
 
 Recall that we have inherited from Hughes a draft API:
 
 @spec«
-text  :: String -> d
+text  :: Doc d => String -> d
 (<>)  :: Doc d => d -> d -> d
 ($$)  :: Doc d => d -> d -> d
 »
 
-(I first ignore disjuction between
-possible layouts (`<|>`).)
+(I ignore for now disjuction between possible layouts (@hask«<|>»).)
 
 At this stage, classic functional pearls would state a number of laws
 that the above API has to satisfy, then infer a semantics from them.
-Fortunately, in our case, a straightforward interpretation for document
-works, so we can jump straight to the semantics and derive the laws from it.
+Fortunately, in our case, Hughes and Wadler have already laid out this
+ground work, so we can jump straight to giving a comositional
+semantics. We will later check that the expected laws hold.
 
-Let us interpret a layout as a non-empty list of lines to print. I'll
-simply use the type of lists and remember on the side the invariant.
+Let us interpret a layout as a non-empty list of lines to print. As
+Hughes, I'll simply use the type of lists (you will remember the
+invariant in your head --- don't worry I will help).
 
 @haskell«
 type L = [String] -- non empty.
 »
 
-@haskell«
+@hiddenHaskell«
 instance Layout L where
 »
-Preparing a layout for printing is as easy as concatenation with
-newlines:
+Preparing a layout for printing is as easy as inserting a newline character between each string:
 
 @haskell«
   render :: L -> String
@@ -407,15 +418,15 @@ thought:
   ($$) :: L -> L -> L
   xs $$ ys = xs ++ ys
 »
-What does horizontal concatenation (<>) mean? We will stick to Hughes'
-advice: "translate [to the right] the second operand, so that is tabs
-against the last character of the first operand". We can represent the
-situation diagramatically as follows:
+The only potential difficulty is to figure out the interpretation of
+horizontal concatenation (<>). We will stick to Hughes' advice:
+"translate the second operand [to the right], so that is tabs against
+the last character of the first operand". Diagramatically:
 
 @horizCat
 
-Thus we handle the last line of the first layout and the first line of
-the second layout specially, as follows:
+The implementation handles the last line of the first layout and the
+first line of the second layout specially, as follows:
 
 @haskell«
   (<>) :: L -> L -> L
@@ -425,109 +436,111 @@ the second layout specially, as follows:
            n = length x
            indent = replicate n blankChar
 »
-The trained eye will detect that, given the above semantics, vertical
-concatenation is (nearly) a special case of horizontal composition. That is,
-instead of composing vertically, one can add an empty line (flush) to the
-left-hand-side layout and compose horizontally.
 
-TODO: flush ==> flush
+Given the above definition, we can then refine our API a bit.
+Indeed, concatenation is (nearly) a special case of horizontal composition. That is,
+instead of composing vertically, one can add an empty line to the
+left-hand-side layout and then compose horizontally. The combinator which adds
+an empty line is called @hask«flush».
 
 @spec«
   ($$) :: L -> L -> L
   a $$ b = flush a <> b
 »
-where
 
 @haskell«
   flush :: L -> L
   flush xs = xs ++ [""]
 »
 
-One might argue that replacing ($$) by `flush` does not make the API
-shorter, and maybe not even simpler. Yet, we will stick this choice,
-for two reasons:
+One might argue that replacing @hask«($$)» by @hask«flush» does not
+make the API shorter, and maybe not even simpler. Yet, we will stick
+this choice, for two reasons:
 
-1. The new API clearly separates the concerns of concatenation and
-left-flushing documents.
-
-2. The horizontal composition (<>) has a nicer algebraic structure
-than ($$). The vertical composition ($$) has no unit, while (<>) forms
-a monoid with the empty layout. (Due to a more complicated semantics,
-Hughes operator (<>) does not form a monoid.)
+@enumList[«The new API clearly separates the concerns of concatenation and
+           left-flushing documents.»
+         ,«The horizontal composition (@hask«<>») has a nicer algebraic structure
+          than (@hask«$$»). The vertical composition (@hask«$$») has no unit, while (@hask«<>») forms
+          a monoid with the empty layout. (Due to a more complicated semantics,
+          Hughes' operator (@hask«<>») does not form a monoid.)»]
 
 To sum up, our API for layouts is the following:
-
 @haskell«
 class Layout d where
-  (<>) :: d -> d -> d
-  text :: String -> d
-  flush :: d -> d
-  render :: d -> String
+  (<>)    :: d -> d -> d
+  text    :: String -> d
+  flush   :: d -> d
+  render  :: d -> String
 »
 Additionally, as mentioned above, layouts follow a number of algebraic
 laws:
 
-- text is homomorphism for concatenation:
-
-@spec«
-prop_text s t = text s <> text t == text (s ++ t)
-»
-
-Which justifies the definition we gave previously for the empty document:
-
-@spec«
-empty = text ""
-»
-
-- Layouts form a monoid with empty and <>
+@enumList[
+«Layouts form a monoid, with @hask«empty» and (@hask«<>»):
 
 @haskell«
 prop_leftUnit :: (Doc a, Eq a) => a -> Bool
 prop_leftUnit a = empty <> a == a
-»
 
-@haskell«
 prop_rightUnit :: (Doc a, Eq a) => a -> Bool
 prop_rightUnit a = a <> empty == a
-»
 
-@haskell«
 prop_assoc :: (Doc a, Eq a) => a -> a -> a -> Bool
 prop_assoc a b c = (a <> b) <> c == a <> (b <> c)
+»»
+,
+«@hask«text» is a monoid homomorphism:
+@spec«
+prop_text_append s t  = text s <> text t == text (s ++ t)
+prop_text_empty       = empty == text ""
 »
-
-- flushing can be pushed in concatenation:
+»,
+« flushing can be pushed in concatenation:
 
 @haskell«
 prop_flush :: (Doc a, Eq a) => a -> a -> Bool
 prop_flush a b = flush (flush a <> b) == flush a <> flush b
 »
-
-Note that laws may only @emph«partially» specify the behaviour, while a
-semantic model will always fully constrain it.
-
-(exercise: is the above set of laws fully constraining the semantic model?)
-
-Notice that Hughes and Wadler give the semantics via laws first and
-come up with a compositional interpretation second. This is fine,
-precisely because laws do not fully constrain the design; there is
-room for wiggle. However, a compositional semantics is often an even
-better guide which should not be an afterthought.
+»]
 
 
-
-Documents
-=========
+@subsection«Choice»
 
 Proceed to extend the API with choice between layouts and specify the
-problem formally.
+problem formally. The extended API is accessible via a new type class:
 
 @haskell«
 class Layout d => Doc d where
   (<|>) :: d -> d -> d
+  fail :: d
 »
-Documents can be defined as the free commutative monoid of layouts (i.e. a bag of
-layouts). The layout operators can be lifted in the natural manner.
+
+Again, we give the compositional semantics right away. Documents are
+interpreted as a set of layouts. We implement sets as list, where
+order and number of occurences won't matter.
+
+TODO: rename F to Set
+@haskell«
+newtype F a = F {fromF :: [a]}
+  deriving (Functor,Applicative,Show)
+»
+
+The interpretation is as one expects:
+@haskell«
+instance Doc (F L) where
+  F xs <|> F ys = F (xs ++ ys)
+  fail = []
+»
+In particular, we simply lift the layout operators idiomatically over sets:
+@haskell«
+instance Layout (F L) where
+  text = pure . text
+  flush = fmap flush
+  xs <> ys = (<>) <$> xs <*> ys
+»
+
+Consequently, disjunction and failure form a monoid, and disjuction is
+commutative.
 
 We omit the unit of the monoid in the interface. Indeed, it
 corresponds to a document with cannot be laid out, which turns out to
@@ -536,48 +549,22 @@ be useless as an API for pretty printing.
 Thus, we chose as a representation for documents the list of possible
 layouts.
 
-@haskell«
-newtype F a = F {fromF :: [a]}
-  deriving (Functor,Applicative,Show)
-»
 
-@haskell«
-instance Doc (F L) where
-  F xs <|> F ys = F (xs ++ ys)
-»
-
-@haskell«
-instance Layout (F L) where
-  text = pure . text
-  flush = fmap flush
-  xs <> ys = (<>) <$> xs <*> ys
-»
-
-Rendering a document is merely picking the shortest layout among the
+Rendering a document is merely picking some shortest layout among the
 valid ones:
 
 @haskell«
   render = render . minimumBy (compare `on` length) . filter valid . fromF
 »
 
--- >   render = render . minimumBy better . fromF
-
-where
-
-@haskell«
-better :: L -> L -> Ordering
-better a b | not (valid b) = LT
-better a b | not (valid a) = GT
-better a b = compare (length a) (length b)
-»
+A layout is @hask«valid» if all its lines are fully visible on the page:
 
 @haskell«
 valid :: L -> Bool
 valid xs = maximum (map length xs) <= 80
 »
 
-An alternative semantics
-------------------------
+@subsection«An abstract semantics»
 
 At this point, a classic functional pearl would derive an
 implementation via a series of calculational steps. While this may
@@ -597,13 +584,8 @@ can't be empty we will start counting from 0).
 
 TODO: diagram
 
-@haskell«
-measure :: L -> M
-measure xs = M {maxWidth   = maximum $ map length $ xs,
-                height     = length xs - 1,
-                lastWidth  = length $ last $ xs}
-»
 
+Formally, we can define a measure from L to M
 @haskell«
 data M = M {height     :: Int,
             lastWidth  :: Int,
@@ -611,7 +593,21 @@ data M = M {height     :: Int,
   deriving (Show,Eq,Ord)
 »
 
+@haskell«
+measure :: L -> M
+measure xs = M {maxWidth   = maximum $ map length $ xs,
+                height     = length xs - 1,
+                lastWidth  = length $ last $ xs}
+»
 
+The correctness of the Layout M instance hinges on this fact;
+equations above are correct if they make `measure` a layout
+homomorphism (ignoring of course render):
+
+@spec«
+measure (a <> b) = measure a <> measure b
+measure (flush a) = flush (measure a)
+»
 
 @haskell«
 instance Layout M where
@@ -625,13 +621,10 @@ instance Layout M where
   render (M lw h mw) = render $ replicate h (replicate mw 'x') ++ [replicate lw 'x']
 »
 
-The equations above are correct if they make `measure` a layout
-homomorphism (ignoring of course render):
+(Exercise: check that layout laws hold.)
 
-@spec«
-measure (a <> b) = measure a <> measure b
-measure (flush a) = flush (measure a)
-»
+
+
 
 TODO: diagram
 
@@ -781,6 +774,19 @@ Note that we pick the narrowest result fitting on min. lines lines!
 
 5. Using something better than strings for text
 
+@subsection«Laws vs compositional semantics»
+
+Note that laws may only @emph«partially» specify the behaviour, while a
+semantic model will always fully constrain it.
+
+(exercise: does the above set of laws fully constrain the semantic model?)
+
+Notice that Hughes and Wadler give the semantics via laws first and
+come up with a compositional interpretation second. This is fine,
+precisely because laws do not fully constrain the design; there is
+room for wiggle. However, a compositional semantics is often an even
+better guide which should not be an afterthought.
+
 »
 
 lineHeight = 6
@@ -834,6 +840,7 @@ horizCat = do
 
 
 spec = haskell
+hiddenHaskell = haskell
 
 verbatim :: Verbatim () -> TeX
 verbatim (Verbatim s _) =
