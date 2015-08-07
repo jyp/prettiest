@@ -372,15 +372,18 @@ semantics for it.
 
 @section«A prettier API»
 
-Recall that we have inherited from Hughes a draft API:
+@subsection«Layouts»
+We ignore for a moment choice between possible layouts
+(@hask«<|>»). We call a document without choice a @emph«layout».
+
+Recall that we have inherited from Hughes a draft API for layouts:
 
 @spec«
-text  :: Doc d => String -> d
-(<>)  :: Doc d => d -> d -> d
-($$)  :: Doc d => d -> d -> d
+text  :: Layout d => String -> d
+(<>)  :: Layout d => d -> d -> d
+($$)  :: Layout d => d -> d -> d
 »
 
-(I ignore for now disjuction between possible layouts (@hask«<|>»).)
 
 At this stage, classic functional pearls would state a number of laws
 that the above API has to satisfy, then infer a semantics from them.
@@ -400,28 +403,25 @@ type L = [String] -- non empty.
 instance Layout L where
 »
 Preparing a layout for printing is as easy as inserting a newline character between each string:
-
 @haskell«
   render :: L -> String
   render = intercalate "\n"
 »
 Embedding a string is thus immediate:
-
 @haskell«
   text :: String -> L
   text s = [s]
 »
 The interpretation of vertical concatenation ($$) requires barely more
 thought:
-
 @haskell«
   ($$) :: L -> L -> L
   xs $$ ys = xs ++ ys
 »
 The only potential difficulty is to figure out the interpretation of
-horizontal concatenation (<>). We will stick to Hughes' advice:
-"translate the second operand [to the right], so that is tabs against
-the last character of the first operand". Diagramatically:
+horizontal concatenation (@hask«<>»). We will stick to Hughes' advice:
+@qu«translate the second operand [to the right], so that is tabs against
+the last character of the first operand». Diagramatically:
 
 @horizCat
 
@@ -441,16 +441,15 @@ Given the above definition, we can then refine our API a bit.
 Indeed, concatenation is (nearly) a special case of horizontal composition. That is,
 instead of composing vertically, one can add an empty line to the
 left-hand-side layout and then compose horizontally. The combinator which adds
-an empty line is called @hask«flush».
-
-@spec«
-  ($$) :: L -> L -> L
-  a $$ b = flush a <> b
-»
-
+an empty line is called @hask«flush», and has the following definition:
 @haskell«
   flush :: L -> L
   flush xs = xs ++ [""]
+»
+Horizontal concatenation is then:
+@spec«
+  ($$) :: L -> L -> L
+  a $$ b = flush a <> b
 »
 
 One might argue that replacing @hask«($$)» by @hask«flush» does not
@@ -506,8 +505,9 @@ prop_flush a b = flush (flush a <> b) == flush a <> flush b
 
 @subsection«Choice»
 
-Proceed to extend the API with choice between layouts and specify the
-problem formally. The extended API is accessible via a new type class:
+We proceed to extend the API with choice between layouts, yielding the
+final API to specify document. The extended API is accessible via a
+new type class:
 
 @haskell«
 class Layout d => Doc d where
@@ -546,46 +546,39 @@ We omit the unit of the monoid in the interface. Indeed, it
 corresponds to a document with cannot be laid out, which turns out to
 be useless as an API for pretty printing.
 
-Thus, we chose as a representation for documents the list of possible
-layouts.
+@subsection«Semantics»
 
-
-Rendering a document is merely picking some shortest layout among the
-valid ones:
-
+We can finally define formally what it means to render a document.  To
+pretty print a document, we pick a shortest layout among the valid
+ones:
 @haskell«
-  render = render . minimumBy (compare `on` length) . filter valid . fromF
+  render = render .  -- (for layouts)
+           minimumBy (compare `on` length) .
+           filter valid .
+           fromF
 »
-
 A layout is @hask«valid» if all its lines are fully visible on the page:
-
 @haskell«
 valid :: L -> Bool
 valid xs = maximum (map length xs) <= 80
 »
 
-@subsection«An abstract semantics»
+@subsection«Measures»
 
 At this point, a classic functional pearl would derive an
 implementation via a series of calculational steps. While this may
-very well be done, I will instead proceed to give insight into how I
-actually designed the library.
+very well be done, I will instead proceed to follow the actual thought
+processed that I used when designing the library. The hope is that the
+actual method is more applicable than a re-engineered story.
 
 Let us remember that we want to select the layout with minimal use of
 space. Hence, from an algorithm point of view, all that matters is the
 space that a layout takes. Let us define an abstract semantics for
 documents which focuses on such space.
 
-This semantics can be guessed by looking at the diagram for
-composition of layouts. All that matters is the maximum width of the
-layout, the width of its last line and its height (and because layouts
-can't be empty we will start counting from 0).
-
-
-TODO: diagram
-
-
-Formally, we can define a measure from L to M
+All that matters is the maximum width of the layout, the width of its
+last line and its height (and because layouts can't be empty we will
+start counting from 0):
 @haskell«
 data M = M {height     :: Int,
             lastWidth  :: Int,
@@ -593,93 +586,178 @@ data M = M {height     :: Int,
   deriving (Show,Eq,Ord)
 »
 
-@haskell«
-measure :: L -> M
-measure xs = M {maxWidth   = maximum $ map length $ xs,
-                height     = length xs - 1,
-                lastWidth  = length $ last $ xs}
-»
+This semantics can be guessed by looking at the diagram for
+composition of layouts. Here is the concatenation
+diagram annotated with those lengths.
+TODO
 
-The correctness of the Layout M instance hinges on this fact;
-equations above are correct if they make `measure` a layout
-homomorphism (ignoring of course render):
-
-@spec«
-measure (a <> b) = measure a <> measure b
-measure (flush a) = flush (measure a)
-»
-
+The above diagram can be read out as code as follows: 
 @haskell«
 instance Layout M where
-  text s = M {height = 0, maxWidth = length s, lastWidth = length s}
-  a <> b = M {maxWidth = max (maxWidth a) (maxWidth b + lastWidth a),
-              height = height a + height b,
-              lastWidth = lastWidth a + lastWidth b}
-  flush a = M {maxWidth = maxWidth a,
-               height = height a + 1,
-               lastWidth = 0}
+  a <> b =
+     M {  maxWidth   = max  (  maxWidth a)
+                            (  lastWidth  a + maxWidth   b),
+          height     =         height     a + height     b,
+          lastWidth  =         lastWidth  a + lastWidth  b}
+»
+The other combinators are easy to implement:
+@haskell«
+  text s   = M {  height     = 0,
+                  maxWidth   = length s,
+                  lastWidth  = length s}
+  flush a  = M {  maxWidth   = maxWidth a,
+                  height     = height a + 1,
+                  lastWidth  = 0}
+»
+We can even give a rendering for these abstract layouts, by printing an @teletype«x» at each
+occupied position in the layout.
+@haskell«
   render (M lw h mw) = render $ replicate h (replicate mw 'x') ++ [replicate lw 'x']
 »
 
-(Exercise: check that layout laws hold.)
+The correctness of the above code relies on the intution of and a
+proper reading of the concatenation diagram. This process being
+informal, we may want to cross-check the final result formally.
+To do so, we define a function which computes the measure of a full layout:
+@haskell«
+measure :: L -> M
+measure xs = M {  maxWidth   = maximum $ map length $ xs,
+                  height     = length xs - 1,
+                  lastWidth  = length $ last $ xs}
+»
 
+Then, to check the correctness of the @hask«Layout M» instance, we
+must check that @hask«measure» is a layout homomorphism (ignoring of
+course render). This property can be spelled out as the following
+three laws:
 
+@spec«
+measure (a <> b) == measure a <> measure b
+measure (flush a) == flush (measure a)
+measure (text s) == text s
+»
 
+Checking the laws is left as a tedious exercise to the reader.
 
-TODO: diagram
+Having properly refined the problem (ignoring such details as the
+actual text being rendered), we may proceed to give a fast
+implementation of
 
 @haskell«
 fits :: M -> Bool
 fits x = maxWidth x <= 80
 »
-Early filtering out invalid results
------------------------------------
+
+
+@subsection«Early filtering out invalid results»
+
+The first optimisation is to filter out invalid results early; like so:
 
 @spec«
+text x = filter valid [text x]
 xs <> ys = filter valid [x <> y | x <- xs, y <- ys]
 »
 
-This is because width is monotonous:
+We can do this because @hask«width» is monotonous:
 
 @spec«
 width (a <> b) ≥ width a  and width (a <> b) ≥ width b
 width (flush a) ≥ with a
 »
 
-and therefore so is validity: keeping invalid layouts is useless: they
-can never be combined with another layout to produce something valid.
+In turn, so is validity:
 
 @spec«
 valid (a <> b)  ==> valid a  and  valid b
 valid (flush a) ==> valid a
 »
 
-Pruning out dominated results
------------------------------
+Consequently, keeping invalid layouts is useless: they can never be
+combined with another layout to produce something valid.
 
-Idea: filter out the results that are dominated by other results.
 
+@subsection«Pruning out dominated results»
+
+The second optimisation relies on the insight that certain results
+dominate others, and that dominated results may be discarded early, in
+a fashion similar to what we have done above.
+
+The domination relation is a partial order. We write @hask«a ≺ b» if
+@hask«a» dominates @hask«b».
 @haskell«
 class Poset a where
   (≺) :: a -> a -> Bool
 »
-
-@spec«
-measure a ≺ measure b   =>   a ≤ b
-»
-
-Find an instance `Poset M` such that:
-
-if    d1 ≺  d2 and  d'1 ≺  d'2
+We will arrange our domination relation such that
+@enumList[«It is preserved by the layout operators.
+@spec«if    d1 ≺  d2 and  d'1 ≺  d'2
 then  (d1 <> d2) ≺  (d'1 <> d'2) and
       flush d1 ≺ flush d2
+»
+»
+,
+«It implies the ordering of length: @hask«a ≺ b  ==>  width a ≤ width b»
+»
+]
 
-
-
+Together, these properties mean that we can always discard dominated
+layouts.  The domination relation that we use is simply the
+intersection of ordering in all dimensions. That is, if layout
+@hask«a» is shorter, narrower, and has a narrower last line than
+layout @hask«b» , then @hask«a» dominates @hask«b». In code:
 @haskell«
 instance Poset M where
   M c1 l1 s1 ≺ M c2 l2 s2 = c1 <= c2 && l1 <= l2 && s1 <= s2
 »
+
+@haskell«
+type DM = [M]
+
+instance Layout DM where
+  xs <> ys = pareto $ concat [ filter fits [x <> y | y <- ys] | x <- xs]
+  flush xs = pareto $ (map flush xs)
+  text s = filter fist [text s]
+
+instance Doc DM where
+  xs <|> ys = bests [xs,ys]
+»
+
+Unfortunately, computing the pareto frontier "stupidly" can be quite slow.
+
+There is a better way: keep the lists sorted in lexicographical order. Then
+the pareto fronter has a more efficient implementation:
+
+@haskell«
+pareto' :: Poset a => [a] -> [a] -> [a]
+pareto' acc [] = []
+pareto' acc (x:xs) = if any (≺ x) acc
+                       then pareto' acc xs
+                       else x:pareto' (x:acc) xs
+»
+
+Because the input is lexicographically sorted, everything which is in
+the frontier can't be dominated; hence no need to refilter the
+frontier when we find a new element.
+
+@spec«
+(x0,y0,z0) <= (x1,y1,z1)
+
+x0 < x1 or
+x0 = x1 and y0 < y0
+x0 = x1 and y0 = y0 and z0 < z1
+»
+
+At least one variable is less.
+
+We make sure that concatenation preserve the lexicographic order
+(thanks Nick):
+
+@spec«
+if    d1 <=  d2 and  d'1 <=  d'2
+then  (d1 <> d2) <=  (d'1 <> d'2)
+»
+
+Flush does not, so we have to re-sort the list.
 
 
 @haskell«
@@ -698,6 +776,14 @@ mergeAll (x:xs) = merge x (mergeAll xs)
 »
 
 
+
+@haskell«
+bests = pareto' [] . mergeAll
+»
+
+
+@subsection«Re-pairing with text»
+
 @haskell«
 type D0 = [(M,L)]
 
@@ -713,38 +799,6 @@ instance Layout D0 where
 instance Doc D0 where
   xs <|> ys = bests [xs,ys]
 »
-
-@haskell«
-bests = pareto' [] . mergeAll
-»
-
-@haskell«
-pareto' :: Poset a => [a] -> [a] -> [a]
-pareto' acc [] = []
-pareto' acc (x:xs) = if any (≺ x) acc
-                       then pareto' acc xs
-                       else x:pareto' (x:acc) xs
-»
-
-Because the input is lexicographically sorted, everything which is in
-the frontier can't be dominated; hence no need to refilter the
-frontier when we find a new element.
-
-(x0,y0,z0) <= (x1,y1,z1)
-
-x0 < x1 or
-x0 = x1 and y0 < y0
-x0 = x1 and y0 = y0 and z0 < z1
-
-At least one variable is less.
-
-We make sure that concatenation preserve the lexicographic order
-(thanks Nick):
-
-if    d1 <=  d2 and  d'1 <=  d'2
-then  (d1 <> d2) <=  (d'1 <> d'2)
-
-Flush does not, so we have to re-sort the list.
 
 Hughes-Style nesting
 ====================
