@@ -710,6 +710,24 @@ instance Poset M where
   M c1 l1 s1 ≺ M c2 l2 s2 = c1 <= c2 && l1 <= l2 && s1 <= s2
 »
 
+Filtering out the dominated elements is an operation known as the
+computation of the pareto frontier, which can be implemented as
+follows. We examine elements sequentially, and keep a pareto frontier
+of the elements seen so far. For each examined element @hask«x», if it
+is dominated, then we merely skip it.  Otherwise, @hask«x» is added to
+the current frontier, and we must then remove all elements dominated
+by @hask«x».
+
+@haskell«
+pareto :: Poset a => [a]  -> [a]
+pareto = loop []
+  where  loop acc  []      = acc
+         loop acc  (x:xs)  =
+            if any (≺ x) acc
+               then  loop  acc xs
+               else  loop  (x:filter (not . (x ≺)) acc) xs
+»
+
 @haskell«
 type DM = [M]
 
@@ -719,46 +737,49 @@ instance Layout DM where
   text s = filter fist [text s]
 
 instance Doc DM where
-  xs <|> ys = bests [xs,ys]
+  xs <|> ys = pareto (xs ++ ys)
 »
 
-Unfortunately, computing the pareto frontier "stupidly" can be quite slow.
+Unfortunately, computing the pareto frontier as above is slow when
+most elements are in the pareto frontier. Indeed, adding an element
+requires all elements in the frontier so far, and thus @hask«pareto»
+has quadratic complexity.
 
-There is a better way: keep the lists sorted in lexicographical order. Then
-the pareto fronter has a more efficient implementation:
-
-@haskell«
-pareto' :: Poset a => [a] -> [a] -> [a]
-pareto' acc [] = []
-pareto' acc (x:xs) = if any (≺ x) acc
-                       then pareto' acc xs
-                       else x:pareto' (x:acc) xs
-»
+There is a better way: keep the lists sorted in lexicographical
+order. Then the pareto fronter has a more efficient implementation.
 
 Because the input is lexicographically sorted, everything which is in
-the frontier can't be dominated; hence no need to refilter the
-frontier when we find a new element.
+the frontier can't be dominated by a new element. Indeed, the new
+element @hask«m1» must be lexicographically bigger than any element
+@hask«m0» in the frontier:
 
+@spec«M x0 y0 z0 <= M x1 y1 z1»
+which means, by definition:
 @spec«
-(x0,y0,z0) <= (x1,y1,z1)
-
 x0 < x1 or
 x0 = x1 and y0 < y0
 x0 = x1 and y0 = y0 and z0 < z1
 »
 
-At least one variable is less.
+which is incompatible with @hask«m0 ≺ m1».
 
-We make sure that concatenation preserve the lexicographic order
-(thanks Nick):
-
-@spec«
-if    d1 <=  d2 and  d'1 <=  d'2
-then  (d1 <> d2) <=  (d'1 <> d'2)
+Consequently, on a sorted list, the pareto frontier can be implemeted as:
+@haskell«
+pareto' :: Poset a => [a] -> [a]
+pareto' = loop [] where
+  loop acc  []      = []
+  loop acc  (x:xs)  = if any (≺ x) acc
+                          then     loop' acc      xs
+                          else x:  loop' (x:acc)  xs
 »
 
-Flush does not, so we have to re-sort the list.
+@haskell«
 
+type D1 = [M]
+
+instance Doc D1 where
+  xs <|> ys = pareto $ merge xs ys
+»
 
 @haskell«
 merge :: Ord a => [a] -> [a] -> [a]
@@ -771,9 +792,26 @@ merge (x:xs) (y:ys)
 
 @haskell«
 mergeAll :: Ord a => [[a]] -> [a]
-mergeAll [] = []
-mergeAll (x:xs) = merge x (mergeAll xs)
+mergeAll = foldr merge []
 »
+
+> instance Layout D0 where
+>   xs <> ys = pareto $ mergeAll [ filter (fits . fst) [x <> y | y <- ys] | x <- xs]
+>   flush xs = pareto $ map sort $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
+>   -- flush xs = pareto' [] $ sort $ (map flush xs)
+>   text s = [text s | valid (text s)]
+>   render (x:_) = render x
+
+We must then ensure that the operators preserve the lexicographically
+sorted property.
+
+@spec«
+if    d1 <=  d2 and  d'1 <=  d'2
+then  (d1 <> d2) <=  (d'1 <> d'2)
+»
+
+Flush does not, so we have to re-sort the list.
+
 
 
 
@@ -800,8 +838,7 @@ instance Doc D0 where
   xs <|> ys = bests [xs,ys]
 »
 
-Hughes-Style nesting
-====================
+@subsection«Hughes-Style nesting»
 
 Hughes proposes a nest conbinator.
 Mostly used for "hanging":
@@ -817,12 +854,11 @@ nest :: Layout d => Int -> d -> d
 nest n y = spaces n <> y
 »
 
-Wadler-Style Nesting
-====================
+@subsection«Wadler-Style Nesting»
 
 Already discussed.
 
-4. Ribbon length
+@subsection«Ribbon length»
 
 Note that we pick the narrowest result fitting on min. lines lines!
 
@@ -840,6 +876,10 @@ come up with a compositional interpretation second. This is fine,
 precisely because laws do not fully constrain the design; there is
 room for wiggle. However, a compositional semantics is often an even
 better guide which should not be an afterthought.
+
+@acknowledgements«Using the QuickSpec tool, Nicholas Smallbone helped
+finding a bug in the final implementation: the concatenation operator
+did not preserve the invariant that lists were sorted. »
 
 »
 
@@ -907,3 +947,5 @@ hask = ensureMath . haskellInline
 
 url :: TeX -> TeX
 url = cmd "url"
+
+acknowledgements = cmd "acks"
