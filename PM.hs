@@ -10,7 +10,8 @@ import MarXup.LineUp.Haskell
 import MarXup.Verbatim
 import MarXup.Latex.Math (ensureMath)
 import Control.Monad (forM_)
-
+import Control.Lens (set)
+                      
 main :: IO ()
 main = renderTex SIGPlan "Prettiest" (preamble (header >> mainText))
 
@@ -899,8 +900,41 @@ abstrLayout lastWidth = do
   path p
   return (Object p bx, after)
 
+asse a = a # SW + Point 0 lineHeight
+
 lw1 = 12
 lw2 = 18
+
+dblarrow :: Box -> Point -> Point -> Diagram ()
+dblarrow lab a b = using (outline "black" . set endTip LatexTip  . set startTip LatexTip) $ do
+   let points = [a,b]
+       normal = OVector (avg points) (rotate90 (b-a))
+       p = polyline points
+   path p
+   autoLabel lab normal
+
+hruler = gruler xpart ypart
+vruler = gruler ypart xpart
+
+gruler xp yp p1 p2 lab = do
+  p1' <- point
+  p2' <- point
+  l <- labelObj lab
+  align xp [p1,p1']
+  align xp [p2,p2']
+  align yp [p1',p2']
+  dblarrow l p1' p2'
+  bbox <- boundingBox [anchors p1', anchors p2', anchors l]
+  rectangleShape bbox
+
+nodeDistance :: Expr
+nodeDistance = 4
+
+leftOf :: Object -> Object -> Diagram ()
+a `leftOf` b = do
+  let dx = xpart (b # W - a # E)
+  minimize dx
+  dx >== nodeDistance
 
 twoLayouts :: Diagram (Object,Point,Object)
 twoLayouts = do
@@ -912,6 +946,11 @@ twoLayouts = do
   height b === 3 *- lineHeight
   return (a,aa,b)
 
+heightRuler a lab = do
+  res <- vruler (a # N) (asse a) lab
+  a `leftOf` res
+  return res
+
 horizCat :: Dia
 horizCat = do
   (a,mid,b) <- twoLayouts
@@ -922,14 +961,24 @@ horizCat = do
   lhs <- boundingBox lhsObjs
   
   eq <- labelObj "="
+
   
   (a',mid',b') <- twoLayouts
   b' # NW .=. mid'
 
+  spread hdist 10 [eq,a']
+
   lhs # S .=. a' # N + Point 0 20
 
-  -- (cat,_) <- draw $ abstrLayout (lw1 + lw2)
+  heightRuler a  (hask «l1»)
+  heightRuler b  (hask «l2»)
+  a'h <- heightRuler a' (hask «l1»)
+  b'h <- heightRuler b' (hask «l2»)
+  toth <- vruler (a' # N) (asse b') (hask «l1+l2»)
+  b'h `leftOf` toth
+  align xpart $ map (#W) [a'h, b'h]
 
+    
   return () 
 
 
@@ -947,5 +996,3 @@ hask = ensureMath . haskellInline
 
 url :: TeX -> TeX
 url = cmd "url"
-
-acknowledgements = cmd "acks"
