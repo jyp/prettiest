@@ -424,7 +424,7 @@ horizontal concatenation (@hask«<>»). We will stick to Hughes' advice:
 @qu«translate the second operand [to the right], so that is tabs against
 the last character of the first operand». Diagramatically:
 
-@horizCat
+@(horizCat False)
 
 The implementation handles the last line of the first layout and the
 first line of the second layout specially, as follows:
@@ -590,7 +590,8 @@ data M = M {height     :: Int,
 This semantics can be guessed by looking at the diagram for
 composition of layouts. Here is the concatenation
 diagram annotated with those lengths.
-TODO
+
+@(horizCat True)
 
 The above diagram can be read out as code as follows: 
 @haskell«
@@ -900,13 +901,19 @@ abstrLayout lastWidth = do
   path p
   return (Object p bx, after)
 
+
+abstractLayoutJoin (a,a_last) (b,b_last) = do
+  j <- boundingBox [a,b]
+  b # NW .=. a_last
+  return (j,b_last)
+
 asse a = a # SW + Point 0 lineHeight
 
 lw1 = 12
 lw2 = 18
 
 dblarrow :: Box -> Point -> Point -> Diagram ()
-dblarrow lab a b = using (outline "black" . set endTip LatexTip  . set startTip LatexTip) $ do
+dblarrow lab a b = using (outline "black" . set endTip ToTip  . set startTip ToTip) $ do
    let points = [a,b]
        normal = OVector (avg points) (rotate90 (b-a))
        p = polyline points
@@ -924,63 +931,56 @@ gruler xp yp p1 p2 lab = do
   align xp [p2,p2']
   align yp [p1',p2']
   dblarrow l p1' p2'
-  bbox <- boundingBox [anchors p1', anchors p2', anchors l]
-  rectangleShape bbox
+  stroke "red" $ boundingBox [anchors p1', anchors p2', anchors l]
 
-nodeDistance :: Expr
-nodeDistance = 4
-
-abstrLayoutWithRulers :: [Char] -> Expr -> Diagram (Object, Point, Object)
-abstrLayoutWithRulers lab lw = do
-  (a,mid) <- draw $ abstrLayout lw
-  heightRule <- vruler (a # N) (asse a) (hask $ textual $ "l" ++ lab)
+rulersOfLayout l mw lw (a,mid) = do
+  heightRule <- vruler (a # N) (asse a) (hask l)
   a `leftOf` heightRule
-  return (a,mid,heightRule)
 
-leftOf :: Object -> Object -> Diagram ()
-a `leftOf` b = do
-  let dx = xpart (b # W - a # E)
-  minimize dx
-  dx >== nodeDistance
+  mwRule <- hruler (a # W) (a # E) (hask mw)
+  mwRule `topOf` a
 
-twoLayouts :: Bool -> Diagram (Object,Object)
-twoLayouts joined = do
-  (a,mid,a_h) <- abstrLayoutWithRulers "1" lw1
-  (b,_,b_h) <- abstrLayoutWithRulers "2" lw2
+  lwRule <- hruler mid (a # W) (hask lw)
+  a `topOf` lwRule
+  return (heightRule,mwRule,lwRule)
+
+twoLayouts :: Diagram ((Object,Point),(Object,Point))
+twoLayouts = do
+  (a,a_last) <- abstrLayout lw1
+  (b,b_last) <- abstrLayout lw2
   width a === 48
   width b === 56
   height a === 4 *- lineHeight
   height b === 3 *- lineHeight
 
-  when joined $ do
-    b # NW .=. mid
-    toth <- vruler (a # N) (asse b) (hask «l1+l2»)
-    b_h `leftOf` toth
-    align xpart $ map (#W) [a_h, b_h]
-
-  return (a,b)
+  return ((a,a_last),(b,b_last))
 
 
-horizCat :: Dia
-horizCat = do
-  (a,b) <- twoLayouts False
+horizCat :: Bool -> TeX
+horizCat showRulers = center $ element $ do
+  (a,b) <- draw $ twoLayouts
   op <- labelObj "<>"
-  let lhsObjs = [a,op,b] 
-  spread hdist 10 lhsObjs
+  let lhsObjs = [fst a,op, fst b]
   align ypart $ map (#Center) $ lhsObjs
   lhs <- boundingBox lhsObjs
   
   eq <- labelObj "="
+  abSep <- draw $ twoLayouts
+  ab <- uncurry abstractLayoutJoin $ abSep
+  if showRulers
+    then do
+      (h1,_,lw1) <- rulersOfLayout «l1» «mw1» «lw1» a
+      (_,_,lw2) <- rulersOfLayout «l2» «mw2» «lw2» b
+      spread hdist 10 [h1,op,fst b]
 
-  (a',_) <- twoLayouts True
+      (_,mwTot,lwTot) <- rulersOfLayout «l1+l2» «max mw1 (lw1+mw2)» «lw1+lw2» ab
+      spread vdist 5 $ reverse [lw1,eq,mwTot]
+    else do
+      spread hdist 10 lhsObjs
+      spread vdist 5 [fst ab,eq,lhs]
+  align xpart $ map (#W) [fst ab,eq,lhs]
 
-  spread hdist 10 [eq,a']
-
-  lhs # S .=. a' # N + Point 0 20
-
-
-    
-  return () 
+  return ()
 
 
 spec = haskell
@@ -997,3 +997,11 @@ hask = ensureMath . haskellInline
 
 url :: TeX -> TeX
 url = cmd "url"
+
+displayLeft :: Tex a -> Tex a
+displayLeft body = env'' "list" [] [mempty,tex "\\setlength\\leftmargin{1em}"] $ do
+  texLn "\\item\\relax"
+  body
+
+display :: Tex a -> Tex a
+display = env "center"
