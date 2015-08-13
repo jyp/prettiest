@@ -9,7 +9,7 @@ import MarXup.Diagram
 import MarXup.LineUp.Haskell
 import MarXup.Verbatim
 import MarXup.Latex.Math (ensureMath)
-import Control.Monad (forM_)
+import Control.Monad (forM_,when)
 import Control.Lens (set)
                       
 main :: IO ()
@@ -930,30 +930,40 @@ gruler xp yp p1 p2 lab = do
 nodeDistance :: Expr
 nodeDistance = 4
 
+abstrLayoutWithRulers :: [Char] -> Expr -> Diagram (Object, Point, Object)
+abstrLayoutWithRulers lab lw = do
+  (a,mid) <- draw $ abstrLayout lw
+  heightRule <- vruler (a # N) (asse a) (hask $ textual $ "l" ++ lab)
+  a `leftOf` heightRule
+  return (a,mid,heightRule)
+
 leftOf :: Object -> Object -> Diagram ()
 a `leftOf` b = do
   let dx = xpart (b # W - a # E)
   minimize dx
   dx >== nodeDistance
 
-twoLayouts :: Diagram (Object,Point,Object)
-twoLayouts = do
-  (a,aa) <- draw $ abstrLayout lw1
-  (b,_) <- draw $ abstrLayout lw2
+twoLayouts :: Bool -> Diagram (Object,Object)
+twoLayouts joined = do
+  (a,mid,a_h) <- abstrLayoutWithRulers "1" lw1
+  (b,_,b_h) <- abstrLayoutWithRulers "2" lw2
   width a === 48
   width b === 56
   height a === 4 *- lineHeight
   height b === 3 *- lineHeight
-  return (a,aa,b)
 
-heightRuler a lab = do
-  res <- vruler (a # N) (asse a) lab
-  a `leftOf` res
-  return res
+  when joined $ do
+    b # NW .=. mid
+    toth <- vruler (a # N) (asse b) (hask «l1+l2»)
+    b_h `leftOf` toth
+    align xpart $ map (#W) [a_h, b_h]
+
+  return (a,b)
+
 
 horizCat :: Dia
 horizCat = do
-  (a,mid,b) <- twoLayouts
+  (a,b) <- twoLayouts False
   op <- labelObj "<>"
   let lhsObjs = [a,op,b] 
   spread hdist 10 lhsObjs
@@ -962,21 +972,12 @@ horizCat = do
   
   eq <- labelObj "="
 
-  
-  (a',mid',b') <- twoLayouts
-  b' # NW .=. mid'
+  (a',_) <- twoLayouts True
 
   spread hdist 10 [eq,a']
 
   lhs # S .=. a' # N + Point 0 20
 
-  heightRuler a  (hask «l1»)
-  heightRuler b  (hask «l2»)
-  a'h <- heightRuler a' (hask «l1»)
-  b'h <- heightRuler b' (hask «l2»)
-  toth <- vruler (a' # N) (asse b') (hask «l1+l2»)
-  b'h `leftOf` toth
-  align xpart $ map (#W) [a'h, b'h]
 
     
   return () 
