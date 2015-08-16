@@ -111,7 +111,7 @@ pretty print S-Expressions, and that they are represented as follows:
 @haskell«
 data SExpr where
    SExpr :: [SExpr] -> SExpr
-   Atom :: String -> SExpr
+   Atom  :: String  -> SExpr
   deriving Show
 »
 Using the above representation, the S-Expr @teletype«(a b c d)» has the
@@ -189,16 +189,16 @@ vertical concatenation:
 
 @haskell«
 sep :: Doc d => [d] -> d
-sep [] = empty
-sep xs = hsep xs <|> vcat xs
+sep []  = empty
+sep xs  = hsep xs <|> vcat xs
 »
 
 Turning S-expressions into a pretty document is then child's play:
 
 @haskell«
 pretty :: Doc d => SExpr -> d
-pretty (Atom s) = text s
-pretty (SExpr xs) = text "(" <> (sep $ map pretty xs) <> text ")"
+pretty  (Atom s)    = text s
+pretty  (SExpr xs)  = text "(" <> (sep $ map pretty xs) <> text ")"
 »
 
 @sec_informal_semantics<-section«The meaning of pretty (informally)»
@@ -213,8 +213,8 @@ demonstrate issues with both Hughes and Wadler libraries):
 
 @haskell«
 testData :: SExpr
-testData = SExpr [SExpr [Atom "12345", abcd4],
-                  SExpr [Atom "12345678", abcd4]]
+testData = SExpr [  SExpr [Atom "12345", abcd4],
+                    SExpr [Atom "12345678", abcd4]]
   where abcd4 = SExpr [abcd,abcd,abcd,abcd]
 »
 
@@ -581,9 +581,9 @@ All that matters is the maximum width of the layout, the width of its
 last line and its height (and because layouts can't be empty we will
 start counting from 0):
 @haskell«
-data M = M {height     :: Int,
-            lastWidth  :: Int,
-            maxWidth   :: Int}
+data M = M {  height     :: Int,
+              lastWidth  :: Int,
+              maxWidth   :: Int}
   deriving (Show,Eq,Ord)
 »
 
@@ -931,7 +931,8 @@ gruler xp yp p1 p2 lab = do
   align xp [p2,p2']
   align yp [p1',p2']
   dblarrow l p1' p2'
-  stroke "red" $ boundingBox [anchors p1', anchors p2', anchors l]
+  -- stroke "red" $
+  boundingBox [anchors p1', anchors p2', anchors l]
 
 rulersOfLayout l mw lw (a,mid) = do
   heightRule <- vruler (a # N) (asse a) (hask l)
