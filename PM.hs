@@ -962,24 +962,30 @@ horizCat showRulers = center $ element $ do
   (a,b) <- draw $ twoLayouts
   op <- labelObj "<>"
   let lhsObjs = [fst a,op, fst b]
-  align ypart $ map (#Center) $ lhsObjs
-  lhs <- boundingBox lhsObjs
+  align ypart $ [fst a # N, fst b # N]
+  align ypart $ [fst a # Center, op # Center]
   
   eq <- labelObj "="
   abSep <- draw $ twoLayouts
   ab <- uncurry abstractLayoutJoin $ abSep
-  if showRulers
+  -- spread hdist 10 
+  (lhsObjsExtra,rhsObjsExtra) <- if showRulers
     then do
       (h1,_,lw1) <- rulersOfLayout «l1» «mw1» «lw1» a
       (_,_,lw2) <- rulersOfLayout «l2» «mw2» «lw2» b
-      spread hdist 10 [h1,op,fst b]
 
-      (_,mwTot,lwTot) <- rulersOfLayout «l1+l2» «max mw1 (lw1+mw2)» «lw1+lw2» ab
-      spread vdist 5 $ reverse [lw1,eq,mwTot]
+      (hTot,mwTot,lwTot) <- rulersOfLayout «l1+l2» «max mw1 (lw1+mw2)» «lw1+lw2» ab
+      spread hdist 10 [h1,op,fst b]
+      return ([lw1],[mwTot,lwTot])
     else do
       spread hdist 10 lhsObjs
-      spread vdist 5 [fst ab,eq,lhs]
-  align xpart $ map (#W) [fst ab,eq,lhs]
+      return ([],[])
+  spread hdist 10 [eq, fst ab]
+  align ypart $ map (#Center) [fst ab, eq]
+  lhs <- boundingBox $ lhsObjs ++ lhsObjsExtra
+  rhs <- boundingBox $ [eq, fst ab] ++ rhsObjsExtra
+  align xpart $ map (#W) [rhs,lhs]
+  spread vdist 10 [rhs,lhs]
 
   return ()
 
