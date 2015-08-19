@@ -2,10 +2,14 @@
 
 default: Prettiest.pdf
 
+clean:
+	rm -f *.aux *.ptb *.boxes *.log
+
 Prettiest.pdf: PM.hs
 	ghc --make PM
 	./PM
 	pdflatex Prettiest
+	bibtex Prettiest
 	./PM
 	pdflatex Prettiest
 

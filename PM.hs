@@ -13,10 +13,10 @@ import Control.Monad (forM_,when)
 import Control.Lens (set)
                       
 main :: IO ()
-main = renderTex SIGPlan "Prettiest" (preamble (header >> mainText))
+main = renderTex SIGPlan "Prettiest" (preamble (header >> mainText >> bibliographyAll))
 
 preamble body = do
-  documentClass "../PaperTools/latex/sigplanconf" []
+  documentClass "../PaperTools/latex/sigplanconf" ["preprint"]
   stdPreamble
   usepackage "tikz" []
   usepackage "polytable" []
@@ -35,7 +35,7 @@ principle titl = deflike "Principle" "principle" titl
 
 header :: Tex ()
 header = do
-  -- maketitle
+  maketitle
   -- abstract
   keywords $ [ "Pearl", "Pretty Printing"]
   return ()
@@ -43,7 +43,7 @@ header = do
 bibliographyAll :: TeX
 bibliographyAll = do
   bibliographystyle "abbrvnat"
-  bibliography  "/home/bernardy/repo/PaperTools/bibtex/jp"
+  bibliography  "../PaperTools/bibtex/jp"
 
 haskellPreamble :: Tex ()
 haskellPreamble = «
@@ -74,7 +74,7 @@ space used to display the data.»
 @pcp_layout<-principle«Layout»« A pretty printer shall make clever use of layout, to make it easy
              for a human to recognise the hierarchical organisation of data.»
 
-The first principle takes precedence over the second one, which itself takes precedence over the third one.
+Furthermore, the first principle takes precedence over the second one, which itself takes precedence over the third one.
 
 
 The functional programming community often uses pretty
