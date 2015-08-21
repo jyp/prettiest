@@ -3,7 +3,7 @@
 import MarXup
 import MarXup.Latex
 import MarXup.Latex.Bib
-import MarXup.Latex.Math (newtheorem, deflike, thmlike, definition, mathpreamble)
+import MarXup.Latex.Math (deflike, thmlike, definition, mathpreamble)
 import MarXup.Tex
 import MarXup.Diagram
 import MarXup.LineUp.Haskell
@@ -11,7 +11,7 @@ import MarXup.Verbatim
 import MarXup.Latex.Math (ensureMath)
 import Control.Monad (forM_,when)
 import Control.Lens (set)
-                      
+
 main :: IO ()
 main = renderTex SIGPlan "Prettiest" (preamble (header >> mainText >> bibliographyAll))
 
@@ -30,7 +30,7 @@ preamble body = do
   env "document" body
 
 principle :: TeX -> TeX -> Tex SortedLabel
-principle titl = deflike "Principle" "principle" titl
+principle titl = deflike "Principle" "principle" "Principle" titl
 
 
 header :: Tex ()
@@ -61,11 +61,11 @@ mainText = «
 
 
 A pretty printer is a program that renders data structures in a way which
-makes them pleasant to read. (The data structures in question are
+makes them pleasant to read. (The data structures in question
 often represent programs, but not always.) I propose the following
-three laws of pretty printing:
+three principles of pretty printing:
 
-@pcp_visibility<-principle«Visibility»«Pretty printer shall
+@pcp_visibility<-principle«Visibility»«A pretty printer shall
 layout all its output within the width of the page.»
 
 @pcp_compact<-principle«Compactness»«A pretty printer shall minimize the amount of
@@ -77,34 +77,35 @@ space used to display the data.»
 Furthermore, the first principle takes precedence over the second one, which itself takes precedence over the third one.
 
 
-The functional programming community often uses pretty
-printing to showcase proper program design: the pretty printer of @citet"hughes_design_1995"
-remains an influential example of functional programming design, while
+The functional programming community has been using
+pretty printing to showcase proper functional programming style. The pretty printer of @citet"hughes_design_1995"
+remains an influential example of functional programming design, while that of
 @citet"wadler_prettier_2003" has appeared as chapter of of a book dedicated to the @qu"fun of programming".
 Even though Hughes and Wadler are not explicit about it, it is apparent that (some of) the principles stated above
 guide the design of their libraries.
 
 
-In addition of esthetical and pedagogical value, Hughes and Wadler's
+In addition to their esthetical and pedagogical value, Hughes and Wadler
 provide practical implementations which form the basis of pretty
-printing packages which remain popular today:
-
-@descList[(«pretty», url«https://hackage.haskell.org/package/pretty»)
-         ,(«wl-print», url«https://hackage.haskell.org/package/wl-pprint»)]
+printing packages, which remain popular today. Hughes' design has been
+refined by Peyton Jones, and is available as the
+Hackage package@footnote«@url«https://hackage.haskell.org/package/pretty»»,
+while Wadler's design has been extended by Leijen and made available as the 
+@sans«wl-print» package@footnote«@url«https://hackage.haskell.org/package/wl-pprint»».
 
 In this paper, I propose a new design for a pretty printing
-library. The interface is inspired by Hughes and Wadler's, but is
+library. The interface is inspired by Hughes' and Wadler's, but is
 subtly different. In contrast to Hughes and Wadler, my primary goal is
 to abide by the principles of pretty printing as defined above;
-efficiency is a secondary concern. (Yet the final result is reasonably
-efficient.)  As Hughes and Wadler, I will aim at using a
-mathematically-supported methodology and a clean design. Finally,
+efficiency is a secondary concern. Yet the final result is reasonably
+efficient.  As Hughes and Wadler, I will aim at demonstrating best functional
+style. TODO: whut? Finally,
 I will draw general conclusions on how to improve on functional
 programming methodologies.
 
 @sec_api<-section«API (Syntax)»
 
-We justify our choice of API (set of combinators) by examining a
+We will start the design of our library by examining a
 simple yet typical pretty printing task.  Let us assume we want to
 pretty print S-Expressions, and that they are represented as follows:
 
@@ -121,14 +122,27 @@ following encoding:
 abcd :: SExpr
 abcd = SExpr [Atom "a",Atom "b",Atom "c",Atom "d"]
 »
-Let us specify pretty printing of an S-Expr as follows. In a pretty
+
+Let us recall that the goal of the pretty printer is to render a given S-Expr according to the
+three principles of pretty printing:
+
+@itemList[
+          «The output shall fit the width of a page (@pcp_visibility).»
+         ,«The output shall use as few lines as possible (@pcp_compact).»
+         ,«The layout of the input should reflect the structure of the input (@pcp_layout).»
+         ]
+
+While it is clear how the first two principles constrain the result, it
+is less clear how the third principle plays out: we must specify more precisely which
+layouts are pretty. To this end, we will say that in a pretty
 display of an S-Expr, we would like the elements to be either
 concatenated horizontally, or aligned vertically. The possible pretty
-layouts of our example would be either
+layouts of our @hask«abcd» example would be either
 
 @verbatim«
 (a b c d)
 »
+
 or
 
 @verbatim«
@@ -138,24 +152,18 @@ or
  d)
 »
 
-The goal of the pretty printer is to render a given S-Expr
-@itemList[«according to the above rules, which embody @pcp_layout,»
-         ,«in as few lines as possible (@pcp_compact) and»
-         ,«within the width of a page (@pcp_visibility)»]
-
-
-Traditionally, a pretty printing library gives us the means to express
+In general, a pretty printing library must provide the means to express
 the specification of possible pretty layouts: it is up to the user to
 reify (@pcp_layout) on the data structure of interest. The printer
 will then automatically pick the smallest (@pcp_compact) which fits
 the page (@pcp_visibility).
 
-We will not depart from the tradition. Our library will provide an API
+Our library will provide an API
 to decribe layout which is similar to Hughes's: we can express both
 vertical (@hask«$$») and horizontal (@hask«<>») composition of
 documents, as well as embedding raw @hask«text» and provide
 automatic choice between layouts (@hask«<|>»). At this stage, we keep
-the representation of documents abstract using a typeclass, which
+the representation of documents abstract, by using a typeclass which
 provides the above combinators, as well as means of @hask«render»ing a
 document:
 
@@ -176,8 +184,8 @@ documents.
 empty :: Layout d => d
 empty = text ""
 
-(<+>) :: Layout d => d -> d -> d
-x <+> y = x <> text " " <> y
+(<+>)    :: Layout d => d -> d -> d
+x <+> y  = x <> text " " <> y
 
 hsep,vcat :: Doc d => [d] -> d
 vcat = foldr1 ($$)
@@ -201,13 +209,13 @@ pretty  (Atom s)    = text s
 pretty  (SExpr xs)  = text "(" <> (sep $ map pretty xs) <> text ")"
 »
 
-@sec_informal_semantics<-section«The meaning of pretty (informally)»
+@sec_informal_semantics<-section«Towards semantics»
 
-We have given a syntax for describing documents, but what should be
-its semantics?  What does it mean to pretty print a document? Technically,
-what is the specification of @hask«render»?
+Our API provies a syntax to describe documents. The natural question is then: what should
+its semantics be?  In other words, how do we turn the three principles into a
+specification of @hask«render»?
 
-Let us use an example to try and answer the question. Suppose we want
+Let us use an example to try and answer the question, and outline why neither Wadler's or Hughes' answer is satisfactory. Suppose we want
 to pretty print the following S-Expr (which is specially crafted to
 demonstrate issues with both Hughes and Wadler libraries):
 
@@ -234,9 +242,9 @@ aligned vertically or concatenated horizontally (for legibility,
 (@pcp_compact), as long as the text fits within the page width
 (@pcp_visibility).
 Interpreting the above (so far informal) specification yields the
-following results.  On a 80-column-wide page, we would get the result
+following results. 1. On a 80-column-wide page, we would get the result
 displayed in @fig_eighty.
-Printed on a 20-column-wide page, we would like to get the following output:
+2. On a 20-column-wide page, we would like to get the following output:
 
 @verbatim«
 12345678901234567890
@@ -308,8 +316,9 @@ is, one can only specify a @emph«constant» amount of indentation, not
 one that depends on the contents of a document.  This means that
 Wadler's library lacks the capability to express that a multi-line
 sub-document @hask«b» should be laid out to the right of a document
-@hask«a» (even if @hask«a» is single-line).  Instead, @hask«a» must be
-put below @hask«b». Because of this restriction the best output that Wadler's library
+@hask«a» (even if @hask«a» is single-line).  Instead, @hask«b» must be
+put below @hask«a». Because of this restriction, with any reasonable
+specification, the best output that Wadler's library
 can produce is the following:
 
 @verbatim«
@@ -343,7 +352,7 @@ Pattern = expression [listElement x,
 »
 If the list does not fit on a single line, it must be put below
 @qu"expression". For legibility, it must be indented. However, the
-amount of indentation can only be a constant, so a typical output is:
+amount of indentation cannot depend on the @teletype«Pattern», so a typical output is:
 @verbatim«
 Pattern = expression
   [listElement x,
@@ -354,10 +363,10 @@ Pattern = expression
 Aligning the argument of the expression below the equal sign is bad:
 it obscures the structure of the program; @pcp_layout is not
 respected. In sum, the lack of a combinator for relative indentation
-is a serious drawback. In fact, the  de-facto standard 
-implemenation of Wadler's design, by Daan Leijen @emph«does» feature
-an alignment combinator. However, it also uses a greedy algorithm, and thus
-suffers from the same issue as Hughes library.
+is a serious drawback. In fact, Daan Leijen's
+implemenation of Wadler's design (@sans«wl-print»), by @emph«does» feature
+an alignment combinator. However, the implemenation also uses a greedy algorithm, and thus
+suffers from the same issue as Hughes' library.
 
 In sum, we have to make a choice between respecting all the principles
 of pretty printing or provide a greedy algorithm. Hughes does not
@@ -367,9 +376,9 @@ greediness.
 Yet, the final algorithm that I will arrive at is fast enough for use
 in common pretty printing tasks.
 
-Before attacking the problem of making a fast (enough) implementation,
-I'll refine the API for defining pretty layouts, and give formal
-semantics for it.
+But; let us not get carried away: before attacking the problem of making a fast (enough) implementation,
+we need to finish the formalisation of the semantics. And before that,
+it is best if we spend a moment to further refine the API for defining pretty layouts.
 
 @section«A prettier API»
 
@@ -392,9 +401,9 @@ Fortunately, in our case, Hughes and Wadler have already laid out this
 ground work, so we can jump straight to giving a comositional
 semantics. We will later check that the expected laws hold.
 
-Let us interpret a layout as a non-empty list of lines to print. As
+Let us interpret a layout as a @emph«non-empty» list of lines to print. As
 Hughes, I'll simply use the type of lists (you will remember the
-invariant in your head --- don't worry I will help).
+invariant in your head --- don't worry, I will help).
 
 @haskell«
 type L = [String] -- non empty.
@@ -1012,3 +1021,5 @@ displayLeft body = env'' "list" [] [mempty,tex "\\setlength\\leftmargin{1em}"] $
 
 display :: Tex a -> Tex a
 display = env "center"
+
+footnote = cmd "footnote"
