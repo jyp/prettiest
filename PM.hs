@@ -206,7 +206,9 @@ Turning S-expressions into a pretty document is then child's play:
 @haskell«
 pretty :: Doc d => SExpr -> d
 pretty  (Atom s)    = text s
-pretty  (SExpr xs)  = text "(" <> (sep $ map pretty xs) <> text ")"
+pretty  (SExpr xs)  =   text "(" <>
+                        (sep $ map pretty xs) <>
+                        text ")"
 »
 
 @sec_informal_semantics<-section«Towards semantics»
@@ -380,11 +382,11 @@ But; let us not get carried away: before attacking the problem of making a fast 
 we need to finish the formalisation of the semantics. And before that,
 it is best if we spend a moment to further refine the API for defining pretty layouts.
 
-@section«A prettier API»
+@section«Semantics, continued»
 
 @subsection«Layouts»
 We ignore for a moment choice between possible layouts
-(@hask«<|>»). We call a document without choice a @emph«layout».
+(@hask«<|>»). As Hughes, we call a document without choice a @emph«layout».
 
 Recall that we have inherited from Hughes a draft API for layouts:
 
@@ -398,7 +400,7 @@ text  :: Layout d => String -> d
 At this stage, classic functional pearls would state a number of laws
 that the above API has to satisfy, then infer a semantics from them.
 Fortunately, in our case, Hughes and Wadler have already laid out this
-ground work, so we can jump straight to giving a comositional
+ground work, so we can jump straight to giving a compositional
 semantics. We will later check that the expected laws hold.
 
 Let us interpret a layout as a @emph«non-empty» list of lines to print. As
@@ -441,10 +443,10 @@ first line of the second layout specially, as follows:
 @haskell«
   (<>) :: L -> L -> L
   xs <> (y:ys) = xs0 ++ [x ++ y] ++ map (indent ++) ys
-     where xs0 = init xs
-           x = last xs
-           n = length x
-           indent = replicate n blankChar
+     where  xs0 = init xs
+            x = last xs
+            n = length x
+            indent = replicate n blankChar
 »
 
 Given the above definition, we can then refine our API a bit.
@@ -470,8 +472,8 @@ this choice, for two reasons:
            left-flushing documents.»
          ,«The horizontal composition (@hask«<>») has a nicer algebraic structure
           than (@hask«$$»). The vertical composition (@hask«$$») has no unit, while (@hask«<>») forms
-          a monoid with the empty layout. (Due to a more complicated semantics,
-          Hughes' operator (@hask«<>») does not form a monoid.)»]
+          a monoid with the empty layout. (Due Hughes' complicated semantics,
+          even his (@hask«<>») operator lacks a unit.)»]
 
 To sum up, our API for layouts is the following:
 @haskell«
@@ -485,7 +487,7 @@ Additionally, as mentioned above, layouts follow a number of algebraic
 laws:
 
 @enumList[
-«Layouts form a monoid, with @hask«empty» and (@hask«<>»):
+«Layouts form a monoid, with the @hask«empty» document@footnote«recall @hask«empty = text ""»:» and (@hask«<>») 
 
 @haskell«
 prop_leftUnit :: (Doc a, Eq a) => a -> Bool
@@ -504,11 +506,11 @@ prop_text_append s t  = text s <> text t == text (s ++ t)
 prop_text_empty       = empty == text ""
 »
 »,
-« flushing can be pushed in concatenation:
+« @hask«flush» can be pulled out of concatenation, in this way:
 
 @haskell«
 prop_flush :: (Doc a, Eq a) => a -> a -> Bool
-prop_flush a b = flush (flush a <> b) == flush a <> flush b
+prop_flush a b =  flush a <> flush b == flush (flush a <> b)
 »
 »]
 
@@ -541,6 +543,12 @@ instance Doc (F L) where
   F xs <|> F ys = F (xs ++ ys)
   fail = []
 »
+
+Consequently, disjunction and failure form a monoid, and disjuction is
+commutative. Disjunction is idempotent.
+
+TODO: write this down.
+
 In particular, we simply lift the layout operators idiomatically over sets:
 @haskell«
 instance Layout (F L) where
@@ -549,8 +557,7 @@ instance Layout (F L) where
   xs <> ys = (<>) <$> xs <*> ys
 »
 
-Consequently, disjunction and failure form a monoid, and disjuction is
-commutative.
+Consequently, concatenation and @hask«flush» distribute over disjunction.
 
 We omit the unit of the monoid in the interface. Indeed, it
 corresponds to a document with cannot be laid out, which turns out to
@@ -573,6 +580,7 @@ valid :: L -> Bool
 valid xs = maximum (map length xs) <= 80
 »
 
+@section«A More Efficient Implementation»
 @subsection«Measures»
 
 At this point, a classic functional pearl would derive an
@@ -620,10 +628,12 @@ The other combinators are easy to implement:
                   height     = height a + 1,
                   lastWidth  = 0}
 »
+
 We can even give a rendering for these abstract layouts, by printing an @teletype«x» at each
-occupied position in the layout.
+busy position in the layout.
 @haskell«
-  render (M lw h mw) = render $ replicate h (replicate mw 'x') ++ [replicate lw 'x']
+  render (M lw h mw) = render $
+      replicate h (replicate mw 'x') ++ [replicate lw 'x']
 »
 
 The correctness of the above code relies on the intution of and a
@@ -921,13 +931,24 @@ asse a = a # SW + Point 0 lineHeight
 lw1 = 12
 lw2 = 18
 
+showDot sz color p =
+  using (outline color) $ do
+    c <- circleShape
+    c#Center .=. p
+    width c === sz
+
 dblarrow :: Box -> Point -> Point -> Diagram ()
-dblarrow lab a b = using (outline "black" . set endTip ToTip  . set startTip ToTip) $ do
+dblarrow lab a b = do
    let points = [a,b]
        normal = OVector (avg points) (rotate90 (b-a))
        p = polyline points
-   path p
-   autoLabel lab normal
+   using (outline "black" . set endTip ToTip  . set startTip ToTip) $ path p
+   tighten 10 $ autoLabel lab normal
+   -- showDot 1 "black" (avg points)
+   -- showDot 2 "green" (lab # Center)
+   -- showDot 3 "red" (avg points + rotate90 (b-a))
+   -- using (outline "blue") $ rectangleShape $ anchors lab
+   return ()
 
 hruler = gruler xpart ypart
 vruler = gruler ypart xpart
@@ -977,13 +998,12 @@ horizCat showRulers = center $ element $ do
   eq <- labelObj "="
   abSep <- draw $ twoLayouts
   ab <- uncurry abstractLayoutJoin $ abSep
-  -- spread hdist 10 
   (lhsObjsExtra,rhsObjsExtra) <- if showRulers
     then do
       (h1,_,lw1) <- rulersOfLayout «l1» «mw1» «lw1» a
-      (_,_,lw2) <- rulersOfLayout «l2» «mw2» «lw2» b
+      (_,_,_lw2) <- rulersOfLayout «l2» «mw2» «lw2» b
 
-      (hTot,mwTot,lwTot) <- rulersOfLayout «l1+l2» «max mw1 (lw1+mw2)» «lw1+lw2» ab
+      (_hTot,mwTot,lwTot) <- rulersOfLayout «l1+l2» «max mw1 (lw1+mw2)» «lw1+lw2» ab
       spread hdist 10 [h1,op,fst b]
       return ([lw1],[mwTot,lwTot])
     else do
