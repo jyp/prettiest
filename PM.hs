@@ -366,7 +366,7 @@ Aligning the argument of the expression below the equal sign is bad:
 it obscures the structure of the program; @pcp_layout is not
 respected. In sum, the lack of a combinator for relative indentation
 is a serious drawback. In fact, Daan Leijen's
-implemenation of Wadler's design (@sans«wl-print»), by @emph«does» feature
+implemenation of Wadler's design (@sans«wl-print»), @emph«does» feature
 an alignment combinator. However, the implemenation also uses a greedy algorithm, and thus
 suffers from the same issue as Hughes' library.
 
@@ -465,14 +465,14 @@ Horizontal concatenation is then:
 »
 
 One might argue that replacing @hask«($$)» by @hask«flush» does not
-make the API shorter, and maybe not even simpler. Yet, we will stick
+make the API shorter, and maybe does not even make it simpler. Yet, we will stick
 this choice, for two reasons:
 
 @enumList[«The new API clearly separates the concerns of concatenation and
            left-flushing documents.»
          ,«The horizontal composition (@hask«<>») has a nicer algebraic structure
-          than (@hask«$$»). The vertical composition (@hask«$$») has no unit, while (@hask«<>») forms
-          a monoid with the empty layout. (Due Hughes' complicated semantics,
+          than (@hask«$$»). The vertical composition (@hask«$$») has no unit, while (@hask«<>») has empty layout as unit.
+          (Due Hughes' complicated semantics,
           even his (@hask«<>») operator lacks a unit.)»]
 
 To sum up, our API for layouts is the following:
@@ -487,7 +487,7 @@ Additionally, as mentioned above, layouts follow a number of algebraic
 laws:
 
 @enumList[
-«Layouts form a monoid, with the @hask«empty» document@footnote«recall @hask«empty = text ""»:» and (@hask«<>») 
+«Layouts form a monoid, with operator (@hask«<>») and unit @hask«empty»@footnote«recall @hask«empty = text ""»»:
 
 @haskell«
 prop_leftUnit :: (Doc a, Eq a) => a -> Bool
@@ -547,9 +547,19 @@ instance Doc (F L) where
 Consequently, disjunction and failure form a monoid, and disjuction is
 commutative. Disjunction is idempotent.
 
-TODO: write this down.
+@haskell«
+prop_leftUnit' :: (Doc a, Eq a) => a -> Bool
+prop_leftUnit' a = fail <|> a == a
 
-In particular, we simply lift the layout operators idiomatically over sets:
+prop_rightUnit' :: (Doc a, Eq a) => a -> Bool
+prop_rightUnit' a = a <|> fail == a
+
+prop_assoc' :: (Doc a, Eq a) => a -> a -> a -> Bool
+prop_assoc' a b c = (a <|> b) <|> c == a <|> (b <|> c)
+»
+
+We simply lift the layout operators idiomatically @citep"mcbride_applicative_2007" over sets:
+
 @haskell«
 instance Layout (F L) where
   text = pure . text
@@ -557,11 +567,18 @@ instance Layout (F L) where
   xs <> ys = (<>) <$> xs <*> ys
 »
 
-Consequently, concatenation and @hask«flush» distribute over disjunction.
+Consequently, concatenation and @hask«flush» distribute over disjunction:
 
-We omit the unit of the monoid in the interface. Indeed, it
-corresponds to a document with cannot be laid out, which turns out to
-be useless as an API for pretty printing.
+@haskell«
+prop_distrl :: (Doc a, Eq a) => a -> Bool
+prop_distrl a = (a <|> b) <> c == (a <> c) <|> (b <> c)
+
+prop_distrr :: (Doc a, Eq a) => a -> Bool
+prop_distrr a = c <> (a <|> b) == (c <> a) <|> (c <> b)
+
+prop_distrflush :: (Doc a, Eq a) => a -> a -> Bool
+prop_assoc' a b = flush (a <|> b) == flush a <|> flush b
+»
 
 @subsection«Semantics»
 
@@ -570,10 +587,11 @@ pretty print a document, we pick a shortest layout among the valid
 ones:
 @haskell«
   render = render .  -- (for layouts)
-           minimumBy (compare `on` length) .
+           minimum .
            filter valid .
            fromF
 »
+TODO: attn. order used
 A layout is @hask«valid» if all its lines are fully visible on the page:
 @haskell«
 valid :: L -> Bool
@@ -586,7 +604,7 @@ valid xs = maximum (map length xs) <= 80
 At this point, a classic functional pearl would derive an
 implementation via a series of calculational steps. While this may
 very well be done, I will instead proceed to follow the actual thought
-processed that I used when designing the library. The hope is that the
+process that I used when designing the library. The hope is that the
 actual method is more applicable than a re-engineered story.
 
 Let us remember that we want to select the layout with minimal use of
@@ -595,8 +613,10 @@ space that a layout takes. Let us define an abstract semantics for
 documents which focuses on such space.
 
 All that matters is the maximum width of the layout, the width of its
-last line and its height (and because layouts can't be empty we will
-start counting from 0):
+last line and its height (and because layouts can't be empty we do not
+count the last line):
+@singleLayoutDiag
+In code:
 @haskell«
 data M = M {  height     :: Int,
               lastWidth  :: Int,
@@ -604,8 +624,10 @@ data M = M {  height     :: Int,
   deriving (Show,Eq,Ord)
 »
 
-This semantics can be guessed by looking at the diagram for
-composition of layouts. Here is the concatenation
+Astute readers may have guessed the above semantics by looking at the diagram for
+composition of layouts shown earlier. Indeed, it is the above semantics which justify
+the abstract representation of a layout that the diagram uses.
+Here is the concatenation
 diagram annotated with those lengths.
 
 @(horizCat True)
@@ -638,7 +660,7 @@ busy position in the layout.
 
 The correctness of the above code relies on the intution of and a
 proper reading of the concatenation diagram. This process being
-informal, we may want to cross-check the final result formally.
+informal, so we should to cross-check the final result formally.
 To do so, we define a function which computes the measure of a full layout:
 @haskell«
 measure :: L -> M
@@ -649,7 +671,7 @@ measure xs = M {  maxWidth   = maximum $ map length $ xs,
 
 Then, to check the correctness of the @hask«Layout M» instance, we
 must check that @hask«measure» is a layout homomorphism (ignoring of
-course render). This property can be spelled out as the following
+course the @hask«render»er). The homomorphism property can be spelled out as the following
 three laws:
 
 @spec«
@@ -658,11 +680,11 @@ measure (flush a) == flush (measure a)
 measure (text s) == text s
 »
 
-Checking the laws is left as a tedious exercise to the reader.
+Checking the laws is as simple, if somewhat a tedious, exercise to the reader.
 
 Having properly refined the problem (ignoring such details as the
 actual text being rendered), we may proceed to give a fast
-implementation of
+implementation of the pretty printer.
 
 @haskell«
 fits :: M -> Bool
@@ -689,13 +711,18 @@ width (flush a) ≥ with a
 In turn, so is validity:
 
 @spec«
-valid (a <> b)  ==> valid a  and  valid b
-valid (flush a) ==> valid a
+valid (a <> b)   => valid a  ∧  valid b
+valid (flush a)  => valid a
 »
 
 Consequently, keeping invalid layouts is useless: they can never be
-combined with another layout to produce something valid.
+combined with another layout to produce something valid:
 
+@spec«
+not (valid a)    => not (valid (a <> b))
+not (valid b)    => not (valid (a <> b))
+not (valid a)    => not (valid (flush a))
+»
 
 @subsection«Pruning out dominated results»
 
@@ -703,41 +730,43 @@ The second optimisation relies on the insight that certain results
 dominate others, and that dominated results may be discarded early, in
 a fashion similar to what we have done above.
 
-The domination relation is a partial order. We write @hask«a ≺ b» if
+The domination relation is a partial order (a reflexive, transitive and antisymmetric relation). We write @hask«a ≺ b» if
 @hask«a» dominates @hask«b».
 @haskell«
 class Poset a where
   (≺) :: a -> a -> Bool
 »
-We will arrange our domination relation such that
-@enumList[«It is preserved by the layout operators.
+We set up the domination relation such that
+@enumList[«It is preserved by the layout operators:
 @spec«if    d1 ≺  d2 and  d'1 ≺  d'2
 then  (d1 <> d2) ≺  (d'1 <> d'2) and
       flush d1 ≺ flush d2
 »
 »
 ,
-«It implies the ordering of length: @hask«a ≺ b  ==>  width a ≤ width b»
+«It implies the ordering layouts: @hask«a ≺ b  =>  a ≤ b».
 »
 ]
 
 Together, these properties mean that we can always discard dominated
-layouts.  The domination relation that we use is simply the
-intersection of ordering in all dimensions. That is, if layout
-@hask«a» is shorter, narrower, and has a narrower last line than
-layout @hask«b» , then @hask«a» dominates @hask«b». In code:
+layouts from a set, as we can discard invalid ones. for any @hask«f» of type @hask«Layout l => l -> l»
+@spec«
+a ≺  a'  => f a ≺  f a'  =>  f a <= f a'
+»
+The domination relation that we use is simply the
+intersection of ordering in all dimensions.
 @haskell«
 instance Poset M where
   M c1 l1 s1 ≺ M c2 l2 s2 = c1 <= c2 && l1 <= l2 && s1 <= s2
 »
 
+That is, if layout
+@hask«a» is shorter, narrower, and has a narrower last line than
+layout @hask«b», then @hask«a» dominates @hask«b».
+
 Filtering out the dominated elements is an operation known as the
-computation of the pareto frontier, which can be implemented as
-follows. We examine elements sequentially, and keep a pareto frontier
-of the elements seen so far. For each examined element @hask«x», if it
-is dominated, then we merely skip it.  Otherwise, @hask«x» is added to
-the current frontier, and we must then remove all elements dominated
-by @hask«x».
+computation of the Pareto frontier, which can be implemented as
+follows.
 
 @haskell«
 pareto :: Poset a => [a]  -> [a]
@@ -745,9 +774,17 @@ pareto = loop []
   where  loop acc  []      = acc
          loop acc  (x:xs)  =
             if any (≺ x) acc
-               then  loop  acc xs
-               else  loop  (x:filter (not . (x ≺)) acc) xs
+               then  loop acc xs
+               else  loop (x:filter (not . (x ≺)) acc) xs
 »
+
+The above function examines elements sequentially, and keeps a pareto frontier
+of the elements seen so far in the @hask«acc» parameter. For each examined element @hask«x», if it
+is dominated, then we merely skip it.  Otherwise, @hask«x» is added to
+the current frontier, and remove all elements dominated
+by @hask«x» are then removed.
+
+The implementation is then as follows:
 
 @haskell«
 type DM = [M]
@@ -755,7 +792,7 @@ type DM = [M]
 instance Layout DM where
   xs <> ys = pareto $ concat [ filter fits [x <> y | y <- ys] | x <- xs]
   flush xs = pareto $ (map flush xs)
-  text s = filter fist [text s]
+  text s = filter fits [text s]
 
 instance Doc DM where
   xs <|> ys = pareto (xs ++ ys)
@@ -763,10 +800,10 @@ instance Doc DM where
 
 Unfortunately, computing the pareto frontier as above is slow when
 most elements are in the pareto frontier. Indeed, adding an element
-requires all elements in the frontier so far, and thus @hask«pareto»
+requires to re-traverse all elements in the frontier so far, and thus @hask«pareto»
 has quadratic complexity.
 
-There is a better way: keep the lists sorted in lexicographical
+There is a better way: keeping the lists sorted in lexicographical
 order. Then the pareto fronter has a more efficient implementation.
 
 Because the input is lexicographically sorted, everything which is in
@@ -777,14 +814,15 @@ element @hask«m1» must be lexicographically bigger than any element
 @spec«M x0 y0 z0 <= M x1 y1 z1»
 which means, by definition:
 @spec«
-x0 < x1 or
-x0 = x1 and y0 < y0
-x0 = x1 and y0 = y0 and z0 < z1
+x0 < x1                          or
+x0 = x1 and y0 < y1              or
+x0 = x1 and y0 = y1 and z0 < z1
 »
 
-which is incompatible with @hask«m0 ≺ m1».
+which is incompatible with @hask«m1 ≺ m0».
+In sum, so no element already in the frontier can be dominated by @hask«m1».
 
-Consequently, on a sorted list, the pareto frontier can be implemeted as:
+Consequently, on a sorted list, we can skip the re-filtering of the @hask«acc»umulated frontier, as follows:
 @haskell«
 pareto' :: Poset a => [a] -> [a]
 pareto' = loop [] where
@@ -794,13 +832,8 @@ pareto' = loop [] where
                           else x:  loop' (x:acc)  xs
 »
 
-@haskell«
-
-type D1 = [M]
-
-instance Doc D1 where
-  xs <|> ys = pareto $ merge xs ys
-»
+In order to make use of the optimised Pareto frontier algorithm, we must then ensure that the operators preserve the lexicographically
+sorted property. We need in particular the ability to merge sorted lists:
 
 @haskell«
 merge :: Ord a => [a] -> [a] -> [a]
@@ -816,15 +849,59 @@ mergeAll :: Ord a => [[a]] -> [a]
 mergeAll = foldr merge []
 »
 
-> instance Layout D0 where
->   xs <> ys = pareto $ mergeAll [ filter (fits . fst) [x <> y | y <- ys] | x <- xs]
->   flush xs = pareto $ map sort $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
->   -- flush xs = pareto' [] $ sort $ (map flush xs)
->   text s = [text s | valid (text s)]
->   render (x:_) = render x
 
-We must then ensure that the operators preserve the lexicographically
-sorted property.
+@haskell«
+type D1 = [M]
+
+instance Doc D1 where
+  xs <|> ys = pareto $ merge xs ys
+»
+
+Generated sub-lists in a sorted manner is possible in the concatenation operator. The trick is to have our lexicographical
+order mention the last with.
+
+M h2 lw2 mw2 <= M h2' lw2' mw2'
+
+M (h1+h2) (lw1+lw2) (max mw1 (mw2 + lw1)) <= M (h1+h2') (lw1+lw2') (max mw1 (mw2' + lw1))
+
+
+
+h1+h2 <  h1+h2'         or
+h1+h2 == h1+h2' and  lw1+lw2 <  lw1+lw2'     or
+h1+h2 == h1+h2' and  lw1+lw2 == lw1+lw2'  and max mw1 (lw1+mw2) <=  max mw1 (lw1+mw2')
+
+Case on mw2.
+
+1. lw1 + mw2 <= mw1
+
+The condition simplifies to:
+
+mw1 <=  max mw1 (lw1+mw2') 
+
+ok by def of max.
+
+2. lw1 + mw2 > mw1
+
+Condition simplifies to:
+
+lw1+mw2 <=  max mw1 (lw1+mw2')
+
+it suffices to show
+
+lw1+mw2 <=  lw1+mw2'
+
+or
+
+mw2 <= mw2'
+
+@haskell«
+instance Layout D1 where
+  xs <> ys = pareto $ mergeAll [ filter (fits . fst) [x <> y | y <- ys] | x <- xs]
+  flush xs = pareto $ map sort $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
+  -- flush xs = pareto' [] $ sort $ (map flush xs)
+  text s = [text s | valid (text s)]
+  render (x:_) = render x
+»
 
 @spec«
 if    d1 <=  d2 and  d'1 <=  d'2
@@ -974,6 +1051,15 @@ rulersOfLayout l mw lw (a,mid) = do
   lwRule <- hruler mid (a # W) (hask lw)
   a `topOf` lwRule
   return (heightRule,mwRule,lwRule)
+
+
+singleLayoutDiag :: Tex ()
+singleLayoutDiag = center $ element $ do
+  a@(bx,_) <- draw $ abstrLayout 40
+  width bx === 56
+  height bx === 7 *- lineHeight
+  rulersOfLayout «height» «maxWidth» «lastWidth» a
+  return ()
 
 twoLayouts :: Diagram ((Object,Point),(Object,Point))
 twoLayouts = do
