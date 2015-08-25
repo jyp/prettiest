@@ -3,7 +3,7 @@
 import MarXup
 import MarXup.Latex
 import MarXup.Latex.Bib
-import MarXup.Latex.Math (deflike, thmlike, definition, mathpreamble)
+import MarXup.Latex.Math (deflike, thmlike, definition, mathpreamble,lemma)
 import MarXup.Tex
 import MarXup.Diagram
 import MarXup.LineUp.Haskell
@@ -18,19 +18,17 @@ main = renderTex SIGPlan "Prettiest" (preamble (header >> mainText >> bibliograp
 preamble body = do
   documentClass "../PaperTools/latex/sigplanconf" ["preprint"]
   stdPreamble
-  usepackage "tikz" []
-  usepackage "polytable" []
-  usepackage "url" []
   mathpreamble
   cmd "input" $ tex "../PaperTools/latex/unicodedefs"
-  newtheorem "principle" "Principle"
 
   title "An Insanely Pretty Printer"
   authorinfo [AuthorInfo "Jean-Philippe Bernardy" "bernardy@chalmers.se" "CTH"]
   env "document" body
 
-principle :: TeX -> TeX -> Tex SortedLabel
-principle titl = deflike "Principle" "principle" "Principle" titl
+principle :: TeX -> TeX -> Tex TeX
+principle titl body = do
+  deflike "Principle" "principle" "Principle" (smallcaps titl) body
+  return $ smallcaps titl
 
 
 header :: Tex ()
@@ -89,7 +87,7 @@ In addition to their esthetical and pedagogical value, Hughes and Wadler
 provide practical implementations which form the basis of pretty
 printing packages, which remain popular today. Hughes' design has been
 refined by Peyton Jones, and is available as the
-Hackage package@footnote«@url«https://hackage.haskell.org/package/pretty»»,
+Hackage package@sans«pretty»@footnote«@url«https://hackage.haskell.org/package/pretty»»,
 while Wadler's design has been extended by Leijen and made available as the 
 @sans«wl-print» package@footnote«@url«https://hackage.haskell.org/package/wl-pprint»».
 
@@ -123,18 +121,11 @@ abcd :: SExpr
 abcd = SExpr [Atom "a",Atom "b",Atom "c",Atom "d"]
 »
 
-Let us recall that the goal of the pretty printer is to render a given S-Expr according to the
-three principles of pretty printing:
-
-@itemList[
-          «The output shall fit the width of a page (@pcp_visibility).»
-         ,«The output shall use as few lines as possible (@pcp_compact).»
-         ,«The layout of the input should reflect the structure of the input (@pcp_layout).»
-         ]
-
+The goal of the pretty printer is to render a given S-Expr according to the
+three principles of pretty printing: @pcp_visibility, @pcp_compact and @pcp_layout.
 While it is clear how the first two principles constrain the result, it
 is less clear how the third principle plays out: we must specify more precisely which
-layouts are pretty. To this end, we will say that in a pretty
+layouts are admissible. To this end, we will say that in a pretty
 display of an S-Expr, we would like the elements to be either
 concatenated horizontally, or aligned vertically. The possible pretty
 layouts of our @hask«abcd» example would be either
@@ -153,13 +144,13 @@ or
 »
 
 In general, a pretty printing library must provide the means to express
-the specification of possible pretty layouts: it is up to the user to
-reify (@pcp_layout) on the data structure of interest. The printer
-will then automatically pick the smallest (@pcp_compact) which fits
+the specification of admissible layouts: it is up to the user to
+reify @pcp_layout on the data structure of interest. The printer
+will then automatically pick the smallest (@pcp_compact) layout which fits
 the page (@pcp_visibility).
 
-Our library will provide an API
-to decribe layout which is similar to Hughes's: we can express both
+Our library provides an API
+to decribe layouts which is similar to Hughes's: we can express both
 vertical (@hask«$$») and horizontal (@hask«<>») composition of
 documents, as well as embedding raw @hask«text» and provide
 automatic choice between layouts (@hask«<|>»). At this stage, we keep
@@ -586,10 +577,10 @@ We can finally define formally what it means to render a document.  To
 pretty print a document, we pick a shortest layout among the valid
 ones:
 @haskell«
-  render = render .  -- (for layouts)
-           minimum .
-           filter valid .
-           fromF
+  render =   render .  -- (for layouts)
+             minimum .
+             filter valid .
+             fromF
 »
 TODO: attn. order used
 A layout is @hask«valid» if all its lines are fully visible on the page:
@@ -790,7 +781,8 @@ The implementation is then as follows:
 type DM = [M]
 
 instance Layout DM where
-  xs <> ys = pareto $ concat [ filter fits [x <> y | y <- ys] | x <- xs]
+  xs <> ys =  pareto $ concat
+              [ filter fits [x <> y | y <- ys] | x <- xs]
   flush xs = pareto $ (map flush xs)
   text s = filter fits [text s]
 
@@ -820,7 +812,7 @@ x0 = x1 and y0 = y1 and z0 < z1
 »
 
 which is incompatible with @hask«m1 ≺ m0».
-In sum, so no element already in the frontier can be dominated by @hask«m1».
+In sum, so no element @hask«m0» already in the frontier can be dominated by @hask«m1».
 
 Consequently, on a sorted list, we can skip the re-filtering of the @hask«acc»umulated frontier, as follows:
 @haskell«
@@ -850,71 +842,83 @@ mergeAll = foldr merge []
 »
 
 
+The @hask«Doc» instance can then be written simply:
+
 @haskell«
 type D1 = [M]
 
 instance Doc D1 where
   xs <|> ys = pareto $ merge xs ys
+
+instance Layout D1 where
 »
 
-Generated sub-lists in a sorted manner is possible in the concatenation operator. The trick is to have our lexicographical
-order mention the last with.
-
-M h2 lw2 mw2 <= M h2' lw2' mw2'
-
-M (h1+h2) (lw1+lw2) (max mw1 (mw2 + lw1)) <= M (h1+h2') (lw1+lw2') (max mw1 (mw2' + lw1))
-
-
-
-h1+h2 <  h1+h2'         or
-h1+h2 == h1+h2' and  lw1+lw2 <  lw1+lw2'     or
-h1+h2 == h1+h2' and  lw1+lw2 == lw1+lw2'  and max mw1 (lw1+mw2) <=  max mw1 (lw1+mw2')
-
-Case on mw2.
-
-1. lw1 + mw2 <= mw1
-
-The condition simplifies to:
-
-mw1 <=  max mw1 (lw1+mw2') 
-
-ok by def of max.
-
-2. lw1 + mw2 > mw1
-
-Condition simplifies to:
-
-lw1+mw2 <=  max mw1 (lw1+mw2')
-
-it suffices to show
-
-lw1+mw2 <=  lw1+mw2'
-
-or
-
-mw2 <= mw2'
+In the implementation of the @hask«Layout» instance, we must
+take care to keep lists sorted, in particular in the concatenation operation.
+Let us propose the following implementation:
 
 @haskell«
-instance Layout D1 where
-  xs <> ys = pareto $ mergeAll [ filter (fits . fst) [x <> y | y <- ys] | x <- xs]
-  flush xs = pareto $ map sort $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
-  -- flush xs = pareto' [] $ sort $ (map flush xs)
-  text s = [text s | valid (text s)]
-  render (x:_) = render x
+  xs <> ys = pareto' $ mergeAll [ filter fits [x <> y | y <- ys] | x <- xs]
 »
 
+For each of the inner list comprehensions to generate sorted output, we need the following lemma.
+
+@lemma«»«
 @spec«
-if    d1 <=  d2 and  d'1 <=  d'2
-then  (d1 <> d2) <=  (d'1 <> d'2)
+if    d1 <=  d2   then  (d <> d1) <=  (d <> d2)
+»»«
+
+The proof works precisely because we have chosen a suitable order for the fields in @hask«M».
+
+That is, if we have
+
+@hask«M h2 lw2 mw2 <= M h2' lw2' mw2'»
+
+then we must have:
+
+@hask«M (h1+h2) (lw1+lw2) (max mw1 (mw2 + lw1)) <= M (h1+h2') (lw1+lw2') (max mw1 (mw2' + lw1))»
+
+This last condition is satisfied iff.:
+
+@spec«
+h1+h2 <  h1+h2'                               or
+h1+h2 == h1+h2'  and  lw1+lw2 <  lw1+lw2'     or
+h1+h2 == h1+h2'  and  lw1+lw2 == lw1+lw2'
+                 and max mw1 (lw1+mw2) <=  max mw1 (lw1+mw2')»
+
+All but the last sub-condition follows the struture of the hypothesis, and thus is satisfied.
+To deal with the that last bit (@hask«max mw1 (lw1+mw2) <=  max mw1 (lw1+mw2')»), we do a case analysis.
+
+
+@enumList[«@hask«lw1 + mw2 <= mw1»:
+          The condition simplifies to:
+          @hask«mw1 <=  max mw1 (lw1+mw2')»
+          which holds by definition of @hask«max».»
+          ,
+          «@hask«lw1 + mw2 > mw1»:,
+          The condition simplifies to:
+          @hask«lw1+mw2 <=  max mw1 (lw1+mw2')»
+          it suffices then to show
+          @hask«lw1+mw2 <=  lw1+mw2'»
+          or just
+          @hask«mw2 <= mw2'»
+          which is given by hypothesis when @hask«h2 == h2'» and  @hask«lw2 == lw2'».»
+          ]
 »
+
 
 Flush does not, so we have to re-sort the list.
 
 
-
-
 @haskell«
 bests = pareto' [] . mergeAll
+»
+
+@haskell«
+  -- flush xs = pareto' $ mergeAll $ map sort $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
+  -- flush xs = pareto' $ sort $ (map flush xs)
+  text s = [text s | valid (text s)]
+  render (x:_) = render x
 »
 
 
@@ -952,15 +956,11 @@ nest :: Layout d => Int -> d -> d
 nest n y = spaces n <> y
 »
 
-@subsection«Wadler-Style Nesting»
-
-Already discussed.
-
 @subsection«Ribbon length»
 
 Note that we pick the narrowest result fitting on min. lines lines!
 
-5. Using something better than strings for text
+@subsection«Using something better than strings for text»
 
 @subsection«Laws vs compositional semantics»
 
@@ -1118,7 +1118,9 @@ hask = ensureMath . haskellInline
 
 
 url :: TeX -> TeX
-url = cmd "url"
+url x = do
+  usepkg "url" 100 []
+  cmd "url" x
 
 displayLeft :: Tex a -> Tex a
 displayLeft body = env'' "list" [] [mempty,tex "\\setlength\\leftmargin{1em}"] $ do
