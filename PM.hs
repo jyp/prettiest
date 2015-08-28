@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -XTypeSynonymInstances -XOverloadedStrings -XRecursiveDo -pgmF marxup3 -F #-}
+{-# OPTIONS_GHC -XTypeSynonymInstances -XOverloadedStrings -XRecursiveDo -pgmF marxup-lit -F #-}
 
 import MarXup
 import MarXup.Latex
@@ -11,6 +11,20 @@ import MarXup.Verbatim
 import MarXup.Latex.Math (ensureMath)
 import Control.Monad (forM_,when)
 import Control.Lens (set)
+
+haskellPreamble :: Tex ()
+haskellPreamble = «
+@haskell«
+{-# LANGUAGE FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, InstanceSigs #-}
+import Data.Function
+import Data.List (intercalate, minimumBy, sort, groupBy)
+import System.Clock
+import Prelude hiding (fail)
+
+a $$ b = flush a <> b
+
+main = print "Nope."
+»»
 
 main :: IO ()
 main = renderTex SIGPlan "Prettiest" (preamble (header >> mainText >> bibliographyAll))
@@ -43,13 +57,6 @@ bibliographyAll = do
   bibliographystyle "abbrvnat"
   bibliography  "../PaperTools/bibtex/jp"
 
-haskellPreamble :: Tex ()
-haskellPreamble = «
-@haskell«
-  import Data.Function
-  import Data.List (intercalate, minimumBy, sort, groupBy)
-  import System.Clock
-»»
 
 mainText :: Tex ()
 mainText = «
@@ -108,9 +115,7 @@ simple yet typical pretty printing task.  Let us assume we want to
 pretty print S-Expressions, and that they are represented as follows:
 
 @haskell«
-data SExpr where
-   SExpr :: [SExpr] -> SExpr
-   Atom  :: String  -> SExpr
+data SExpr = SExpr [SExpr] | Atom String
   deriving Show
 »
 Using the above representation, the S-Expr @teletype«(a b c d)» has the
@@ -158,7 +163,7 @@ the representation of documents abstract, by using a typeclass which
 provides the above combinators, as well as means of @hask«render»ing a
 document:
 
-@haskell«
+@spec«
 text    :: Doc d => String -> d
 (<>)    :: Doc d => d -> d -> d
 ($$)    :: Doc d => d -> d -> d
@@ -402,7 +407,7 @@ invariant in your head --- don't worry, I will help).
 type L = [String] -- non empty.
 »
 
-@hiddenHaskell«
+@haskell_hidden«
 instance Layout L where
 »
 Preparing a layout for printing is as easy as inserting a newline character between each string:
@@ -417,7 +422,7 @@ Embedding a string is thus immediate:
 »
 The interpretation of vertical concatenation ($$) requires barely more
 thought:
-@haskell«
+@spec«
   ($$) :: L -> L -> L
   xs $$ ys = xs ++ ys
 »
@@ -437,7 +442,7 @@ first line of the second layout specially, as follows:
      where  xs0 = init xs
             x = last xs
             n = length x
-            indent = replicate n blankChar
+            indent = replicate n ' '
 »
 
 Given the above definition, we can then refine our API a bit.
@@ -532,7 +537,7 @@ The interpretation is as one expects:
 @haskell«
 instance Doc (F L) where
   F xs <|> F ys = F (xs ++ ys)
-  fail = []
+  fail = F []
 »
 
 Consequently, disjunction and failure form a monoid, and disjuction is
@@ -560,7 +565,7 @@ instance Layout (F L) where
 
 Consequently, concatenation and @hask«flush» distribute over disjunction:
 
-@haskell«
+@spec«
 prop_distrl :: (Doc a, Eq a) => a -> Bool
 prop_distrl a = (a <|> b) <> c == (a <> c) <|> (b <> c)
 
@@ -718,7 +723,11 @@ not (valid a)    => not (valid (flush a))
 @subsection«Pruning out dominated results»
 
 The second optimisation relies on the insight that certain results
-dominate others, and that dominated results may be discarded early, in
+dominate others:
+if layout
+@hask«a» is shorter, narrower, and has a narrower last line than
+layout @hask«b», then @hask«a» dominates @hask«b».
+Dominated results may be discarded early, in
 a fashion similar to what we have done above.
 
 The domination relation is a partial order (a reflexive, transitive and antisymmetric relation). We write @hask«a ≺ b» if
@@ -727,15 +736,23 @@ The domination relation is a partial order (a reflexive, transitive and antisymm
 class Poset a where
   (≺) :: a -> a -> Bool
 »
-We set up the domination relation such that
-@enumList[«It is preserved by the layout operators:
+
+The order that we use is the
+intersection of ordering in all dimensions:
+@haskell«
+instance Poset M where
+  M c1 l1 s1 ≺ M c2 l2 s2 = c1 <= c2 && l1 <= l2 && s1 <= s2
+»
+
+Furthermore:
+@enumList[«Domination is preserved by the layout operators:
 @spec«if    d1 ≺  d2 and  d'1 ≺  d'2
 then  (d1 <> d2) ≺  (d'1 <> d'2) and
       flush d1 ≺ flush d2
 »
 »
 ,
-«It implies the ordering layouts: @hask«a ≺ b  =>  a ≤ b».
+«Domination implies lexical ordering: @hask«a ≺ b  =>  a ≤ b».
 »
 ]
 
@@ -744,17 +761,8 @@ layouts from a set, as we can discard invalid ones. for any @hask«f» of type @
 @spec«
 a ≺  a'  => f a ≺  f a'  =>  f a <= f a'
 »
-The domination relation that we use is simply the
-intersection of ordering in all dimensions.
-@haskell«
-instance Poset M where
-  M c1 l1 s1 ≺ M c2 l2 s2 = c1 <= c2 && l1 <= l2 && s1 <= s2
-»
 
-That is, if layout
-@hask«a» is shorter, narrower, and has a narrower last line than
-layout @hask«b», then @hask«a» dominates @hask«b».
-
+@subsection«Pareto frontier»
 Filtering out the dominated elements is an operation known as the
 computation of the Pareto frontier, which can be implemented as
 follows.
@@ -777,7 +785,7 @@ by @hask«x» are then removed.
 
 The implementation is then as follows:
 
-@haskell«
+@spec«
 type DM = [M]
 
 instance Layout DM where
@@ -790,12 +798,12 @@ instance Doc DM where
   xs <|> ys = pareto (xs ++ ys)
 »
 
-Unfortunately, computing the pareto frontier as above is slow when
-most elements are in the pareto frontier. Indeed, adding an element
-requires to re-traverse all elements in the frontier so far, and thus @hask«pareto»
+Unfortunately, computing the Pareto frontier as above is slow when
+most elements are in the pareto frontier. Indeed, when adding an element
+all the elements in the frontier so far a re-examined, and thus @hask«pareto»
 has quadratic complexity.
 
-There is a better way: keeping the lists sorted in lexicographical
+There is a better way, which involves keeping the lists sorted in lexicographical
 order. Then the pareto fronter has a more efficient implementation.
 
 Because the input is lexicographically sorted, everything which is in
@@ -815,13 +823,14 @@ which is incompatible with @hask«m1 ≺ m0».
 In sum, so no element @hask«m0» already in the frontier can be dominated by @hask«m1».
 
 Consequently, on a sorted list, we can skip the re-filtering of the @hask«acc»umulated frontier, as follows:
+
 @haskell«
 pareto' :: Poset a => [a] -> [a]
 pareto' = loop [] where
   loop acc  []      = []
   loop acc  (x:xs)  = if any (≺ x) acc
-                          then     loop' acc      xs
-                          else x:  loop' (x:acc)  xs
+                          then     loop acc      xs
+                          else x:  loop (x:acc)  xs
 »
 
 In order to make use of the optimised Pareto frontier algorithm, we must then ensure that the operators preserve the lexicographically
@@ -911,10 +920,6 @@ Flush does not, so we have to re-sort the list.
 
 
 @haskell«
-bests = pareto' [] . mergeAll
-»
-
-@haskell«
   -- flush xs = pareto' $ mergeAll $ map sort $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
   -- flush xs = pareto' $ sort $ (map flush xs)
   text s = [text s | valid (text s)]
@@ -922,10 +927,18 @@ bests = pareto' [] . mergeAll
 »
 
 
+
 @subsection«Re-pairing with text»
 
 @haskell«
+bests = pareto' . mergeAll
+»
+
+@haskell«
 type D0 = [(M,L)]
+
+instance Poset (M,L) where
+instance Layout (M,L) where
 
 instance Layout D0 where
   xs <> ys = bests [ filter (fits . fst) [x <> y | y <- ys] | x <- xs]
@@ -954,6 +967,8 @@ His nesting is optional, but in the context of hang, it does not need to be.
 @haskell«
 nest :: Layout d => Int -> d -> d
 nest n y = spaces n <> y
+
+spaces n = text (replicate n ' ')
 »
 
 @subsection«Ribbon length»
@@ -1106,7 +1121,9 @@ horizCat showRulers = center $ element $ do
 
 
 spec = haskell
-hiddenHaskell = haskell
+
+haskell_hidden :: Verbatim a -> TeX
+haskell_hidden x = mempty
 
 verbatim :: Verbatim () -> TeX
 verbatim (Verbatim s _) =
