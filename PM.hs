@@ -23,7 +23,18 @@ import Prelude hiding (fail)
 
 a $$ b = flush a <> b
 
-main = print "Nope."
+
+main = do
+   -- putStrLn $ render $ mms
+   t0 <- getTime ProcessCPUTime
+   print $ mm
+   t1 <- getTime ProcessCPUTime
+   print $ timeSpecAsNanoSecs $ diffTimeSpec t0 t1
+   where mm :: M
+         (mm:_) = pretty $ testExpr 15
+
+testExpr 0 = Atom "a"
+testExpr n = SExpr [testExpr (n-1),testExpr (n-1)]
 »»
 
 main :: IO ()
@@ -654,7 +665,7 @@ busy position in the layout.
       replicate h (replicate mw 'x') ++ [replicate lw 'x']
 »
 
-The correctness of the above code relies on the intution of and a
+The correctness of the above code relies on intution, and a
 proper reading of the concatenation diagram. This process being
 informal, so we should to cross-check the final result formally.
 To do so, we define a function which computes the measure of a full layout:
@@ -684,7 +695,7 @@ implementation of the pretty printer.
 
 @haskell«
 fits :: M -> Bool
-fits x = maxWidth x <= 80
+fits x = maxWidth x <= 40
 »
 
 
@@ -785,7 +796,7 @@ by @hask«x» are then removed.
 
 The implementation is then as follows:
 
-@spec«
+@haskell«
 type DM = [M]
 
 instance Layout DM where
@@ -795,6 +806,7 @@ instance Layout DM where
   text s = filter fits [text s]
 
 instance Doc DM where
+  fail = []
   xs <|> ys = pareto (xs ++ ys)
 »
 
@@ -854,12 +866,14 @@ mergeAll = foldr merge []
 The @hask«Doc» instance can then be written simply:
 
 @haskell«
-type D1 = [M]
+newtype D1 = D1 [M]
 
 instance Doc D1 where
-  xs <|> ys = pareto $ merge xs ys
+  D1 xs <|> D1 ys = D1 $ pareto $ merge xs ys
+  fail = D1 []
 
 instance Layout D1 where
+  flush (D1 xs) = D1 $ map flush xs
 »
 
 In the implementation of the @hask«Layout» instance, we must
@@ -867,7 +881,7 @@ take care to keep lists sorted, in particular in the concatenation operation.
 Let us propose the following implementation:
 
 @haskell«
-  xs <> ys = pareto' $ mergeAll [ filter fits [x <> y | y <- ys] | x <- xs]
+  D1 xs <> D1 ys = D1 $ pareto' $ mergeAll [ filter fits [x <> y | y <- ys] | x <- xs]
 »
 
 For each of the inner list comprehensions to generate sorted output, we need the following lemma.
@@ -922,8 +936,8 @@ Flush does not, so we have to re-sort the list.
 @haskell«
   -- flush xs = pareto' $ mergeAll $ map sort $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
   -- flush xs = pareto' $ sort $ (map flush xs)
-  text s = [text s | valid (text s)]
-  render (x:_) = render x
+  text s = D1 [text s | valid (text s)]
+  render (D1 (x:_)) = render x
 »
 
 
@@ -995,6 +1009,8 @@ finding a bug in the final implementation: the concatenation operator
 did not preserve the invariant that lists were sorted. »
 
 »
+
+
 
 lineHeight = 6
 
