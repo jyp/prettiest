@@ -23,15 +23,22 @@ import Prelude hiding (fail)
 
 a $$ b = flush a <> b
 
-
-main = do
-   -- putStrLn $ render $ mms
+time x = do
    t0 <- getTime ProcessCPUTime
-   print $ mm
+   putStrLn $ x
    t1 <- getTime ProcessCPUTime
    print $ timeSpecAsNanoSecs $ diffTimeSpec t0 t1
+  
+main = do
+   time $ show mm
+   time $ show mm'
+   -- time $ l
    where mm :: M
-         (mm:_) = pretty $ testExpr 15
+         mm = minimum $ (pretty input :: DM)
+         D1 (mm':_) = pretty input
+         l :: String
+         l = render $ (pretty input :: F L)
+         input = testExpr 16
 
 testExpr 0 = Atom "a"
 testExpr n = SExpr [testExpr (n-1),testExpr (n-1)]
@@ -594,7 +601,7 @@ pretty print a document, we pick a shortest layout among the valid
 ones:
 @haskell«
   render =   render .  -- (for layouts)
-             minimum .
+             minimumBy (compare `on` length).
              filter valid .
              fromF
 »
@@ -602,7 +609,7 @@ TODO: attn. order used
 A layout is @hask«valid» if all its lines are fully visible on the page:
 @haskell«
 valid :: L -> Bool
-valid xs = maximum (map length xs) <= 80
+valid xs = maximum (map length xs) <= 40
 »
 
 @section«A More Efficient Implementation»
@@ -687,17 +694,17 @@ measure (flush a) == flush (measure a)
 measure (text s) == text s
 »
 
-Checking the laws is as simple, if somewhat a tedious, exercise to the reader.
+Checking the laws is left as a simple, if somewhat a tedious, exercise to the reader.
 
-Having properly refined the problem (ignoring such details as the
-actual text being rendered), we may proceed to give a fast
-implementation of the pretty printer.
 
 @haskell«
 fits :: M -> Bool
 fits x = maxWidth x <= 40
 »
 
+Having properly refined the problem (ignoring such details as the
+actual text being rendered), we may proceed to give a fast
+implementation of the pretty printer.
 
 @subsection«Early filtering out invalid results»
 
@@ -752,7 +759,9 @@ The order that we use is the
 intersection of ordering in all dimensions:
 @haskell«
 instance Poset M where
-  M c1 l1 s1 ≺ M c2 l2 s2 = c1 <= c2 && l1 <= l2 && s1 <= s2
+  m1 ≺ m2 =   height     m1 <= height     m2 &&
+              maxWidth   m1 <= maxWidth   m2 &&
+              lastWidth  m1 <= lastWidth  m2
 »
 
 Furthermore:
@@ -804,6 +813,7 @@ instance Layout DM where
               [ filter fits [x <> y | y <- ys] | x <- xs]
   flush xs = pareto $ (map flush xs)
   text s = filter fits [text s]
+  render = render . minimum
 
 instance Doc DM where
   fail = []
