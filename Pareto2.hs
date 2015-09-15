@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs, MultiParamTypeClasses, RankNTypes, TypeFamilies, DataKinds, ConstraintKinds, PolyKinds, TypeOperators, MagicHash, FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE GADTs, MultiParamTypeClasses, RankNTypes, TypeFamilies, DataKinds, ConstraintKinds, PolyKinds, TypeOperators, MagicHash, FlexibleInstances, FlexibleContexts, UndecidableInstances #-}
 
 module Pareto2 where
 
@@ -12,6 +12,10 @@ class Ord (Coord p) => Point p where
 data KdTree p where
   Empty :: KdTree p
   Node :: !Int -> KdTree p -> Either p (Coord p) -> KdTree p -> KdTree p
+
+instance (Show p, Show (Coord p)) => Show (KdTree p) where
+  show Empty = "()"
+  show (Node d l x r) = "(Node " ++ show  d ++ " " ++ show l ++ " " ++ show x ++ " " ++ show r ++ ")"
 
 -- equal things go to the left; so on the right nothing dominates p
 
@@ -31,7 +35,7 @@ instance Ord a => Point (a,a,a) where
 
 instance Ord a => Poset (a,a,a) where
   (x,y,z) ≺ (x',y',z') = x <= x' && y <= y' && z <= z'
-  
+
 class Poset a where
   (≺) :: a -> a -> Bool
 
@@ -42,10 +46,12 @@ insert :: (Poset p, Point p) => Int -> p -> KdTree p -> KdTree p
 insert d p' Empty = Node (d `mod` dims p') Empty (Left p') Empty
 insert _ p' (Node d l p r) = case p of
           Left q | q ≺ p' -> Node d l' p r'
+                 | p' ≺ q -> Node d lp' (Right (coord d q)) r'
           _ -> if coord d p' <= coord' d p
-                                  then Node d (insert (d+1) p' l) p r'
+                                  then Node d lp' p r'
                                   else Node d l' p (insert (d+1) p' r)
     where l' = filterOut bs l
+          lp' = insert (d+1) p' l
           r' = filterOut bs r
           bs = coords p'
 
@@ -72,14 +78,6 @@ filterOut bs t = case t of
                            r' = filterOut bs' r
                            keep = not $ and [y <= coord' d p | (d,y) <- bs]
 
--- -- Filter everything which is 
--- filterCoord :: Int -> c -> KdTree p -> KdTree p
--- filterCoord d x Empty = Empty
--- filterCoord d x (Node d' l p r) =
---   if x < coord d p
---   then l
---   else filterCoord 
- 
 
 test = pareto ([(10,10,10)] :: [(Int,Int,Int)])
 
