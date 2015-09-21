@@ -31,14 +31,17 @@ time x = do
   
 main = do
    time $ show mm
+   time $ show mm1
    time $ show mm'
    -- time $ l
    where mm :: M
          mm = minimum $ (pretty input :: DM)
-         D1 (mm':_) = pretty input
+         mm' :: M'
+         mm' = minimum $ (pretty input :: [M'])
+         D1 (mm1:_) = pretty input
          l :: String
          l = render $ (pretty input :: F L)
-         input = testExpr 16
+         input = testExpr 3
 
 testExpr 0 = Atom "a"
 testExpr n = SExpr [testExpr (n-1),testExpr (n-1)]
@@ -418,8 +421,7 @@ ground work, so we can jump straight to giving a compositional
 semantics. We will later check that the expected laws hold.
 
 Let us interpret a layout as a @emph«non-empty» list of lines to print. As
-Hughes, I'll simply use the type of lists (you will remember the
-invariant in your head --- don't worry, I will help).
+Hughes, I'll simply use the type of lists .
 
 @haskell«
 type L = [String] -- non empty.
@@ -820,7 +822,109 @@ instance Doc DM where
   xs <|> ys = pareto (xs ++ ys)
 »
 
-Unfortunately, computing the Pareto frontier as above is slow when
+
+
+
+@subsection«Re-pairing with text»
+
+@haskell«
+bests = pareto' . mergeAll
+»
+
+@haskell«
+type D0 = [(M,L)]
+
+instance Poset (M,L) where
+instance Layout (M,L) where
+
+instance Layout D0 where
+  xs <> ys = bests [ filter (fits . fst) [x <> y | y <- ys] | x <- xs]
+  flush xs = bests $ map sort $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
+  -- flush xs = pareto' [] $ sort $ (map flush xs)
+  text s = [text s | valid (text s)]
+  render (x:_) = render x
+»
+
+@haskell«
+instance Doc D0 where
+  xs <|> ys = bests [xs,ys]
+»
+
+@subsection«Hughes-Style nesting»
+
+Hughes proposes a nest conbinator.
+Mostly used for "hanging":
+
+@haskell«
+hang :: Doc d => Int -> d -> d -> d
+hang n x y = (x <> y) <|> (x $$ nest n y)
+»
+His nesting is optional, but in the context of hang, it does not need to be.
+
+@haskell«
+nest :: Layout d => Int -> d -> d
+nest n y = spaces n <> y
+
+spaces n = text (replicate n ' ')
+»
+
+@subsection«Ribbon length»
+
+@haskell«
+data M' = M' {  height'     :: Int,
+                lastWidth'  :: Int,
+                maxWidth'   :: Int,
+                lastIndent   :: Int,
+                firstWidth' :: Int}
+  deriving (Show,Eq,Ord)
+»
+
+@haskell«
+instance Layout M' where
+  a <> b =
+     M' {  maxWidth'   = max  (  maxWidth' a)
+                              (  lastWidth'  a + maxWidth'   b),
+           height'     =         height'     a + height'     b,
+           lastWidth'  =         lastWidth'  a + lastWidth'  b,
+           firstWidth' = firstWidth' a + if height' a == 0 then firstWidth' b else 0,
+           lastIndent  = lastIndent a + if height' b == 0 then 0 else lastIndent b}
+  text s   = M' {  height'     = 0,
+                   maxWidth'   = length s,
+                   lastWidth'  = length s,
+                   firstWidth' = length s,
+                   lastIndent  = 0}
+  flush a  = M' {  maxWidth'   = maxWidth' a,
+                   height'     = height' a + 1,
+                   lastWidth'  = 0,
+                   firstWidth' = firstWidth' a,
+                   lastIndent  = 0}
+»
+
+@haskell«
+
+instance Poset M' where
+  m1 ≺ m2 =   height'     m1 <= height'     m2 &&
+              maxWidth'   m1 <= maxWidth'   m2 &&
+              lastWidth'  m1 <= lastWidth'  m2 &&
+              lastIndent  m1 >  lastIndent  m2
+
+instance Layout [M'] where
+  xs <> ys =  pareto $ concat
+              [ filter fits' [x <> y | y <- ys, lastWidth' x - lastIndent x + firstWidth' y <= ribbon ] | x <- xs]
+  flush xs = pareto $ (map flush xs)
+  text s = filter fits' [text s]
+  render = render . minimum
+
+instance Doc [M'] where
+  xs <|> ys = pareto (xs ++ ys)
+
+fits' m = maxWidth' m < 40
+ribbon = 20
+»
+»
+
+improve_pareto_section = haskell
+«Unfortunately, computing the Pareto frontier as above is slow when
 most elements are in the pareto frontier. Indeed, when adding an element
 all the elements in the frontier so far a re-examined, and thus @hask«pareto»
 has quadratic complexity.
@@ -949,54 +1053,7 @@ Flush does not, so we have to re-sort the list.
   text s = D1 [text s | valid (text s)]
   render (D1 (x:_)) = render x
 »
-
-
-
-@subsection«Re-pairing with text»
-
-@haskell«
-bests = pareto' . mergeAll
 »
-
-@haskell«
-type D0 = [(M,L)]
-
-instance Poset (M,L) where
-instance Layout (M,L) where
-
-instance Layout D0 where
-  xs <> ys = bests [ filter (fits . fst) [x <> y | y <- ys] | x <- xs]
-  flush xs = bests $ map sort $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
-  -- flush xs = pareto' [] $ sort $ (map flush xs)
-  text s = [text s | valid (text s)]
-  render (x:_) = render x
-»
-
-@haskell«
-instance Doc D0 where
-  xs <|> ys = bests [xs,ys]
-»
-
-@subsection«Hughes-Style nesting»
-
-Hughes proposes a nest conbinator.
-Mostly used for "hanging":
-
-@haskell«
-hang :: Doc d => Int -> d -> d -> d
-hang n x y = (x <> y) <|> (x $$ nest n y)
-»
-His nesting is optional, but in the context of hang, it does not need to be.
-
-@haskell«
-nest :: Layout d => Int -> d -> d
-nest n y = spaces n <> y
-
-spaces n = text (replicate n ' ')
-»
-
-@subsection«Ribbon length»
-
 Note that we pick the narrowest result fitting on min. lines lines!
 
 @subsection«Using something better than strings for text»
