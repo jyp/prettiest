@@ -86,7 +86,7 @@ mainText = «
 
 
 
-A pretty printer is a program that renders data structures in a way which
+A pretty printer is a program that prints data structures in a way which
 makes them pleasant to read. (The data structures in question
 often represent programs, but not always.) I propose the following
 three principles of pretty printing:
@@ -94,11 +94,11 @@ three principles of pretty printing:
 @pcp_visibility<-principle«Visibility»«A pretty printer shall
 layout all its output within the width of the page.»
 
-@pcp_compact<-principle«Compactness»«A pretty printer shall minimize the amount of
-space used to display the data.»
-
-@pcp_layout<-principle«Layout»« A pretty printer shall make clever use of layout, to make it easy
+@pcp_layout<-principle«Legibility»« A pretty printer shall make clever use of layout, to make it easy
              for a human to recognise the hierarchical organisation of data.»
+
+@pcp_compact<-principle«Compactness»«A pretty printer shall minimize the number of lines
+used to display the data.»
 
 Furthermore, the first principle takes precedence over the second one, which itself takes precedence over the third one.
 
@@ -111,12 +111,11 @@ Even though Hughes and Wadler are not explicit about it, it is apparent that (so
 guide the design of their libraries.
 
 
-In addition to their esthetical and pedagogical value, Hughes and Wadler
-provide practical implementations which form the basis of pretty
-printing packages, which remain popular today. Hughes' design has been
+In addition to their esthetical and pedagogical value, the pretty printers of Hughes and Wadler
+are practical implementations which form the basis of pretty-printing packages, which remain popular today. Hughes' design has been
 refined by Peyton Jones, and is available as the
 Hackage package@sans«pretty»@footnote«@url«https://hackage.haskell.org/package/pretty»»,
-while Wadler's design has been extended by Leijen and made available as the 
+while Wadler's design has been extended by Leijen and made available as the
 @sans«wl-print» package@footnote«@url«https://hackage.haskell.org/package/wl-pprint»».
 
 In this paper, I propose a new design for a pretty printing
@@ -131,8 +130,7 @@ programming methodologies.
 
 @sec_api<-section«API (Syntax)»
 
-We will start the design of our library by examining a
-simple yet typical pretty printing task.  Let us assume we want to
+Let us assume we want to
 pretty print S-Expressions, and that they are represented as follows:
 
 @haskell«
@@ -151,7 +149,7 @@ The goal of the pretty printer is to render a given S-Expr according to the
 three principles of pretty printing: @pcp_visibility, @pcp_compact and @pcp_layout.
 While it is clear how the first two principles constrain the result, it
 is less clear how the third principle plays out: we must specify more precisely which
-layouts are admissible. To this end, we will say that in a pretty
+layouts are admissible. To this end, we assert that in a pretty
 display of an S-Expr, we would like the elements to be either
 concatenated horizontally, or aligned vertically. The possible pretty
 layouts of our @hask«abcd» example would be either
@@ -170,7 +168,7 @@ or
 »
 
 In general, a pretty printing library must provide the means to express
-the specification of admissible layouts: it is up to the user to
+the set of admissible layouts: it is up to the user to
 reify @pcp_layout on the data structure of interest. The printer
 will then automatically pick the smallest (@pcp_compact) layout which fits
 the page (@pcp_visibility).
@@ -201,12 +199,12 @@ documents.
 empty :: Layout d => d
 empty = text ""
 
-(<+>)    :: Layout d => d -> d -> d
+(<+>) :: Layout d => d -> d -> d
 x <+> y  = x <> text " " <> y
 
 hsep,vcat :: Doc d => [d] -> d
-vcat = foldr1 ($$)
-hsep = foldr1 (<+>)
+vcat  = foldr1 ($$)
+hsep  = foldr1 (<+>)
 »
 
 We can furthermore define automatic choice between horizontal and
@@ -218,7 +216,7 @@ sep []  = empty
 sep xs  = hsep xs <|> vcat xs
 »
 
-Turning S-expressions into a pretty document is then child's play:
+Turning S-expressions into a @hask«Doc» is then child's play:
 
 @haskell«
 pretty :: Doc d => SExpr -> d
@@ -228,6 +226,8 @@ pretty  (SExpr xs)  =   text "(" <>
                         text ")"
 »
 
+TODO: render example
+
 @sec_informal_semantics<-section«Towards semantics»
 
 Our API provies a syntax to describe documents. The natural question is then: what should
@@ -235,7 +235,7 @@ its semantics be?  In other words, how do we turn the three principles into a
 specification of @hask«render»?
 
 Let us use an example to try and answer the question, and outline why neither Wadler's or Hughes' answer is satisfactory. Suppose we want
-to pretty print the following S-Expr (which is specially crafted to
+to pretty-print the following S-Expr (which is specially crafted to
 demonstrate issues with both Hughes and Wadler libraries):
 
 @haskell«
@@ -255,7 +255,7 @@ Example expression printed on 80 columns. The first line is a helper showing the
  (12345678 ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d))))
 »»
 
-Remember that would like elements inside an S-Expr to be either
+Remember that we would like elements inside an S-Expr to be either
 aligned vertically or concatenated horizontally (for legibility,
 @pcp_layout), The second option will be preferred over the first
 (@pcp_compact), as long as the text fits within the page width
@@ -330,7 +330,7 @@ document in a narrow space, wasting space.
 
 How does Wadler's library fare on the example? Unfortunately, we
 cannot answer the question in a strict sense. Indeed, Wadler's API is
-to restrictive to even @emph«express» the layout we are after! That
+too restrictive to even @emph«express» the layout we are after! That
 is, one can only specify a @emph«constant» amount of indentation, not
 one that depends on the contents of a document.  This means that
 Wadler's library lacks the capability to express that a multi-line
@@ -356,7 +356,7 @@ can produce is the following:
    (a b c d))))
 »
 
-It's not too bad... but there is a spurious line break after the atom
+It's not too bad --- but there is a spurious line break after the atom
 @teletype«12345678». While Wadler's restriction may be acceptable to some, I find it
 unsatisfying for two reasons. First, spurious line breaks may appear
 in many places, so the rendering may be much longer than necessary, thereby violating @pcp_compact.
@@ -392,8 +392,8 @@ of pretty printing or provide a greedy algorithm. Hughes does not
 fully respect @pcp_compact. Wadler does not fully respect
 @pcp_layout. Here, I decide to respect both, but I give up on
 greediness.
-Yet, the final algorithm that I will arrive at is fast enough for use
-in common pretty printing tasks.
+Yet, the final algorithm that I arrive at is fast enough for use
+in common pretty-printing tasks.
 
 But; let us not get carried away: before attacking the problem of making a fast (enough) implementation,
 we need to finish the formalisation of the semantics. And before that,
@@ -488,8 +488,7 @@ this choice, for two reasons:
            left-flushing documents.»
          ,«The horizontal composition (@hask«<>») has a nicer algebraic structure
           than (@hask«$$»). The vertical composition (@hask«$$») has no unit, while (@hask«<>») has empty layout as unit.
-          (Due Hughes' complicated semantics,
-          even his (@hask«<>») operator lacks a unit.)»]
+          (In Hughes' pretty-printer, not even @hask«<>» has a unit, due to more involved semantics.)»]
 
 To sum up, our API for layouts is the following:
 @haskell«
@@ -614,14 +613,18 @@ valid :: L -> Bool
 valid xs = maximum (map length xs) <= 40
 »
 
+TODO: finish the implementation and state its inefficiency.
+
 @section«A More Efficient Implementation»
 @subsection«Measures»
 
+@comment«
 At this point, a classic functional pearl would derive an
 implementation via a series of calculational steps. While this may
 very well be done, I will instead proceed to follow the actual thought
 process that I used when designing the library. The hope is that the
 actual method is more applicable than a re-engineered story.
+»
 
 Let us remember that we want to select the layout with minimal use of
 space. Hence, from an algorithm point of view, all that matters is the
@@ -644,7 +647,7 @@ Astute readers may have guessed the above semantics by looking at the diagram fo
 composition of layouts shown earlier. Indeed, it is the above semantics which justify
 the abstract representation of a layout that the diagram uses.
 Here is the concatenation
-diagram annotated with those lengths.
+diagram annotated with those lengths:
 
 @(horizCat True)
 
@@ -652,10 +655,10 @@ The above diagram can be read out as code as follows:
 @haskell«
 instance Layout M where
   a <> b =
-     M {  maxWidth   = max  (  maxWidth a)
-                            (  lastWidth  a + maxWidth   b),
-          height     =         height     a + height     b,
-          lastWidth  =         lastWidth  a + lastWidth  b}
+     M {  maxWidth   =  max  (  maxWidth a)
+                             (  lastWidth  a + maxWidth   b),
+          height     =  height     a + height     b,
+          lastWidth  =  lastWidth  a + lastWidth  b}
 »
 The other combinators are easy to implement:
 @haskell«
@@ -696,7 +699,7 @@ measure (flush a) == flush (measure a)
 measure (text s) == text s
 »
 
-Checking the laws is left as a simple, if somewhat a tedious, exercise to the reader.
+Checking the laws is left as a simple, if somewhat a tedious, exercise (TODO: appendix) to the reader.
 
 
 @haskell«
@@ -704,14 +707,15 @@ fits :: M -> Bool
 fits x = maxWidth x <= 40
 »
 
-Having properly refined the problem (ignoring such details as the
-actual text being rendered), we may proceed to give a fast
+Having properly refined the problem, and ignoring puny details such as the
+actual text being rendered, we may proceed to give a fast
 implementation of the pretty printer.
 
 @subsection«Early filtering out invalid results»
 
 The first optimisation is to filter out invalid results early; like so:
 
+TODO: lemma
 @spec«
 text x = filter valid [text x]
 xs <> ys = filter valid [x <> y | x <- xs, y <- ys]
@@ -719,6 +723,7 @@ xs <> ys = filter valid [x <> y | x <- xs, y <- ys]
 
 We can do this because @hask«width» is monotonous:
 
+TODO: lemma
 @spec«
 width (a <> b) ≥ width a  and width (a <> b) ≥ width b
 width (flush a) ≥ with a
@@ -726,6 +731,7 @@ width (flush a) ≥ with a
 
 In turn, so is validity:
 
+TODO: lemma
 @spec«
 valid (a <> b)   => valid a  ∧  valid b
 valid (flush a)  => valid a
@@ -767,11 +773,14 @@ instance Poset M where
 »
 
 Furthermore:
+
 @enumList[«Domination is preserved by the layout operators:
-@spec«if    d1 ≺  d2 and  d'1 ≺  d'2
-then  (d1 <> d2) ≺  (d'1 <> d'2) and
-      flush d1 ≺ flush d2
-»
+
+TODO: lemmas
+
+@spec«      d1 ≺  d2  ⇒   flush d1 ≺ flush d2 »
+
+@spec«if    d1 ≺  d2 and  d'1 ≺  d'2   => (d1 <> d2) ≺  (d'1 <> d'2)  »
 »
 ,
 «Domination implies lexical ordering: @hask«a ≺ b  =>  a ≤ b».
