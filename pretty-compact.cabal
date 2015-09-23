@@ -23,6 +23,15 @@ source-repository head
                   type: git
                   location: http://github.com/jyp/prettiest.git
 
+executable paper
+        build-depends:
+                     base,
+                     marxup,
+                     lens,
+                     clock
+        main-is:
+           PM.hs
+
 Library
         exposed-modules:
                 Text.PrettyPrint.Compact

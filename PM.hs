@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -XTypeSynonymInstances -XOverloadedStrings -XRecursiveDo -pgmF marxup-lit -F #-}
+{-# OPTIONS_GHC -XTypeSynonymInstances -XOverloadedStrings -XRecursiveDo -pgmF marxup3 -F #-}
 
 import MarXup
 import MarXup.Latex
@@ -23,17 +23,17 @@ import Prelude hiding (fail)
 
 a $$ b = flush a <> b
 
+
 time x = do
    t0 <- getTime ProcessCPUTime
    putStrLn $ x
    t1 <- getTime ProcessCPUTime
    print $ timeSpecAsNanoSecs $ diffTimeSpec t0 t1
-  
+
 main = do
    time $ show mm
    time $ show mm1
    time $ show mm'
-   -- time $ l
    where mm :: M
          mm = minimum $ (pretty input :: DM)
          mm' :: M'
@@ -49,6 +49,9 @@ testExpr n = SExpr [testExpr (n-1),testExpr (n-1)]
 
 main :: IO ()
 main = renderTex SIGPlan "Prettiest" (preamble (header >> mainText >> bibliographyAll))
+
+comment :: TeX -> TeX
+comment _ = mempty
 
 preamble body = do
   documentClass "../PaperTools/latex/sigplanconf" ["preprint"]
@@ -97,7 +100,7 @@ layout all its output within the width of the page.»
 @pcp_layout<-principle«Legibility»« A pretty printer shall make clever use of layout, to make it easy
              for a human to recognise the hierarchical organisation of data.»
 
-@pcp_compact<-principle«Compactness»«A pretty printer shall minimize the number of lines
+@pcp_compact<-principle«Frugality»«A pretty printer shall minimize the number of lines
 used to display the data.»
 
 Furthermore, the first principle takes precedence over the second one, which itself takes precedence over the third one.
@@ -112,9 +115,9 @@ guide the design of their libraries.
 
 
 In addition to their esthetical and pedagogical value, the pretty printers of Hughes and Wadler
-are practical implementations which form the basis of pretty-printing packages, which remain popular today. Hughes' design has been
+are practical implementations which form the basis of industrial-strength pretty-printing packages, which remain popular today. Hughes' design has been
 refined by Peyton Jones, and is available as the
-Hackage package@sans«pretty»@footnote«@url«https://hackage.haskell.org/package/pretty»»,
+Hackage package @sans«pretty»@footnote«@url«https://hackage.haskell.org/package/pretty»»,
 while Wadler's design has been extended by Leijen and made available as the
 @sans«wl-print» package@footnote«@url«https://hackage.haskell.org/package/wl-pprint»».
 
@@ -123,10 +126,7 @@ library. The interface is inspired by Hughes' and Wadler's, but is
 subtly different. In contrast to Hughes and Wadler, my primary goal is
 to abide by the principles of pretty printing as defined above;
 efficiency is a secondary concern. Yet the final result is reasonably
-efficient.  As Hughes and Wadler, I will aim at demonstrating best functional
-style. TODO: whut? Finally,
-I will draw general conclusions on how to improve on functional
-programming methodologies.
+efficient.
 
 @sec_api<-section«API (Syntax)»
 
@@ -146,7 +146,7 @@ abcd = SExpr [Atom "a",Atom "b",Atom "c",Atom "d"]
 »
 
 The goal of the pretty printer is to render a given S-Expr according to the
-three principles of pretty printing: @pcp_visibility, @pcp_compact and @pcp_layout.
+three principles of pretty printing: @pcp_visibility, @pcp_layout and @pcp_compact.
 While it is clear how the first two principles constrain the result, it
 is less clear how the third principle plays out: we must specify more precisely which
 layouts are admissible. To this end, we assert that in a pretty
@@ -226,13 +226,11 @@ pretty  (SExpr xs)  =   text "(" <>
                         text ")"
 »
 
-TODO: render example
-
 @sec_informal_semantics<-section«Towards semantics»
 
 Our API provies a syntax to describe documents. The natural question is then: what should
 its semantics be?  In other words, how do we turn the three principles into a
-specification of @hask«render»?
+specification of @hask«render»? In particular, how do we turn the above code into a pretty printer of S-Expressions?
 
 Let us use an example to try and answer the question, and outline why neither Wadler's or Hughes' answer is satisfactory. Suppose we want
 to pretty-print the following S-Expr (which is specially crafted to
@@ -256,7 +254,7 @@ Example expression printed on 80 columns. The first line is a helper showing the
 »»
 
 Remember that we would like elements inside an S-Expr to be either
-aligned vertically or concatenated horizontally (for legibility,
+aligned vertically or concatenated horizontally (for
 @pcp_layout), The second option will be preferred over the first
 (@pcp_compact), as long as the text fits within the page width
 (@pcp_visibility).
@@ -356,7 +354,7 @@ can produce is the following:
    (a b c d))))
 »
 
-It's not too bad --- but there is a spurious line break after the atom
+It does not look too bad --- but there is a spurious line break after the atom
 @teletype«12345678». While Wadler's restriction may be acceptable to some, I find it
 unsatisfying for two reasons. First, spurious line breaks may appear
 in many places, so the rendering may be much longer than necessary, thereby violating @pcp_compact.
@@ -370,8 +368,8 @@ Pattern = expression [listElement x,
                       listElement w]
 »
 If the list does not fit on a single line, it must be put below
-@qu"expression". For legibility, it must be indented. However, the
-amount of indentation cannot depend on the @teletype«Pattern», so a typical output is:
+@qu"expression". According to @pcp_layout, it should be indented. However, the
+amount of indentation cannot depend on the @teletype«Pattern», so Wadler library would typically output:
 @verbatim«
 Pattern = expression
   [listElement x,
@@ -379,8 +377,8 @@ Pattern = expression
    listElement z,
    listElement w]
 »
-Aligning the argument of the expression below the equal sign is bad:
-it obscures the structure of the program; @pcp_layout is not
+Aligning the argument of the expression below to the left of the equal sign is bad:
+it needlessly obscures the structure of the program; @pcp_layout is not
 respected. In sum, the lack of a combinator for relative indentation
 is a serious drawback. In fact, Daan Leijen's
 implemenation of Wadler's design (@sans«wl-print»), @emph«does» feature
@@ -408,9 +406,9 @@ We ignore for a moment choice between possible layouts
 Recall that we have inherited from Hughes a draft API for layouts:
 
 @spec«
-text  :: Layout d => String -> d
-(<>)  :: Layout d => d -> d -> d
-($$)  :: Layout d => d -> d -> d
+text  :: Layout l => String -> l
+(<>)  :: Layout l => l -> l -> l
+($$)  :: Layout l => l -> l -> l
 »
 
 
@@ -421,7 +419,7 @@ ground work, so we can jump straight to giving a compositional
 semantics. We will later check that the expected laws hold.
 
 Let us interpret a layout as a @emph«non-empty» list of lines to print. As
-Hughes, I'll simply use the type of lists .
+Hughes, I'll simply use the type of lists.
 
 @haskell«
 type L = [String] -- non empty.
@@ -481,7 +479,7 @@ Horizontal concatenation is then:
 »
 
 One might argue that replacing @hask«($$)» by @hask«flush» does not
-make the API shorter, and maybe does not even make it simpler. Yet, we will stick
+make the API shorter nor simpler. Yet, I stick
 this choice, for two reasons:
 
 @enumList[«The new API clearly separates the concerns of concatenation and
@@ -492,11 +490,11 @@ this choice, for two reasons:
 
 To sum up, our API for layouts is the following:
 @haskell«
-class Layout d where
-  (<>)    :: d -> d -> d
-  text    :: String -> d
-  flush   :: d -> d
-  render  :: d -> String
+class Layout l where
+  (<>)    :: l -> l -> l
+  text    :: String -> l
+  flush   :: l -> l
+  render  :: l -> String
 »
 Additionally, as mentioned above, layouts follow a number of algebraic
 laws:
@@ -521,7 +519,7 @@ prop_text_append s t  = text s <> text t == text (s ++ t)
 prop_text_empty       = empty == text ""
 »
 »,
-« @hask«flush» can be pulled out of concatenation, in this way:
+« @hask«flush» can be pulled out of concatenation, in this way@footnote«This law would look nicer if @hask«flush» was a postfix operator.»:
 
 @haskell«
 prop_flush :: (Doc a, Eq a) => a -> a -> Bool
@@ -543,40 +541,39 @@ class Layout d => Doc d where
 »
 
 Again, we give the compositional semantics right away. Documents are
-interpreted as a set of layouts. We implement sets as list, where
+interpreted as a set of layouts. We implement sets as lists, where
 order and number of occurences won't matter.
-
-TODO: rename F to Set
-@haskell«
-newtype F a = F {fromF :: [a]}
-  deriving (Functor,Applicative,Show)
-»
 
 The interpretation is as one expects:
 @haskell«
-instance Doc (F L) where
-  F xs <|> F ys = F (xs ++ ys)
-  fail = F []
+instance Doc [L] where
+  xs <|> ys = (xs ++ ys)
+  fail = []
 »
 
-Consequently, disjunction and failure form a monoid, and disjuction is
-commutative. Disjunction is idempotent.
+Consequently, disjunction is associative. Because we want the ordering inside the list to be irrelevant,
+it should also be commutative.
 
-@haskell«
-prop_leftUnit' :: (Doc a, Eq a) => a -> Bool
+@comment«prop_leftUnit' :: (Doc a, Eq a) => a -> Bool
 prop_leftUnit' a = fail <|> a == a
 
 prop_rightUnit' :: (Doc a, Eq a) => a -> Bool
 prop_rightUnit' a = a <|> fail == a
+»
 
-prop_assoc' :: (Doc a, Eq a) => a -> a -> a -> Bool
-prop_assoc' a b c = (a <|> b) <|> c == a <|> (b <|> c)
+@haskell«
+
+prop_disj_assoc :: (Doc a, Eq a) => a -> a -> a -> Bool
+prop_disj_assoc a b c = (a <|> b) <|> c == a <|> (b <|> c)
+
+prop_disj_commut :: (Doc a, Eq a) => a -> a -> a -> Bool
+prop_disj_commut a b c = (a <|> b) <|> c == a <|> (b <|> c)
 »
 
 We simply lift the layout operators idiomatically @citep"mcbride_applicative_2007" over sets:
 
 @haskell«
-instance Layout (F L) where
+instance Layout [L] where
   text = pure . text
   flush = fmap flush
   xs <> ys = (<>) <$> xs <*> ys
@@ -602,37 +599,45 @@ pretty print a document, we pick a shortest layout among the valid
 ones:
 @haskell«
   render =   render .  -- (for layouts)
-             minimumBy (compare `on` length).
-             filter valid .
+             frugal .
+             filter visible .
              fromF
 »
 TODO: attn. order used
+
 A layout is @hask«valid» if all its lines are fully visible on the page:
 @haskell«
-valid :: L -> Bool
-valid xs = maximum (map length xs) <= 40
+visible :: L -> Bool
+visible xs = maximum (map length xs) <= 40
+
+frugal = minimumBy (compare `on` length)
 »
 
-TODO: finish the implementation and state its inefficiency.
+Pretty printing an S-Expr is then
+
+@haskell«
+showSExpr x = render (pretty x :: F L)
+»
+
+Running it on our example (@hask«showSExpr testData») yields the expected output.
+
+While the above semantics provide an executable implementation, it is insanely slow.
+Indeed: every possible combination of choices is constructed then a shortest output is
+picked. Thus, for an input with @ensureMath«n» choices, the running time is @ensureMath«O(n)».
+
 
 @section«A More Efficient Implementation»
 @subsection«Measures»
 
-@comment«
-At this point, a classic functional pearl would derive an
-implementation via a series of calculational steps. While this may
-very well be done, I will instead proceed to follow the actual thought
-process that I used when designing the library. The hope is that the
-actual method is more applicable than a re-engineered story.
-»
+The first insight to arrive at an efficient implementation is that it is
+not necessary to construct layouts fully: only some of their parameters are relevant.
+Let us remember that we want to sift through layouts based on the space that they take.
+Hence, from an algorithm point of view, all that matters a measure of that space.
+Let us define an abstract semantics for
+layouts, which ignores the text, and captures only the measure of space used.
 
-Let us remember that we want to select the layout with minimal use of
-space. Hence, from an algorithm point of view, all that matters is the
-space that a layout takes. Let us define an abstract semantics for
-documents which focuses on such space.
-
-All that matters is the maximum width of the layout, the width of its
-last line and its height (and because layouts can't be empty we do not
+The only measures that matter are the maximum width of the layout, the width of its
+last line and its height (and, because layouts cannot be empty we do not
 count the last line):
 @singleLayoutDiag
 In code:
@@ -644,14 +649,14 @@ data M = M {  height     :: Int,
 »
 
 Astute readers may have guessed the above semantics by looking at the diagram for
-composition of layouts shown earlier. Indeed, it is the above semantics which justify
+composition of layouts shown earlier. Indeed, it is the above abstract semantics which justifies
 the abstract representation of a layout that the diagram uses.
 Here is the concatenation
 diagram annotated with those lengths:
 
 @(horizCat True)
 
-The above diagram can be read out as code as follows: 
+The above diagram can be read out as code as follows:
 @haskell«
 instance Layout M where
   a <> b =
@@ -693,18 +698,19 @@ must check that @hask«measure» is a layout homomorphism (ignoring of
 course the @hask«render»er). The homomorphism property can be spelled out as the following
 three laws:
 
+@lemma«Measure is a homomorphism»«
 @spec«
 measure (a <> b) == measure a <> measure b
 measure (flush a) == flush (measure a)
 measure (text s) == text s
-»
+»»«»
 
 Checking the laws is left as a simple, if somewhat a tedious, exercise (TODO: appendix) to the reader.
 
 
 @haskell«
-fits :: M -> Bool
-fits x = maxWidth x <= 40
+visibleMeasure :: M -> Bool
+visibleMeasure x = maxWidth x <= 40
 »
 
 Having properly refined the problem, and ignoring puny details such as the
@@ -715,7 +721,6 @@ implementation of the pretty printer.
 
 The first optimisation is to filter out invalid results early; like so:
 
-TODO: lemma
 @spec«
 text x = filter valid [text x]
 xs <> ys = filter valid [x <> y | x <- xs, y <- ys]
@@ -723,19 +728,20 @@ xs <> ys = filter valid [x <> y | x <- xs, y <- ys]
 
 We can do this because @hask«width» is monotonous:
 
-TODO: lemma
-@spec«
+@lemma«
+@hask«width» is monotonous
+»(spec«
 width (a <> b) ≥ width a  and width (a <> b) ≥ width b
 width (flush a) ≥ with a
-»
+»)«Proof»
 
 In turn, so is validity:
 
-TODO: lemma
+@lemma«@hask«valid» is monotonous»«
 @spec«
 valid (a <> b)   => valid a  ∧  valid b
 valid (flush a)  => valid a
-»
+»»«»
 
 Consequently, keeping invalid layouts is useless: they can never be
 combined with another layout to produce something valid:
@@ -772,25 +778,20 @@ instance Poset M where
               lastWidth  m1 <= lastWidth  m2
 »
 
-Furthermore:
+Furthermore, the layout operators are monotonic for the domination relation:
 
-@enumList[«Domination is preserved by the layout operators:
+@lemma«flush is monotonic»«
+  @spec«      d1 ≺  d2  ⇒   flush d1 ≺ flush d2 »»«»
+  
+  @lemma«concatenation is monotonic»«
+  @spec«if    d1 ≺  d2 and  d'1 ≺  d'2   => (d1 <> d2) ≺  (d'1 <> d'2)  »
+  »«»
 
-TODO: lemmas
-
-@spec«      d1 ≺  d2  ⇒   flush d1 ≺ flush d2 »
-
-@spec«if    d1 ≺  d2 and  d'1 ≺  d'2   => (d1 <> d2) ≺  (d'1 <> d'2)  »
-»
-,
-«Domination implies lexical ordering: @hask«a ≺ b  =>  a ≤ b».
-»
-]
 
 Together, these properties mean that we can always discard dominated
 layouts from a set, as we can discard invalid ones. for any @hask«f» of type @hask«Layout l => l -> l»
 @spec«
-a ≺  a'  => f a ≺  f a'  =>  f a <= f a'
+a ≺  a'  => f a ≺  f a'  =>  height (f a) <= height (f a')
 »
 
 @subsection«Pareto frontier»
@@ -821,9 +822,9 @@ type DM = [M]
 
 instance Layout DM where
   xs <> ys =  pareto $ concat
-              [ filter fits [x <> y | y <- ys] | x <- xs]
+              [ filter visibleMeasure [x <> y | y <- ys] | x <- xs]
   flush xs = pareto $ (map flush xs)
-  text s = filter fits [text s]
+  text s = filter visibleMeasure [text s]
   render = render . minimum
 
 instance Doc DM where
@@ -831,44 +832,39 @@ instance Doc DM where
   xs <|> ys = pareto (xs ++ ys)
 »
 
-
+TODO: performance table
 
 
 @subsection«Re-pairing with text»
 
 @haskell«
-bests = pareto' . mergeAll
-»
-
-@haskell«
-type D0 = [(M,L)]
 
 instance Poset (M,L) where
-instance Layout (M,L) where
+  (a,_) ≺ (b,_) = a ≺ b
 
-instance Layout D0 where
-  xs <> ys = bests [ filter (fits . fst) [x <> y | y <- ys] | x <- xs]
-  flush xs = bests $ map sort $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
-  -- flush xs = pareto' [] $ sort $ (map flush xs)
-  text s = [text s | valid (text s)]
-  render (x:_) = render x
+instance Layout [(M,L)] where
+  xs <> ys =  pareto $ concat
+              [ filter visibleMeasure [x <> y | y <- ys] | x <- xs]
+  flush xs = pareto $ (map flush xs)
+  text s = filter visibleMeasure [text s]
+  render = render . snd . minimumBy (compare `on` fst)
 »
 
-@haskell«
-instance Doc D0 where
-  xs <|> ys = bests [xs,ys]
-»
 
 @subsection«Hughes-Style nesting»
 
-Hughes proposes a nest conbinator.
-Mostly used for "hanging":
+Hughes proposes a @hask«nest» conbinator, which indents its argument @emph«unless» it appears on the right-hand-side of a horizontal concatenation.
+The above semantics are rather involved, and appear difficult to support in my framework.
 
+Fortunately, @hask«nest» appears to be used chiefly to implement the @hask«hang» combinator, which offers the choice between horizontal concatenation
+and vertical concatenation with an indentation:
 @haskell«
 hang :: Doc d => Int -> d -> d -> d
 hang n x y = (x <> y) <|> (x $$ nest n y)
 »
-His nesting is optional, but in the context of hang, it does not need to be.
+
+In this context, nesting occurs on the right-hand-side of horizontal concatenation, and thus its semantics is simple; in fact
+it can be implemented in terms of the combinators seen so far:
 
 @haskell«
 nest :: Layout d => Int -> d -> d
@@ -879,61 +875,47 @@ spaces n = text (replicate n ' ')
 
 @subsection«Ribbon length»
 
-@haskell«
-data M' = M' {  height'     :: Int,
-                lastWidth'  :: Int,
-                maxWidth'   :: Int,
-                lastIndent   :: Int,
-                firstWidth' :: Int}
-  deriving (Show,Eq,Ord)
-»
+Another subtle feature of Hughes' library is the ability to limit
+the amount of text on a single line, ignoring the current indentation.
+While such a feature is easily added to Hughes or Wadler's greedy printer,
+it is harder to support as such on top of the basis we have so far.
+
+Need to record the length of the 1st line, length of the last line (no indent).
+When concatenating, we add those numbers and check that .... Unfortunately this
+adds two dimensions to the search space, and renders the final algorithm impossibly slow.
+
+An alternative is to interpret the ribbon length as the maximum size of a self-contain sublayout of one line.
+Then we just filter out the intermediate results that do not satisfy this property.
 
 @haskell«
-instance Layout M' where
-  a <> b =
-     M' {  maxWidth'   = max  (  maxWidth' a)
-                              (  lastWidth'  a + maxWidth'   b),
-           height'     =         height'     a + height'     b,
-           lastWidth'  =         lastWidth'  a + lastWidth'  b,
-           firstWidth' = firstWidth' a + if height' a == 0 then firstWidth' b else 0,
-           lastIndent  = lastIndent a + if height' b == 0 then 0 else lastIndent b}
-  text s   = M' {  height'     = 0,
-                   maxWidth'   = length s,
-                   lastWidth'  = length s,
-                   firstWidth' = length s,
-                   lastIndent  = 0}
-  flush a  = M' {  maxWidth'   = maxWidth' a,
-                   height'     = height' a + 1,
-                   lastWidth'  = 0,
-                   firstWidth' = firstWidth' a,
-                   lastIndent  = 0}
+fitRibbon m = height m > 0 || maxWidth m < ribbonLength
+  where ribbonLength = round (0.7 * 40)
+
+valid m = visible m && fitRibbon m
 »
 
-@haskell«
+@subsection«Laws vs compositional semantics»
 
-instance Poset M' where
-  m1 ≺ m2 =   height'     m1 <= height'     m2 &&
-              maxWidth'   m1 <= maxWidth'   m2 &&
-              lastWidth'  m1 <= lastWidth'  m2 &&
-              lastIndent  m1 >  lastIndent  m2
+Note that laws may only @emph«partially» specify the behaviour, while a
+semantic model will always fully constrain it.
 
-instance Layout [M'] where
-  xs <> ys =  pareto $ concat
-              [ filter fits' [x <> y | y <- ys, lastWidth' x - lastIndent x + firstWidth' y <= ribbon ] | x <- xs]
-  flush xs = pareto $ (map flush xs)
-  text s = filter fits' [text s]
-  render = render . minimum
+(exercise: does the above set of laws fully constrain the semantic model?)
 
-instance Doc [M'] where
-  xs <|> ys = pareto (xs ++ ys)
+Notice that Hughes and Wadler give the semantics via laws first and
+come up with a compositional interpretation second. This is fine,
+precisely because laws do not fully constrain the design; there is
+room for wiggle. However, a compositional semantics is often an even
+better guide which should not be an afterthought.
 
-fits' m = maxWidth' m < 40
-ribbon = 20
-»
+@acknowledgements«Using the QuickSpec tool, Nicholas Smallbone helped
+finding a bug in the final implementation: the concatenation operator
+did not preserve the invariant that lists were sorted. »
+
 »
 
-improve_pareto_section = haskell
-«Unfortunately, computing the Pareto frontier as above is slow when
+improve_pareto_section :: TeX
+improve_pareto_section = «
+Unfortunately, computing the Pareto frontier as above is slow when
 most elements are in the pareto frontier. Indeed, when adding an element
 all the elements in the frontier so far a re-examined, and thus @hask«pareto»
 has quadratic complexity.
@@ -1004,7 +986,7 @@ take care to keep lists sorted, in particular in the concatenation operation.
 Let us propose the following implementation:
 
 @haskell«
-  D1 xs <> D1 ys = D1 $ pareto' $ mergeAll [ filter fits [x <> y | y <- ys] | x <- xs]
+  D1 xs <> D1 ys = D1 $ pareto' $ mergeAll [ filter visibleMeasure [x <> y | y <- ys] | x <- xs]
 »
 
 For each of the inner list comprehensions to generate sorted output, we need the following lemma.
@@ -1059,9 +1041,8 @@ Flush does not, so we have to re-sort the list.
 @haskell«
   -- flush xs = pareto' $ mergeAll $ map sort $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
   -- flush xs = pareto' $ sort $ (map flush xs)
-  text s = D1 [text s | valid (text s)]
+  text s = D1 [text s | visible (text s)]
   render (D1 (x:_)) = render x
-»
 »
 Note that we pick the narrowest result fitting on min. lines lines!
 
