@@ -47,6 +47,13 @@ testExpr 0 = Atom "a"
 testExpr n = SExpr [testExpr (n-1),testExpr (n-1)]
 »»
 
+tm :: Tex a -> Tex a
+tm x = do
+  tex "$"
+  r <- x
+  tex "$"
+  return r
+
 main :: IO ()
 main = renderTex SIGPlan "Prettiest" (preamble (header >> mainText >> bibliographyAll))
 
@@ -544,7 +551,7 @@ Again, we give the compositional semantics right away. Documents are
 interpreted as a set of layouts. We implement sets as lists, where
 order and number of occurences won't matter.
 
-The interpretation is as one expects:
+The interpretation of disjunction merely appends the list of possible layouts.
 @haskell«
 instance Doc [L] where
   xs <|> ys = (xs ++ ys)
@@ -623,7 +630,7 @@ Running it on our example (@hask«showSExpr testData») yields the expected outp
 
 While the above semantics provide an executable implementation, it is insanely slow.
 Indeed: every possible combination of choices is constructed then a shortest output is
-picked. Thus, for an input with @ensureMath«n» choices, the running time is @ensureMath«O(n)».
+picked. Thus, for an input with @ensureMath«n» choices, the running time is @tm«O(2^n)».
 
 
 @section«A More Efficient Implementation»
@@ -676,10 +683,10 @@ The other combinators are easy to implement:
 »
 
 We can even give a rendering for these abstract layouts, by printing an @teletype«x» at each
-busy position in the layout.
+occupied position:
 @haskell«
-  render (M lw h mw) = render $
-      replicate h (replicate mw 'x') ++ [replicate lw 'x']
+  render m = render (replicate h (replicate (maxWidth m) 'x') ++
+                     [replicate (lastWidth m) 'x'])
 »
 
 The correctness of the above code relies on intution, and a
@@ -791,7 +798,7 @@ Furthermore, the layout operators are monotonic for the domination relation:
 Together, these properties mean that we can always discard dominated
 layouts from a set, as we can discard invalid ones. for any @hask«f» of type @hask«Layout l => l -> l»
 @spec«
-a ≺  a'  => f a ≺  f a'  =>  height (f a) <= height (f a')
+a ≺  a'  => f a ≺  f a'  =>  height (f a) <= height a'
 »
 
 @subsection«Pareto frontier»
