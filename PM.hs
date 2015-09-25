@@ -1,58 +1,78 @@
-{-# OPTIONS_GHC -XTypeSynonymInstances -XOverloadedStrings -XRecursiveDo -pgmF marxup3 -F #-}
+{-# OPTIONS_GHC -XTypeSynonymInstances -XOverloadedStrings -XRecursiveDo -pgmF marxup -F #-}
+{-# LANGUAGE FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, InstanceSigs, FlexibleContexts #-}
 
 import MarXup
 import MarXup.Latex
 import MarXup.Latex.Bib
 import MarXup.Latex.Math (deflike, thmlike, definition, mathpreamble,lemma)
 import MarXup.Tex
-import MarXup.Diagram
+import MarXup.Diagram hiding (height)
+import qualified MarXup.Diagram as D
 import MarXup.LineUp.Haskell
 import MarXup.Verbatim
 import MarXup.Latex.Math (ensureMath)
-import Control.Monad (forM_,when)
 import Control.Lens (set)
-
-haskellPreamble :: Tex ()
-haskellPreamble = «
-@haskell«
-{-# LANGUAGE FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, InstanceSigs #-}
 import Data.Function
 import Data.List (intercalate, minimumBy, sort, groupBy)
 import System.Clock
 import Prelude hiding (fail)
+import Control.Monad (forM_,when,forM)
+import System.IO
+import MarXup.Verbatim (fromVerbatim)
+import System.IO.Unsafe (unsafePerformIO)
 
 a $$ b = flush a <> b
 
-
-time x = do
+time dump x = do
    t0 <- getTime ProcessCPUTime
-   putStrLn $ x
+   hPutStrLn dump $ x
    t1 <- getTime ProcessCPUTime
-   print $ timeSpecAsNanoSecs $ diffTimeSpec t0 t1
+   return $ timeSpecAsNanoSecs $ diffTimeSpec t0 t1
 
-main = do
-   time $ show mm
-   time $ show mm1
-   time $ show mm'
-   where mm :: M
-         mm = minimum $ (pretty input :: DM)
-         mm' :: M'
-         mm' = minimum $ (pretty input :: [M'])
-         D1 (mm1:_) = pretty input
-         l :: String
-         l = render $ (pretty input :: F L)
-         input = testExpr 3
+test = do
+  dump <- openFile "data" WriteMode
+  forM_ [1..15] $ \size -> do
+    let mm :: M
+        mm = minimum $ (pretty input :: DM)
+        -- mm' :: M'
+        -- mm' = minimum $ (pretty input :: [M'])
+        D1 (mm1:_) = pretty input
+        l :: String
+        l = render $ (pretty input :: [L])
+        input = testExpr size
+    print =<< time dump (show mm)
+    -- time $ show mm1
+    -- time $ show mm'
+
+performanceData = do
+  dump <- openFile "data" WriteMode
+  forM [1..15] $ \size -> do
+    let mm :: M
+        mm = minimum $ (pretty input :: DM)
+        -- mm' :: M'
+        -- mm' = minimum $ (pretty input :: [M'])
+        D1 (mm1:_) = pretty input
+        l :: String
+        l = render $ (pretty input :: [L])
+        input = testExpr size
+    dt <- time dump $ show mm
+    return (size,height mm, dt)
+    -- time $ show mm1
+    -- time $ show mm'
+
+performanceTable :: TeX
+performanceTable = tabular [] "rrr" [[textual (show s), textual (show h),textual (show t)] | (s,h,t) <- unsafePerformIO performanceData]
+
 
 testExpr 0 = Atom "a"
 testExpr n = SExpr [testExpr (n-1),testExpr (n-1)]
-»»
 
-tm :: Tex a -> Tex a
+tm :: Verbatim a -> Tex ()
 tm x = do
   tex "$"
-  r <- x
+  tex $ fromVerbatim x
   tex "$"
-  return r
+  return ()
 
 main :: IO ()
 main = renderTex SIGPlan "Prettiest" (preamble (header >> mainText >> bibliographyAll))
@@ -607,8 +627,7 @@ ones:
 @haskell«
   render =   render .  -- (for layouts)
              frugal .
-             filter visible .
-             fromF
+             filter visible
 »
 TODO: attn. order used
 
@@ -623,7 +642,7 @@ frugal = minimumBy (compare `on` length)
 Pretty printing an S-Expr is then
 
 @haskell«
-showSExpr x = render (pretty x :: F L)
+showSExpr x = render (pretty x :: [L])
 »
 
 Running it on our example (@hask«showSExpr testData») yields the expected output.
@@ -685,7 +704,7 @@ The other combinators are easy to implement:
 We can even give a rendering for these abstract layouts, by printing an @teletype«x» at each
 occupied position:
 @haskell«
-  render m = render (replicate h (replicate (maxWidth m) 'x') ++
+  render m = render (replicate (height m) (replicate (maxWidth m) 'x') ++
                      [replicate (lastWidth m) 'x'])
 »
 
@@ -839,22 +858,31 @@ instance Doc DM where
   xs <|> ys = pareto (xs ++ ys)
 »
 
-TODO: performance table
+@performanceTable
 
 
 @subsection«Re-pairing with text»
+
+Eventually, one might be interested in getting the text out. To do so we can pair measures with full-text layouts, while keeping the 
 
 @haskell«
 
 instance Poset (M,L) where
   (a,_) ≺ (b,_) = a ≺ b
 
+instance Layout (M,L) where
+  (x,x') <> (y,y') =  (x<>y,x'<>y')
+  flush (x,x') = (flush x, flush x')
+  text s = (text s, text s)
+  render = render . snd
+
 instance Layout [(M,L)] where
   xs <> ys =  pareto $ concat
-              [ filter visibleMeasure [x <> y | y <- ys] | x <- xs]
+              [ filter (visibleMeasure . fst) [x <> y | y <- ys] | x <- xs]
   flush xs = pareto $ (map flush xs)
-  text s = filter visibleMeasure [text s]
-  render = render . snd . minimumBy (compare `on` fst)
+  text s = filter (visibleMeasure . fst) [text s]
+  render = render . minimumBy (compare `on` fst)
+
 »
 
 
@@ -898,7 +926,7 @@ Then we just filter out the intermediate results that do not satisfy this proper
 fitRibbon m = height m > 0 || maxWidth m < ribbonLength
   where ribbonLength = round (0.7 * 40)
 
-valid m = visible m && fitRibbon m
+valid m = visibleMeasure m && fitRibbon m
 »
 
 @subsection«Laws vs compositional semantics»
@@ -1152,7 +1180,7 @@ singleLayoutDiag :: Tex ()
 singleLayoutDiag = center $ element $ do
   a@(bx,_) <- draw $ abstrLayout 40
   width bx === 56
-  height bx === 7 *- lineHeight
+  D.height bx === 7 *- lineHeight
   rulersOfLayout «height» «maxWidth» «lastWidth» a
   return ()
 
@@ -1162,8 +1190,8 @@ twoLayouts = do
   (b,b_last) <- abstrLayout lw2
   width a === 48
   width b === 56
-  height a === 4 *- lineHeight
-  height b === 3 *- lineHeight
+  D.height a === 4 *- lineHeight
+  D.height b === 3 *- lineHeight
 
   return ((a,a_last),(b,b_last))
 
