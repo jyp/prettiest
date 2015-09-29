@@ -19,6 +19,7 @@ import Prelude hiding (fail)
 import Control.Monad (forM_,when,forM)
 import System.IO
 import MarXup.Verbatim (fromVerbatim)
+import MarXup.Diagram.Plot (simplePlot)
 import System.IO.Unsafe (unsafePerformIO)
 
 a $$ b = flush a <> b
@@ -44,7 +45,8 @@ test = do
     -- time $ show mm1
     -- time $ show mm'
 
-performanceData = do
+performanceData :: [(Integer, Int, Integer)]
+performanceData = unsafePerformIO $ do
   dump <- openFile "data" WriteMode
   forM [1..15] $ \size -> do
     let mm :: M
@@ -61,8 +63,19 @@ performanceData = do
     -- time $ show mm'
 
 performanceTable :: TeX
-performanceTable = tabular [] "rrr" [[textual (show s), textual (show h),textual (show t)] | (s,h,t) <- unsafePerformIO performanceData]
+performanceTable = tabular [] "rrr" [[textual (show s), textual (show h),textual (show t)] | (s,h,t) <- performanceData]
 
+performancePlot :: Diagram ()
+performancePlot = do
+  bx <- simplePlot [0,10000] [0,1994429954] [(fromIntegral nlines, fromIntegral time) | (_,nlines,time) <- performanceData]
+  width bx === constant 200
+  D.height bx === constant 100
+
+performancePlotLog :: Diagram ()
+performancePlotLog = do
+  bx <- simplePlot [0,2..10] [5,10..25] [(log (fromIntegral nlines + 1), log (fromIntegral time)) | (_,nlines,time) <- performanceData]
+  width bx === constant 200
+  D.height bx === constant 100
 
 testExpr 0 = Atom "a"
 testExpr n = SExpr [testExpr (n-1),testExpr (n-1)]
@@ -859,6 +872,8 @@ instance Doc DM where
 »
 
 @performanceTable
+@center(element performancePlot)
+@center(element performancePlotLog)
 
 
 @subsection«Re-pairing with text»
