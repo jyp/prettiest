@@ -67,18 +67,17 @@ performanceTable = tabular [] "rrr" [[textual (show s), textual (show h),textual
 
 performancePlot :: Diagram ()
 performancePlot = do
-  bx <- simplePlot [0,10000] [0,1994429954] [(fromIntegral nlines, fromIntegral time) | (_,nlines,time) <- performanceData]
+  bx <- simplePlot [0,10000] [0,2000000000] [(fromIntegral nlines, fromIntegral time) | (_,nlines,time) <- performanceData]
   width bx === constant 200
   D.height bx === constant 100
+
+log10 x = log x / log 10
 
 performancePlotLog :: Diagram ()
 performancePlotLog = do
-  bx <- simplePlot [0,2..10] [5,10..25] [(log (fromIntegral nlines + 1), log (fromIntegral time)) | (_,nlines,time) <- performanceData]
+  bx <- simplePlot [0,1..4] [1..10] [(log10 (fromIntegral nlines + 1), log10 (fromIntegral time)) | (_,nlines,time) <- performanceData]
   width bx === constant 200
   D.height bx === constant 100
-
-testExpr 0 = Atom "a"
-testExpr n = SExpr [testExpr (n-1),testExpr (n-1)]
 
 tm :: Verbatim a -> Tex ()
 tm x = do
@@ -278,8 +277,8 @@ demonstrate issues with both Hughes and Wadler libraries):
 
 @haskell«
 testData :: SExpr
-testData = SExpr [  SExpr [Atom "12345", abcd4],
-                    SExpr [Atom "12345678", abcd4]]
+testData = SExpr [  SExpr [Atom "abcde", abcd4],
+                    SExpr [Atom "abcdefgh", abcd4]]
   where abcd4 = SExpr [abcd,abcd,abcd,abcd]
 »
 
@@ -289,8 +288,8 @@ Example expression printed on 80 columns. The first line is a helper showing the
 @verbatim«
 12345678901234567890123456789012345678901234567890123456789012345678901234567890
 
-((12345 ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d)))
- (12345678 ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d))))
+((abcde ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d)))
+ (abcdefgh ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d))))
 »»
 
 Remember that we would like elements inside an S-Expr to be either
@@ -301,17 +300,17 @@ aligned vertically or concatenated horizontally (for
 Interpreting the above (so far informal) specification yields the
 following results. 1. On a 80-column-wide page, we would get the result
 displayed in @fig_eighty.
-2. On a 20-column-wide page, we would like to get the following output:
+2. On a 20-column-wide page, we would like to get the following output (the first line is a helper showing the column of a given character):
 
 @verbatim«
 12345678901234567890
 
-((12345 ((a b c d)
+((abcde ((a b c d)
          (a b c d)
          (a b c d)
          (a b c d)
          (a b c d)))
- (12345678
+ (abcdefgh
   ((a b c d)
    (a b c d)
    (a b c d)
@@ -327,12 +326,12 @@ instead:
 
 @verbatim«
 12345678901234567890
-((12345 ((a b c d)
+((abcde ((a b c d)
          (a b c d)
          (a b c d)
          (a b c d)
          (a b c d)))
- (12345678 ((a
+ (abcdefgh ((a
              b
              c
              d)
@@ -361,7 +360,7 @@ to split the first line of a document on the basis of the content of
 the last.» (sec. 7.4 of his paper).  Therefore, he chooses a greedy
 algorithm, which processes the input line by line, trying to fit as
 much as possible on the current line, without regard for what comes
-next.  In our example, the algorithm can fit @teletype«(12345678 ((a»
+next.  In our example, the algorithm can fit @teletype«(abcdefgh ((a»
 on the sixth line, but then it has committed to a very deep
 indentation level, which forces to display the remainder of the
 document in a narrow space, wasting space.
@@ -380,13 +379,13 @@ can produce is the following:
 
 @verbatim«
 12345678901234567890
-((12345
+((abcde
   ((a b c d)
    (a b c d)
    (a b c d)
    (a b c d)
    (a b c d)))
- (12345678
+ (abcdefgh
   ((a b c d)
    (a b c d)
    (a b c d)
@@ -395,7 +394,7 @@ can produce is the following:
 »
 
 It does not look too bad --- but there is a spurious line break after the atom
-@teletype«12345678». While Wadler's restriction may be acceptable to some, I find it
+@teletype«abcdefgh». While Wadler's restriction may be acceptable to some, I find it
 unsatisfying for two reasons. First, spurious line breaks may appear
 in many places, so the rendering may be much longer than necessary, thereby violating @pcp_compact.
 Second, and more importantly, a document which is laid out below another cannot
@@ -487,7 +486,23 @@ thought:
 The only potential difficulty is to figure out the interpretation of
 horizontal concatenation (@hask«<>»). We will stick to Hughes' advice:
 @qu«translate the second operand [to the right], so that is tabs against
-the last character of the first operand». Diagramatically:
+the last character of the first operand». For example:
+
+@verbatim«
+xxxxxxxxxxxxx               yyyyyyyyyyyyyyyyyyyyy
+xxxxxxxxx             <>    yyyyyyyyyyyyyyyyyyyyyyyyyyyyy
+xxxxxxxxxxxx                yyyy
+xxxxxx
+
+=   xxxxxxxxxxxxx
+    xxxxxxxxx
+    xxxxxxxxxxxx
+    xxxxxxyyyyyyyyyyyyyyyyyyyyy
+          yyyyyyyyyyyyyyyyyyyyyyyyyyyyy
+          yyyy
+»
+
+Or, diagramatically:
 
 @(horizCat False)
 
@@ -591,8 +606,7 @@ instance Doc [L] where
   fail = []
 »
 
-Consequently, disjunction is associative. Because we want the ordering inside the list to be irrelevant,
-it should also be commutative.
+Consequently, disjunction is associative. 
 
 @comment«prop_leftUnit' :: (Doc a, Eq a) => a -> Bool
 prop_leftUnit' a = fail <|> a == a
@@ -605,9 +619,6 @@ prop_rightUnit' a = a <|> fail == a
 
 prop_disj_assoc :: (Doc a, Eq a) => a -> a -> a -> Bool
 prop_disj_assoc a b c = (a <|> b) <|> c == a <|> (b <|> c)
-
-prop_disj_commut :: (Doc a, Eq a) => a -> a -> a -> Bool
-prop_disj_commut a b c = (a <|> b) <|> c == a <|> (b <|> c)
 »
 
 We simply lift the layout operators idiomatically @citep"mcbride_applicative_2007" over sets:
@@ -639,20 +650,32 @@ pretty print a document, we pick a shortest layout among the valid
 ones:
 @haskell«
   render =   render .  -- (for layouts)
-             frugal .
+             mostFrugal .
              filter visible
 »
-TODO: attn. order used
 
 A layout is @hask«valid» if all its lines are fully visible on the page:
 @haskell«
 visible :: L -> Bool
-visible xs = maximum (map length xs) <= 40
+visible xs = maximum (map length xs) <= pageWidth
 
-frugal = minimumBy (compare `on` length)
+pageWidth = 40
+
+mostFrugal :: [L] -> L
+mostFrugal = minimumBy (compare `on` length)
 »
 
-Pretty printing an S-Expr is then
+Given this definition, we can now see that the commutativity law only holds up to 
+Because we want the ordering inside the list to be irrelevant,
+it should also be commutative.
+
+
+@haskell«
+prop_disj_commut :: (Doc a, Eq a) => a -> a -> a -> Bool
+prop_disj_commut a b c = (a <|> b) <|> c == a <|> (b <|> c)
+»
+
+Pretty printing an S-Expr is then written as follows.
 
 @haskell«
 showSExpr x = render (pretty x :: [L])
@@ -749,7 +772,7 @@ Checking the laws is left as a simple, if somewhat a tedious, exercise (TODO: ap
 
 @haskell«
 visibleMeasure :: M -> Bool
-visibleMeasure x = maxWidth x <= 40
+visibleMeasure x = maxWidth x <= pageWidth
 »
 
 Having properly refined the problem, and ignoring puny details such as the
@@ -871,10 +894,24 @@ instance Doc DM where
   xs <|> ys = pareto (xs ++ ys)
 »
 
-@performanceTable
+@section«Timings»
+
+Benchmark: priting @hask«testExpr n», for @hask«n» from 1 to 15.
+
+@haskell«
+testExpr 0 = Atom "a"
+testExpr n = SExpr [testExpr (n-1),testExpr (n-1)]
+»
+
+Time to compute the layout vs. number of lines in the output
+
 @center(element performancePlot)
+
+on a log scale:
+
 @center(element performancePlotLog)
 
+@section«Discussion»
 
 @subsection«Re-pairing with text»
 
@@ -939,7 +976,7 @@ Then we just filter out the intermediate results that do not satisfy this proper
 
 @haskell«
 fitRibbon m = height m > 0 || maxWidth m < ribbonLength
-  where ribbonLength = round (0.7 * 40)
+  where ribbonLength = round (0.7 * fromIntegral pageWidth)
 
 valid m = visibleMeasure m && fitRibbon m
 »
