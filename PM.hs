@@ -163,8 +163,9 @@ while Wadler's design has been extended by Leijen and made available as the
 In this paper, I propose a new design for a pretty printing
 library. The interface is inspired by Hughes' and Wadler's, but is
 subtly different. In contrast to Hughes and Wadler, my primary goal is
-to abide by the principles of pretty printing as defined above;
-efficiency is a secondary concern. Yet the final result is reasonably
+to abide by the principles of pretty printing as defined above:
+efficiency is a secondary concern. I will interpret the above three principles
+as an optimisation problem, which one may fear will be expensive to solve. Yet, the final result is reasonably
 efficient (@sec_timings).
 
 @sec_api<-section«API (Syntax)»
@@ -367,7 +368,7 @@ document in a narrow space, wasting space.
 
 How does Wadler's library fare on the example? Unfortunately, we
 cannot answer the question in a strict sense. Indeed, Wadler's API is
-too restrictive to even @emph«express» the layout we are after! That
+too restrictive to even @emph«express» the layout we are after. That
 is, one can only specify a @emph«constant» amount of indentation, not
 one that depends on the contents of a document.  This means that
 Wadler's library lacks the capability to express that a multi-line
@@ -489,9 +490,9 @@ horizontal concatenation (@hask«<>»). We will stick to Hughes' advice:
 the last character of the first operand». For example:
 
 @verbatim«
-xxxxxxxxxxxxx               yyyyyyyyyyyyyyyyyyyyy
-xxxxxxxxx             <>    yyyyyyyyyyyyyyyyyyyyyyyyyyyyy
-xxxxxxxxxxxx                yyyy
+xxxxxxxxxxxxx       yyyyyyyyyyyyyyyyyyyyy
+xxxxxxxxx       <>  yyyyyyyyyyyyyyyyyyyyyyyyyyyyy
+xxxxxxxxxxxx        yyyy
 xxxxxx
 
 =   xxxxxxxxxxxxx
@@ -580,6 +581,8 @@ prop_text_empty       = empty == text ""
 prop_flush :: (Doc a, Eq a) => a -> a -> Bool
 prop_flush a b =  flush a <> flush b == flush (flush a <> b)
 »
+One might expect this law to hold instead: @hask«a <> flush b == flush (a <> b)». However, the inner @hask«flush» on @hask«b» goes back to the local indentation level, while the outer @hask«flush» goes back to the outer indentation level, which are equal only if @hask«a» ends with an empty line. In turn this condition is guaranteed only when @hask«a» is itself flushed.
+
 »]
 
 
@@ -647,17 +650,17 @@ prop_assoc' a b = flush (a <|> b) == flush a <|> flush b
 
 We can finally define formally what it means to render a document.  To
 pretty print a document, we pick a shortest layout among the valid
-ones:
+ones, according to @pcp_visibility:
 @haskell«
   render =   render .  -- (for layouts)
              mostFrugal .
-             filter visible
+             filter valid
 »
 
-A layout is @hask«valid» if all its lines are fully visible on the page:
+A layout is @hask«valid» if all its lines are fully valid on the page:
 @haskell«
-visible :: L -> Bool
-visible xs = maximum (map length xs) <= pageWidth
+valid :: L -> Bool
+valid xs = maximum (map length xs) <= pageWidth
 
 pageWidth = 40
 
@@ -665,6 +668,7 @@ mostFrugal :: [L] -> L
 mostFrugal = minimumBy (compare `on` length)
 »
 
+TODO: fix this
 Given this definition, we can now see that the commutativity law only holds up to 
 Because we want the ordering inside the list to be irrelevant,
 it should also be commutative.
@@ -771,8 +775,8 @@ Checking the laws is left as a simple, if somewhat a tedious, exercise (TODO: ap
 
 
 @haskell«
-visibleMeasure :: M -> Bool
-visibleMeasure x = maxWidth x <= pageWidth
+validMeasure :: M -> Bool
+validMeasure x = maxWidth x <= pageWidth
 »
 
 Having properly refined the problem, and ignoring puny details such as the
@@ -817,22 +821,31 @@ not (valid a)    => not (valid (flush a))
 @subsection«Pruning out dominated results»
 
 The second optimisation relies on the insight that certain results
-dominate others:
-if layout
-@hask«a» is shorter, narrower, and has a narrower last line than
-layout @hask«b», then @hask«a» dominates @hask«b».
-Dominated results may be discarded early, in
-a fashion similar to what we have done above.
+dominate others, and that dominated results can be discarded early.
+We write @hask«a ≺ b» if @hask«a» dominates @hask«b». We will arrange
+our domination relation such that
+@itemize[«Layout operators are monotonous with respect to domination.
+         Consequently, for any document context @hask«ctx :: Doc d => d -> d», if @hask«a ≺ b» then @hask«c a ≺ c b»»
+        ,«If @hask«a ≺ b», then @hask«a» is at least as frugal as @hask«b».»]
 
-The domination relation is a partial order (a reflexive, transitive and antisymmetric relation). We write @hask«a ≺ b» if
-@hask«a» dominates @hask«b».
+Together, these properties mean that we can always discard dominated
+layouts from a set, as we can discard invalid ones. Indeed, we have:
+@spec«
+a ≺  b  => c a ≺  c b  =>  height (c a) <= height (c b)
+»
+
+We can proceed by defining our relation and proving its properties 1. and 2. above.
+The domination relation is a partial order (a reflexive, transitive and antisymmetric relation). 
 @haskell«
 class Poset a where
   (≺) :: a -> a -> Bool
 »
 
 The order that we use is the
-intersection of ordering in all dimensions:
+intersection of ordering in all dimensions: if layout
+@hask«a» is shorter, narrower, and has a narrower last line than
+layout @hask«b», then @hask«a» dominates @hask«b».
+
 @haskell«
 instance Poset M where
   m1 ≺ m2 =   height     m1 <= height     m2 &&
@@ -840,21 +853,38 @@ instance Poset M where
               lastWidth  m1 <= lastWidth  m2
 »
 
-Furthermore, the layout operators are monotonic for the domination relation:
+The second desired property is a direct consequence of the definition.
+The first one is broken down into the two following lemmas:
 
-@lemma«flush is monotonic»«
-  @spec«      d1 ≺  d2  ⇒   flush d1 ≺ flush d2 »»«»
-  
+@lemma«@hask«flush» is monotonic»«
+  @spec«      d1 ≺  d2  ⇒   flush d1 ≺ flush d2 »»«
+We have
+
+height     m1 <= height     m2
+maxWidth   m1 <= maxWidth   m2
+lastWidth  m1 <= lastWidth  m2
+
+and we want:
+
+height     (flush m1) <= height     (flush m2)
+maxWidth   (flush m1) <= maxWidth   (flush m2)
+lastWidth  (flush m1) <= lastWidth  (flush m2)
+
+or, after computation:
+
+
+height     m1 + 1 <= height     m2 + 1
+maxWidth   m1 <= maxWidth m2
+0 <= 0
+
+
+»
+
   @lemma«concatenation is monotonic»«
   @spec«if    d1 ≺  d2 and  d'1 ≺  d'2   => (d1 <> d2) ≺  (d'1 <> d'2)  »
   »«»
 
 
-Together, these properties mean that we can always discard dominated
-layouts from a set, as we can discard invalid ones. for any @hask«f» of type @hask«Layout l => l -> l»
-@spec«
-a ≺  a'  => f a ≺  f a'  =>  height (f a) <= height a'
-»
 
 @subsection«Pareto frontier»
 Filtering out the dominated elements is an operation known as the
@@ -884,9 +914,9 @@ type DM = [M]
 
 instance Layout DM where
   xs <> ys =  pareto $ concat
-              [ filter visibleMeasure [x <> y | y <- ys] | x <- xs]
+              [ filter validMeasure [x <> y | y <- ys] | x <- xs]
   flush xs = pareto $ (map flush xs)
-  text s = filter visibleMeasure [text s]
+  text s = filter validMeasure [text s]
   render = render . minimum
 
 instance Doc DM where
@@ -930,9 +960,9 @@ instance Layout (M,L) where
 
 instance Layout [(M,L)] where
   xs <> ys =  pareto $ concat
-              [ filter (visibleMeasure . fst) [x <> y | y <- ys] | x <- xs]
+              [ filter (validMeasure . fst) [x <> y | y <- ys] | x <- xs]
   flush xs = pareto $ (map flush xs)
-  text s = filter (visibleMeasure . fst) [text s]
+  text s = filter (validMeasure . fst) [text s]
   render = render . minimumBy (compare `on` fst)
 
 »
@@ -978,7 +1008,7 @@ Then we just filter out the intermediate results that do not satisfy this proper
 fitRibbon m = height m > 0 || maxWidth m < ribbonLength
   where ribbonLength = round (0.7 * fromIntegral pageWidth)
 
-valid m = visibleMeasure m && fitRibbon m
+valid m = validMeasure m && fitRibbon m
 »
 
 @subsection«Laws vs compositional semantics»
@@ -1073,7 +1103,7 @@ take care to keep lists sorted, in particular in the concatenation operation.
 Let us propose the following implementation:
 
 @haskell«
-  D1 xs <> D1 ys = D1 $ pareto' $ mergeAll [ filter visibleMeasure [x <> y | y <- ys] | x <- xs]
+  D1 xs <> D1 ys = D1 $ pareto' $ mergeAll [ filter validMeasure [x <> y | y <- ys] | x <- xs]
 »
 
 For each of the inner list comprehensions to generate sorted output, we need the following lemma.
@@ -1128,7 +1158,7 @@ Flush does not, so we have to re-sort the list.
 @haskell«
   -- flush xs = pareto' $ mergeAll $ map sort $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
   -- flush xs = pareto' $ sort $ (map flush xs)
-  text s = D1 [text s | visible (text s)]
+  text s = D1 [text s | valid (text s)]
   render (D1 (x:_)) = render x
 »
 Note that we pick the narrowest result fitting on min. lines lines!
