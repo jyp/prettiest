@@ -165,7 +165,7 @@ library. The interface is inspired by Hughes' and Wadler's, but is
 subtly different. In contrast to Hughes and Wadler, my primary goal is
 to abide by the principles of pretty printing as defined above;
 efficiency is a secondary concern. Yet the final result is reasonably
-efficient.
+efficient (@sec_timings).
 
 @sec_api<-section«API (Syntax)»
 
@@ -894,7 +894,7 @@ instance Doc DM where
   xs <|> ys = pareto (xs ++ ys)
 »
 
-@section«Timings»
+@sec_timings<-section«Timings»
 
 Benchmark: priting @hask«testExpr n», for @hask«n» from 1 to 15.
 
