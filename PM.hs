@@ -659,8 +659,8 @@ ones, according to @pcp_visibility:
 
 A layout is @hask«valid» if all its lines are fully valid on the page:
 @haskell«
-valid :: L -> Bool
-valid xs = maximum (map length xs) <= pageWidth
+    where valid :: L -> Bool
+          valid xs = maximum (map length xs) <= pageWidth
 
 pageWidth = 40
 
@@ -824,9 +824,9 @@ The second optimisation relies on the insight that certain results
 dominate others, and that dominated results can be discarded early.
 We write @hask«a ≺ b» if @hask«a» dominates @hask«b». We will arrange
 our domination relation such that
-@itemize[«Layout operators are monotonous with respect to domination.
-         Consequently, for any document context @hask«ctx :: Doc d => d -> d», if @hask«a ≺ b» then @hask«c a ≺ c b»»
-        ,«If @hask«a ≺ b», then @hask«a» is at least as frugal as @hask«b».»]
+@itemList[«Layout operators are monotonous with respect to domination.
+           Consequently, for any document context @hask«ctx :: Doc d => d -> d», if @hask«a ≺ b» then @hask«c a ≺ c b»»
+          ,«If @hask«a ≺ b», then @hask«a» is at least as frugal as @hask«b».»]
 
 Together, these properties mean that we can always discard dominated
 layouts from a set, as we can discard invalid ones. Indeed, we have:
@@ -1178,7 +1178,8 @@ precisely because laws do not fully constrain the design; there is
 room for wiggle. However, a compositional semantics is often an even
 better guide which should not be an afterthought.
 
-@acknowledgements«Using the QuickSpec tool, Nicholas Smallbone helped
+@acknowledgements«Atze van der Ploeg gave useful feedback on a draft of this paper.
+Using the QuickSpec tool, Nicholas Smallbone helped
 finding a bug in the final implementation: the concatenation operator
 did not preserve the invariant that lists were sorted. »
 
