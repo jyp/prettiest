@@ -4,7 +4,7 @@
 import MarXup
 import MarXup.Latex
 import MarXup.Latex.Bib
-import MarXup.Latex.Math (deflike, thmlike, definition, mathpreamble,lemma)
+import MarXup.Latex.Math (deflike, thmlike, definition, mathpreamble,lemma,theorem)
 import MarXup.Tex
 import MarXup.Diagram hiding (height)
 import qualified MarXup.Diagram as D
@@ -643,7 +643,7 @@ prop_distrr :: (Doc a, Eq a) => a -> Bool
 prop_distrr a = c <> (a <|> b) == (c <> a) <|> (c <> b)
 
 prop_distrflush :: (Doc a, Eq a) => a -> a -> Bool
-prop_assoc' a b = flush (a <|> b) == flush a <|> flush b
+prop_distrflush a b = flush (a <|> b) == flush a <|> flush b
 »
 
 @subsection«Semantics»
@@ -659,33 +659,40 @@ ones, according to @pcp_visibility:
 
 A layout is @hask«valid» if all its lines are fully valid on the page:
 @haskell«
-    where valid :: L -> Bool
+    where
+          valid :: L -> Bool
           valid xs = maximum (map length xs) <= pageWidth
 
-pageWidth = 40
+          mostFrugal :: [L] -> L
+          mostFrugal = minimumBy (compare `on` length)
 
-mostFrugal :: [L] -> L
-mostFrugal = minimumBy (compare `on` length)
+pageWidth = 40
 »
 
-TODO: fix this
-Given this definition, we can now see that the commutativity law only holds up to 
-Because we want the ordering inside the list to be irrelevant,
-it should also be commutative.
-
+One may expect that disjuction should also be commutative.
+However, the implementation of @hask«mostFrugal» picks one of
+the most frugal layouts: that is fine as all most frugal layouts are
+equally good. It also means that re-ordering the arguments of a disjunction may
+affect the layout being picked. Therefore, commutativity of disjunction holds
+only up to the length of the layout being rendered:
 
 @haskell«
 prop_disj_commut :: (Doc a, Eq a) => a -> a -> a -> Bool
-prop_disj_commut a b c = (a <|> b) <|> c == a <|> (b <|> c)
+prop_disj_commut a b c = a <|> b =~ b <|> a
+
+infix 3 =~
+(=~) :: Layout a => a -> a -> Bool
+(=~) = (==) `on` (length . lines . render)
 »
 
-Pretty printing an S-Expr is then written as follows.
+We have now defined semantics compositionally; furthermore this semantics is executable.
+That is, we can define the pretty printing an S-Expr is then written as follows:
 
 @haskell«
 showSExpr x = render (pretty x :: [L])
 »
 
-Running it on our example (@hask«showSExpr testData») yields the expected output.
+Running @hask«showSExpr» on our example (@hask«testData») yields the expected output.
 
 While the above semantics provide an executable implementation, it is insanely slow.
 Indeed: every possible combination of choices is constructed then a shortest output is
@@ -769,7 +776,7 @@ three laws:
 measure (a <> b) == measure a <> measure b
 measure (flush a) == flush (measure a)
 measure (text s) == text s
-»»«»
+»»«TODO»
 
 Checking the laws is left as a simple, if somewhat a tedious, exercise (TODO: appendix) to the reader.
 
@@ -792,47 +799,55 @@ text x = filter valid [text x]
 xs <> ys = filter valid [x <> y | x <- xs, y <- ys]
 »
 
-We can do this because @hask«width» is monotonous:
+We can do this because @hask«validity» is monotonous:
 
-@lemma«
-@hask«width» is monotonous
-»(spec«
-width (a <> b) ≥ width a  and width (a <> b) ≥ width b
-width (flush a) ≥ with a
-»)«Proof»
-
-In turn, so is validity:
-
-@lemma«@hask«valid» is monotonous»«
+@lem_valid_mono<-lemma«@hask«valid» is monotonous»«
 @spec«
 valid (a <> b)   => valid a  ∧  valid b
 valid (flush a)  => valid a
-»»«»
+»»«
+@spec«
+valid (a <> b)   => maxWidth (a <> b) < pageWidth
+                 => max (maxWidth a) (lastWidth a +  maxWidth b) < pageWidth
+                 => maxWidth a < pageWidth   ∧  lastWidth a +  maxWidth b < pageWidth
+                 => maxWidth a < pageWidth   ∧                 maxWidth b < pageWidth
+                 => valid a  ∧  valid b
+
+
+valid (flush a)  => maxWidth a < pageWidth
+                 => maxWidth a < pageWidth 
+                 => valid a
+  »
+  »
 
 Consequently, keeping invalid layouts is useless: they can never be
-combined with another layout to produce something valid:
+combined with another layout to produce something valid.
 
+@lemma«Invalid layouts cannot be fixed»«
 @spec«
 not (valid a)    => not (valid (a <> b))
 not (valid b)    => not (valid (a <> b))
 not (valid a)    => not (valid (flush a))
-»
+»»«Contraposition of @lem_valid_mono»
 
 @subsection«Pruning out dominated results»
 
-The second optimisation relies on the insight that certain results
-dominate others, and that dominated results can be discarded early.
-We write @hask«a ≺ b» if @hask«a» dominates @hask«b». We will arrange
+The second optimisation relies on the insight that even certain valid results
+are dominated by others; that is, they can be discarded early.
+
+We write @hask«a ≺ b» when @hask«a» dominates @hask«b». We will arrange
 our domination relation such that
-@itemList[«Layout operators are monotonous with respect to domination.
-           Consequently, for any document context @hask«ctx :: Doc d => d -> d», if @hask«a ≺ b» then @hask«c a ≺ c b»»
+@enumList[«Layout operators are monotonous with respect to domination.
+           Consequently, for any document context
+
+           @hask«ctx :: Doc d => d -> d», if @hask«a ≺ b» then @hask«ctx a ≺ ctx b»»
           ,«If @hask«a ≺ b», then @hask«a» is at least as frugal as @hask«b».»]
 
 Together, these properties mean that we can always discard dominated
 layouts from a set, as we can discard invalid ones. Indeed, we have:
-@spec«
-a ≺  b  => c a ≺  c b  =>  height (c a) <= height (c b)
-»
+@theorem«domination»«
+a ≺  b  => ctx a ≺  ctx b  =>  height (c a) <= height (c b)
+»«»
 
 We can proceed by defining our relation and proving its properties 1. and 2. above.
 The domination relation is a partial order (a reflexive, transitive and antisymmetric relation). 
@@ -857,32 +872,63 @@ The second desired property is a direct consequence of the definition.
 The first one is broken down into the two following lemmas:
 
 @lemma«@hask«flush» is monotonic»«
-  @spec«      d1 ≺  d2  ⇒   flush d1 ≺ flush d2 »»«
-We have
-
+  if @spec«      m1 ≺  m2 » then   @spec«flush m1 ≺ flush m2 »»«
+We make the three following three assumptions
+@spec«
 height     m1 <= height     m2
 maxWidth   m1 <= maxWidth   m2
 lastWidth  m1 <= lastWidth  m2
+»
+and we need to prove the following three conditions
 
-and we want:
-
+@spec«
 height     (flush m1) <= height     (flush m2)
 maxWidth   (flush m1) <= maxWidth   (flush m2)
 lastWidth  (flush m1) <= lastWidth  (flush m2)
+»
 
-or, after computation:
+by definition, they reduce to the following inequalities, which are easy consequences of the assumptions.
 
-
-height     m1 + 1 <= height     m2 + 1
-maxWidth   m1 <= maxWidth m2
-0 <= 0
+@spec«
+height     m1 + 1  <= height     m2 + 1
+maxWidth   m1      <= maxWidth m2
+0                  <= 0
+»
 
 
 »
 
-  @lemma«concatenation is monotonic»«
-  @spec«if    d1 ≺  d2 and  d'1 ≺  d'2   => (d1 <> d2) ≺  (d'1 <> d'2)  »
-  »«»
+@lemma«concatenation is monotonic»«
+@spec«if    m1 ≺  m2 and  m'1 ≺  m'2   => (m1 <> m'1) ≺  (m2 <> m'2)  »
+
+»«
+height     m1 <= height     m2      (1)
+maxWidth   m1 <= maxWidth   m2      (2)
+lastWidth  m1 <= lastWidth  m2      (3)
+height     m'1 <= height     m'2    (4)
+maxWidth   m'1 <= maxWidth   m'2    (5)
+lastWidth  m'1 <= lastWidth  m'2    (6)
+
+@spec«
+height     (m1 <> m'1) <= height     (m2 <> m'2)
+maxWidth   (m1 <> m'1) <= maxWidth   (m2 <> m'2)
+lastWidth  (m1 <> m'1) <= lastWidth  (m2 <> m'2)
+»
+
+@spec«
+height     m1 + height m'1 <= height     m2 + height m'2
+max (maxWidth m1) (lastWidth m1 + maxWidth m'1) <= max (maxWidth m2) (lastWidth m2 + maxWidth m'2)
+lastWidth  m1 + lastWidth m'1 <= lastWidth  m2 + lastWidth m'2
+»
+
+The 1st and 3rd inequalities are consequences of the assumptions combined with the monotonicity of +.
+Additionally, the 2nd inequation uses monotonicity of @hask«max»
+
+@spec«
+a <= b ∧ c <= d   =>  max a c <= max b d
+»
+
+»
 
 
 
