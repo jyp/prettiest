@@ -18,7 +18,6 @@ import System.Clock
 import Prelude hiding (fail)
 import Control.Monad (forM_,when,forM)
 import System.IO
-import MarXup.Verbatim (fromVerbatim)
 import MarXup.Diagram.Plot (simplePlot)
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -581,7 +580,8 @@ prop_text_empty       = empty == text ""
 prop_flush :: (Doc a, Eq a) => a -> a -> Bool
 prop_flush a b =  flush a <> flush b == flush (flush a <> b)
 »
-One might expect this law to hold instead: @hask«a <> flush b == flush (a <> b)». However, the inner @hask«flush» on @hask«b» goes back to the local indentation level, while the outer @hask«flush» goes back to the outer indentation level, which are equal only if @hask«a» ends with an empty line. In turn this condition is guaranteed only when @hask«a» is itself flushed.
+One might expect this law to hold instead: @spec«a <> flush b == flush (a <> b)».
+However, the inner @hask«flush» on @hask«b» goes back to the local indentation level, while the outer @hask«flush» goes back to the outer indentation level, which are equal only if @hask«a» ends with an empty line. In turn this condition is guaranteed only when @hask«a» is itself flushed.
 
 »]
 
@@ -972,20 +972,41 @@ instance Doc DM where
 
 @sec_timings<-section«Timings»
 
-Benchmark: priting @hask«testExpr n», for @hask«n» from 1 to 15.
+
+In order to test it on large, but representative outputs, we have used it to pretty-print
+S-Exprs representing full binary trees of increasing depths.
+The S-Exprs are generated with the following function:
 
 @haskell«
 testExpr 0 = Atom "a"
 testExpr n = SExpr [testExpr (n-1),testExpr (n-1)]
 »
 
-Time to compute the layout vs. number of lines in the output
+We have laid out @hask«testExpr n» using the pretty printer for S-Expressions
+shown above, and the most efficient version of @hask«render»,
+and measured the time to compute the length of the layout.
+Note that the printer heavily exercises the disjuction construct. For each SExpr with two
+sub-expressions, the printer introduces a choice. Hence for printing @hask«testExpr n»
+@tm«2^n-1» choices are offered to the pretty printer,
+for a total of @tm«2^{2^n-1}» possible layouts to consider.
+
+We have run the layout algorithm for @hask«n» ranging from 1 to 15.
+The following plot shows the time taken (in nanoseconds) against
+the @emph«number of lines of output». (Using the number of lines rather than @hask«n»
+gives a more reasonable of the amount of work to perform for each layout task.)
 
 @center(element performancePlot)
 
-on a log scale:
+The following plot shows the same data, on a double logarithmic scale
+(note that several inputs can be printed on a single line):
 
 @center(element performancePlotLog)
+
+The plot shows a sub-linear behaviour. We interpret this result as follows.
+Our pretty-printer for s-expressions indents all the contents after the first opening parenthesis.
+Consequently, for very big
+outputs, just printing the opening parentheses takes sufficiently much horizontal spaces that
+a significant amout of possibilities may be discarded early, thus saving time.
 
 @section«Discussion»
 
