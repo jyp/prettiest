@@ -18,8 +18,9 @@ import System.Clock
 import Prelude hiding (fail)
 import Control.Monad (forM_,when,forM)
 import System.IO
-import MarXup.Diagram.Plot (simplePlot)
+import MarXup.Diagram.Plot (simplLinAxis, logAxis, simplePlot, Vec2(..))
 import System.IO.Unsafe (unsafePerformIO)
+import Numeric (showFFloat, showEFloat)
 
 a $$ b = flush a <> b
 
@@ -66,15 +67,23 @@ performanceTable = tabular [] "rrr" [[textual (show s), textual (show h),textual
 
 performancePlot :: Diagram ()
 performancePlot = do
-  bx <- simplePlot [0,10000] [0,2000000000] [(fromIntegral nlines, fromIntegral time) | (_,nlines,time) <- performanceData]
+  return ()
+  bx <- simplePlot (Vec2 (showFFloat (Just 0)) (showEFloat (Just 0)))
+                   (Vec2 (simplLinAxis 2000) (simplLinAxis 500000000))
+                   [Vec2
+                    (fromIntegral nlines)
+                    (fromIntegral time) | (_,nlines,time) <- performanceData]
   width bx === constant 200
   D.height bx === constant 100
 
-log10 x = log x / log 10
 
 performancePlotLog :: Diagram ()
 performancePlotLog = do
-  bx <- simplePlot [0,1..4] [1..10] [(log10 (fromIntegral nlines + 1), log10 (fromIntegral time)) | (_,nlines,time) <- performanceData]
+  bx <- simplePlot (pure $ showEFloat (Just 1))
+                   (Vec2 (logAxis 10) (logAxis 10))
+                   [Vec2
+                    (fromIntegral nlines)
+                    (fromIntegral time) | (_,nlines,time) <- performanceData]
   width bx === constant 200
   D.height bx === constant 100
 
