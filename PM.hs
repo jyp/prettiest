@@ -58,7 +58,7 @@ performanceData = unsafePerformIO $ do
         l = render $ (pretty input :: [L])
         input = testExpr size
     dt <- time dump $ show mm
-    return (size,height mm, dt)
+    return (size,1+height mm, dt)
     -- time $ show mm1
     -- time $ show mm'
 
@@ -79,7 +79,7 @@ performancePlot = do
 
 performancePlotLog :: Diagram ()
 performancePlotLog = do
-  bx <- simplePlot (pure $ showEFloat (Just 1))
+  bx <- simplePlot (Vec2 (showFFloat (Just 0)) (showEFloat (Just 1)))
                    (Vec2 (logAxis 10) (logAxis 10))
                    [Vec2
                     (fromIntegral nlines)
@@ -1104,7 +1104,11 @@ better guide which should not be an afterthought.
 finding a bug in the final implementation: the concatenation operator
 did not preserve the invariant that lists were sorted. »
 
+@cmd0"appendix"
+@performanceTable
+
 »
+
 
 improve_pareto_section :: TeX
 improve_pareto_section = «
