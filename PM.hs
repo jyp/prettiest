@@ -18,7 +18,7 @@ import System.Clock
 import Prelude hiding (fail)
 import Control.Monad (forM_,when,forM)
 import System.IO
-import MarXup.Diagram.Plot (simplLinAxis, logAxis, simplePlot, Vec2(..))
+import MarXup.Diagram.Plot 
 import System.IO.Unsafe (unsafePerformIO)
 import Numeric (showFFloat, showEFloat)
 
@@ -65,25 +65,27 @@ performanceData = unsafePerformIO $ do
 performanceTable :: TeX
 performanceTable = tabular [] "rrr" [[textual (show s), textual (show h),textual (show t)] | (s,h,t) <- performanceData]
 
+performancePoints = [Point
+                    (fromIntegral nlines)
+                    (fromIntegral time) | (_,nlines,time) <- performanceData]
+
 performancePlot :: Diagram ()
 performancePlot = do
   return ()
-  bx <- simplePlot (Vec2 (showFFloat (Just 0)) (showEFloat (Just 0)))
-                   (Vec2 (simplLinAxis 2000) (simplLinAxis 500000000))
-                   [Vec2
-                    (fromIntegral nlines)
-                    (fromIntegral time) | (_,nlines,time) <- performanceData]
+  c@(bx,_) <- simplePlot (Point (showFFloat (Just 0)) (showEFloat (Just 0)))
+                       (Point (simplLinAxis 2000) (simplLinAxis 500000000))
+                       performancePoints
   width bx === constant 200
   D.height bx === constant 100
 
 
 performancePlotLog :: Diagram ()
 performancePlotLog = do
-  bx <- simplePlot (Vec2 (showFFloat (Just 0)) (showEFloat (Just 1)))
-                   (Vec2 (logAxis 10) (logAxis 10))
-                   [Vec2
-                    (fromIntegral nlines)
-                    (fromIntegral time) | (_,nlines,time) <- performanceData]
+  let points' = sequenceA performancePoints
+  c@(bx,_) <- simplePlot (Point (showFFloat (Just 0)) (showEFloat (Just 0)))
+                         (Point (logAxis 10) (logAxis 10))
+                         performancePoints
+  functionPlot c 100 (\x -> x* (2738257626.0 / 8192))
   width bx === constant 200
   D.height bx === constant 100
 
