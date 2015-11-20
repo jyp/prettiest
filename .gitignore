@@ -19,3 +19,5 @@ cabal.config
 /Prettiest.tex
 /PM
 /texput.log
+/Prettiest.bbl
+/Prettiest.blg
