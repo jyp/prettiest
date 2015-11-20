@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -XTypeSynonymInstances -XOverloadedStrings -XRecursiveDo -pgmF marxup -F #-}
-{-# LANGUAGE FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, InstanceSigs, FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, InstanceSigs, FlexibleContexts, RankNTypes #-}
 
 import MarXup
 import MarXup.Latex
@@ -14,67 +14,70 @@ import MarXup.Latex.Math (ensureMath)
 import Control.Lens (set)
 import Data.Function
 import Data.List (intercalate, minimumBy, sort, groupBy)
-import System.Clock
+-- import System.Clock
 import Prelude hiding (fail)
 import Control.Monad (forM_,when,forM)
 import System.IO
 import MarXup.Diagram.Plot 
 import System.IO.Unsafe (unsafePerformIO)
 import Numeric (showFFloat, showEFloat)
-
+import Criterion (nf)
+import qualified Criterion.Main.Options as C
+import qualified Criterion.Monad as C
+import Criterion.Types (Measured(..), Report(..), SampleAnalysis(..))
+import Statistics.Resampling.Bootstrap (Estimate(..))
+import Criterion.Measurement as C
+import Criterion.Internal (runAndAnalyseOne)
+import System.Environment (getArgs)
 a $$ b = flush a <> b
 
-time dump x = do
-   t0 <- getTime ProcessCPUTime
-   hPutStrLn dump $ x
-   t1 <- getTime ProcessCPUTime
-   return $ timeSpecAsNanoSecs $ diffTimeSpec t0 t1
+benchmark size = nf testOne size
+-- C.runAndAnalyseOne 0 "benchn" 
 
-test = do
-  dump <- openFile "data" WriteMode
-  forM_ [1..15] $ \size -> do
-    let mm :: M
-        mm = minimum $ (pretty input :: DM)
-        -- mm' :: M'
-        -- mm' = minimum $ (pretty input :: [M'])
-        D1 (mm1:_) = pretty input
-        l :: String
-        l = render $ (pretty input :: [L])
-        input = testExpr size
-    print =<< time dump (show mm)
-    -- time $ show mm1
-    -- time $ show mm'
+testOne :: forall a. (Eq a, Num a) => a -> Int
+testOne size = height mm
+    where mm :: M
+          mm = minimum $ (pretty input :: DM)
+          -- mm' :: M'
+          -- mm' = minimum $ (pretty input :: [M'])
+          D1 (mm1:_) = pretty input
+          l :: String
+          l = render $ (pretty input :: [L])
+          input = testExpr size
 
-performanceData :: [(Integer, Int, Integer)]
+performanceData :: [(Integer, Integer, Double)]
 performanceData = unsafePerformIO $ do
-  dump <- openFile "data" WriteMode
-  forM [1..15] $ \size -> do
-    let mm :: M
-        mm = minimum $ (pretty input :: DM)
-        -- mm' :: M'
-        -- mm' = minimum $ (pretty input :: [M'])
-        D1 (mm1:_) = pretty input
-        l :: String
-        l = render $ (pretty input :: [L])
-        input = testExpr size
-    dt <- time dump $ show mm
-    return (size,1+height mm, dt)
-    -- time $ show mm1
-    -- time $ show mm'
+  d <- readFile "analysis.dat"
+  return [(sz,h,dt) | (sz,h, Estimate {estPoint = dt}) <- read d]
+  -- forM [1..15] $ \size -> do
+  --   (Measured { measTime = dt},_) <- C.measure (benchmark size) 1
+  --   return (size,2 ^ (max 0 (size - 2)), dt)
+  --   -- time $ show mm1
+  --   -- time $ show mm'
+
+performanceAnalysis :: IO ()
+performanceAnalysis = do
+  an <- C.withConfig C.defaultConfig $ do
+    forM [1..15] $ \size -> do
+      (Report { reportAnalysis = SampleAnalysis {anMean = dt}}) <- runAndAnalyseOne size ("bench " ++ show size) (benchmark size)
+      return (size,2 ^ (max 0 (size - 2)), dt)
+  writeFile "analysis.dat" $ show an
+
 
 performanceTable :: TeX
 performanceTable = tabular [] "rrr" [[textual (show s), textual (show h),textual (show t)] | (s,h,t) <- performanceData]
 
+performancePoints :: [Point' Double]
 performancePoints = [Point
                     (fromIntegral nlines)
-                    (fromIntegral time) | (_,nlines,time) <- performanceData]
+                    (time) | (_,nlines,time) <- performanceData]
 
 performancePlot :: Diagram ()
 performancePlot = do
   return ()
   c@(bx,_) <- simplePlot (Point (showFFloat (Just 0)) (showEFloat (Just 0)))
-                       (Point (simplLinAxis 2000) (simplLinAxis 500000000))
-                       performancePoints
+                         (Point (simplLinAxis 2000) (simplLinAxis 0.5))
+                         performancePoints
   width bx === constant 200
   D.height bx === constant 100
 
@@ -85,9 +88,11 @@ performancePlotLog = do
   c@(bx,_) <- simplePlot (Point (showFFloat (Just 0)) (showEFloat (Just 0)))
                          (Point (logAxis 10) (logAxis 10))
                          performancePoints
-  functionPlot c 100 (\x -> x* (2738257626.0 / 8192))
+  functionPlot c 100 (\x -> x* (2.45 / 8192))
   width bx === constant 200
   D.height bx === constant 100
+
+-- data ErrorBar a = ErrorBar {lbound, mean, ubound :: a}
 
 tm :: Verbatim a -> Tex ()
 tm x = do
@@ -97,7 +102,11 @@ tm x = do
   return ()
 
 main :: IO ()
-main = renderTex SIGPlan "Prettiest" (preamble (header >> mainText >> bibliographyAll))
+main = do
+  args <- getArgs
+  case args of
+    ["benchmark"] -> performanceAnalysis
+    _ -> renderTex SIGPlan "Prettiest" (preamble (header >> mainText >> bibliographyAll))
 
 comment :: TeX -> TeX
 comment _ = mempty
