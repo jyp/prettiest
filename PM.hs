@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -XTypeSynonymInstances -XOverloadedStrings -XRecursiveDo -pgmF marxup -F #-}
-{-# LANGUAGE FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, InstanceSigs, FlexibleContexts, RankNTypes #-}
+{-# LANGUAGE FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, InstanceSigs, FlexibleContexts, RankNTypes, TypeFamilies #-}
 
 import MarXup
 import MarXup.Latex
@@ -34,6 +34,10 @@ a $$ b = flush a <> b
 benchmark size = nf testOne size
 -- C.runAndAnalyseOne 0 "benchn" 
 
+instance Element String where
+  type Target String = TeX
+  element = textual
+
 testOne :: forall a. (Eq a, Num a) => a -> Int
 testOne size = height mm
     where mm :: M
@@ -45,15 +49,21 @@ testOne size = height mm
           l = render $ (pretty input :: [L])
           input = testExpr size
 
-performanceData :: [(Integer, Integer, Double)]
+dataFileName = "benchmark-" ++ show pageWidth ++ ".dat"
+
+performanceData :: [(Integer, Integer, (Double,Double,Double))]
 performanceData = unsafePerformIO $ do
-  d <- readFile "analysis.dat"
-  return [(sz,h,dt) | (sz,h, Estimate {estPoint = dt}) <- read d]
+  d <- readFile dataFileName
+  return [(sz,h,(estLowerBound e, estPoint e, estUpperBound e)) | (sz,h, e) <- read d]
   -- forM [1..15] $ \size -> do
   --   (Measured { measTime = dt},_) <- C.measure (benchmark size) 1
   --   return (size,2 ^ (max 0 (size - 2)), dt)
   --   -- time $ show mm1
   --   -- time $ show mm'
+
+regimeSpeed :: Double
+regimeSpeed = fromIntegral nlines / time
+  where ((_,nlines,(_,time,_)):_) = reverse performanceData
 
 performanceAnalysis :: IO ()
 performanceAnalysis = do
@@ -61,36 +71,42 @@ performanceAnalysis = do
     forM [1..15] $ \size -> do
       (Report { reportAnalysis = SampleAnalysis {anMean = dt}}) <- runAndAnalyseOne size ("bench " ++ show size) (benchmark size)
       return (size,2 ^ (max 0 (size - 2)), dt)
-  writeFile "analysis.dat" $ show an
+  writeFile dataFileName $ show an
 
 
 performanceTable :: TeX
 performanceTable = tabular [] "rrr" [[textual (show s), textual (show h),textual (show t)] | (s,h,t) <- performanceData]
 
 performancePoints :: [Point' Double]
-performancePoints = [Point
-                    (fromIntegral nlines)
-                    (time) | (_,nlines,time) <- performanceData]
+performancePoints = [x | (_,x,_) <- performanceBars]
 
-performancePlot :: Diagram ()
-performancePlot = do
-  return ()
-  c@(bx,_) <- simplePlot (Point (showFFloat (Just 0)) (showEFloat (Just 0)))
-                         (Point (simplLinAxis 2000) (simplLinAxis 0.5))
-                         performancePoints
-  width bx === constant 200
-  D.height bx === constant 100
+performanceBars :: [(Point' Double,Point' Double,Point' Double)]
+performanceBars = [(Point x l, Point x m, Point x h)
+                  | (_,nlines,(l,m,h)) <- performanceData, let x = fromIntegral nlines]
 
 
-performancePlotLog :: Diagram ()
-performancePlotLog = do
+
+scatterWithErrors :: PlotCanvas a -> [(Vec2 a,Vec2 a,Vec2 a)] -> Diagram ()
+scatterWithErrors (bx,t) inputs = do
+  let three f (a,b,c) = (f a, f b, f c)
+  forM_ (map (three (interpBox bx . (forward <$> t <*>))) inputs) $ \(l,m,h) -> do
+    -- draw $ path $ polyline [l,h]
+    -- stroke "red" $ path $ polyline [m - Point 3 0, m + Point (-3) 0]
+    showDot 2 "black" m
+    -- forM [l,h] $ \z -> stroke "red" $ path $ polyline [z - Point 2 0, z + Point 2 0]
+    -- error bars are so narrow that we do not see them.
+
+performancePlot sho axes =  do
   let points' = sequenceA performancePoints
-  c@(bx,_) <- simplePlot (Point (showFFloat (Just 0)) (showEFloat (Just 0)))
-                         (Point (logAxis 10) (logAxis 10))
-                         performancePoints
-  functionPlot c 100 (\x -> x* (2.45 / 8192))
+  c@(bx,_) <- preparePlot sho axes (minimum <$> points') (maximum <$> points')
+  scatterWithErrors c performanceBars
+  functionPlot c 5 (\x -> x/regimeSpeed)
   width bx === constant 200
   D.height bx === constant 100
+
+performancePlotLog = performancePlot (Point (showFFloat (Just 0)) (showEFloat (Just 0))) (Point (logAxis 10) (logAxis 10))
+performancePlotLin = performancePlot (Point (showFFloat (Just 0)) (showEFloat (Just 0))) (Point (simplLinAxis 2000) (simplLinAxis 0.5))
+
 
 -- data ErrorBar a = ErrorBar {lbound, mean, ubound :: a}
 
@@ -686,7 +702,7 @@ A layout is @hask«valid» if all its lines are fully valid on the page:
           mostFrugal :: [L] -> L
           mostFrugal = minimumBy (compare `on` length)
 
-pageWidth = 40
+pageWidth = 80
 »
 
 One may expect that disjuction should also be commutative.
@@ -993,40 +1009,42 @@ instance Doc DM where
 @sec_timings<-section«Timings»
 
 
-In order to test it on large, but representative outputs, we have used it to pretty-print
-S-Exprs representing full binary trees of increasing depths.
-The S-Exprs are generated with the following function:
+In order to test our pretty printer on large but representative outputs, we have used it to lay out
+S-Exprs representing full binary trees of increasing depth.
+The S-Exprs to print are given by the following function:
 
 @haskell«
 testExpr 0 = Atom "a"
 testExpr n = SExpr [testExpr (n-1),testExpr (n-1)]
 »
 
-We have laid out @hask«testExpr n» using the pretty printer for S-Expressions
-shown above, and the most efficient version of @hask«render»,
-and measured the time to compute the length of the layout.
+The set of layouts were given by using the pretty printer for S-Expressions
+shown above. The most efficient version of the pretty-printer was used.
+and measured the time to compute the length of the layout. (Computing the length is enough to force the computation of the best layout.)
 Note that the printer heavily exercises the disjuction construct. For each SExpr with two
-sub-expressions, the printer introduces a choice. Hence for printing @hask«testExpr n»
-@tm«2^n-1» choices are offered to the pretty printer,
+sub-expressions, the printer introduces a choice. Hence for printing @hask«testExpr n»,
+the pretty printer is offered @tm«2^n-1» choices,
 for a total of @tm«2^{2^n-1}» possible layouts to consider.
 
-We have run the layout algorithm for @hask«n» ranging from 1 to 15.
-The following plot shows the time taken (in nanoseconds) against
+We have run the layout algorithm for @hask«n» ranging from 1 to 15, and measured
+the time to perform pretty-printing. 
+The following plot shows the time taken (in seconds) against
 the @emph«number of lines of output». (Using the number of lines rather than @hask«n»
-gives a more reasonable of the amount of work to perform for each layout task.)
-
-@center(element performancePlot)
-
-The following plot shows the same data, on a double logarithmic scale
+gives a more reasonable measure of the amount of work to perform for each layout task.)
+The following plot shows the data on a double logarithmic scale
 (note that several inputs can be printed on a single line):
 
 @center(element performancePlotLog)
+Precise timing were obtained by using O'Sullivan's @emph«criterion» benchmarking library.
+Error bars are omitted because they are so thin that they
+are not even visible at this scale.
 
-The plot shows a sub-linear behaviour. We interpret this result as follows.
-Our pretty-printer for s-expressions indents all the contents after the first opening parenthesis.
-Consequently, for very big
-outputs, just printing the opening parentheses takes sufficiently much horizontal spaces that
-a significant amout of possibilities may be discarded early, thus saving time.
+The plot shows a behaviour that tends to become linear when the output is large enough.
+For such large inputs approximately @(showFFloat (Just 2) regimeSpeed []) lines are laid out per second. We interpret this result as follows.
+Our pretty-printer essentially considers non-dominated layouts. If the input is sufficiently complex, this approximately means to
+consider one layout per possible width (say @show(pageWidth)) --- when the width is given then the length and the width of last line are fixed.
+Therefore, the amount of work becomes independent of the number of disjuctions present in the input,
+and depends only on the amount of text to render.
 
 @section«Discussion»
 
