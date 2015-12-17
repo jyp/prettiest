@@ -17,8 +17,7 @@ import Data.List (intercalate, minimumBy, sort, groupBy)
 -- import System.Clock
 import Prelude hiding (fail)
 import Control.Monad (forM_,when,forM)
-import System.IO
-import MarXup.Diagram.Plot 
+import Graphics.Diagrams.Plot
 import System.IO.Unsafe (unsafePerformIO)
 import Numeric (showFFloat, showEFloat)
 import Criterion (nf)
@@ -26,9 +25,9 @@ import qualified Criterion.Main.Options as C
 import qualified Criterion.Monad as C
 import Criterion.Types (Measured(..), Report(..), SampleAnalysis(..))
 import Statistics.Resampling.Bootstrap (Estimate(..))
-import Criterion.Measurement as C
 import Criterion.Internal (runAndAnalyseOne)
 import System.Environment (getArgs)
+
 a $$ b = flush a <> b
 
 benchmark size = nf testOne size
@@ -86,7 +85,7 @@ performanceBars = [(Point x l, Point x m, Point x h)
 
 
 
-scatterWithErrors :: PlotCanvas a -> [(Vec2 a,Vec2 a,Vec2 a)] -> Diagram ()
+scatterWithErrors :: PlotCanvas a -> [(Vec2 a,Vec2 a,Vec2 a)] -> TexDiagram ()
 scatterWithErrors (bx,t) inputs = do
   let three f (a,b,c) = (f a, f b, f c)
   forM_ (map (three (interpBox bx . (forward <$> t <*>))) inputs) $ \(l,m,h) -> do
@@ -104,8 +103,10 @@ performancePlot sho axes =  do
   width bx === constant 200
   D.height bx === constant 100
 
-performancePlotLog = performancePlot (Point (showFFloat (Just 0)) (showEFloat (Just 0))) (Point (logAxis 10) (logAxis 10))
-performancePlotLin = performancePlot (Point (showFFloat (Just 0)) (showEFloat (Just 0))) (Point (simplLinAxis 2000) (simplLinAxis 0.5))
+renderFloat x = ensureMath $ tex $ showFFloat (Just 0) x ""
+
+performancePlotLog = performancePlot (pure renderFloat) (Point (logAxis 10) (logAxis 10))
+performancePlotLin = performancePlot (pure renderFloat) (Point (simplLinAxis 2000) (simplLinAxis 0.5))
 
 
 -- data ErrorBar a = ErrorBar {lbound, mean, ubound :: a}
@@ -1298,7 +1299,7 @@ did not preserve the invariant that lists were sorted. »
 
 lineHeight = 6
 
-abstrLayout :: Expr -> Diagram (Object,Point)
+abstrLayout :: Expr -> TexDiagram (Object,Point)
 abstrLayout lastWidth = do
   bx <- box
   let points@[_nw,_ne,_se,after,_sse,_sw]
@@ -1329,13 +1330,13 @@ showDot sz color p =
     c#Center .=. p
     width c === sz
 
-dblarrow :: Box -> Point -> Point -> Diagram ()
+dblarrow :: Box -> Point -> Point -> TexDiagram ()
 dblarrow lab a b = do
    let points = [a,b]
        normal = OVector (avg points) (rotate90 (b-a))
        p = polyline points
    using (outline "black" . set endTip ToTip  . set startTip ToTip) $ path p
-   tighten 10 $ autoLabel lab normal
+   tighten 10 $ autoLabelObj lab normal
    -- showDot 1 "black" (avg points)
    -- showDot 2 "green" (lab # Center)
    -- showDot 3 "red" (avg points + rotate90 (b-a))
@@ -1376,7 +1377,7 @@ singleLayoutDiag = center $ element $ do
   rulersOfLayout «height» «maxWidth» «lastWidth» a
   return ()
 
-twoLayouts :: Diagram ((Object,Point),(Object,Point))
+twoLayouts :: TexDiagram ((Object,Point),(Object,Point))
 twoLayouts = do
   (a,a_last) <- abstrLayout lw1
   (b,b_last) <- abstrLayout lw2
