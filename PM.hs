@@ -808,12 +808,63 @@ must check that @hask«measure» is a layout homomorphism (ignoring of
 course the @hask«render»er). The homomorphism property can be spelled out as the following
 three laws:
 
-@lemma«Measure is a homomorphism»«
+@lemma«Measure is a Layout-homomorphism»«
 @spec«
-measure (a <> b) == measure a <> measure b
+measure (a <> b)  == measure a <> measure b
 measure (flush a) == flush (measure a)
-measure (text s) == text s
-»»«TODO»
+measure (text s)  == text s
+»»«
+1.
+measure (a ++ [""]) == M { maxWidth = maximum (map length) (a ++ [""])
+                         , height   = length  (a ++ [""]) - 1
+                         , lastWidth = length $ last $ (a ++ [""])
+                         }
+                    == M { maxWidth  = maximum ((map length a) ++ [length ""])
+                         , height    = length a + 1 - 1
+                         , lastWidth = length ""
+                         }
+                    == M { maxWidth  = maximum (map length a)
+                         , height    = length a - 1 + 1
+                         , lastWidth = 0
+                         }
+                    == flush M { maxWidth  = maximum (map length a)
+                                , height    = length a - 1
+                                , lastWidth = length $ last $ a
+                                }
+                    == flush (measure a)
+
+
+measure (xs <> (y:ys)) == M { maxWidth = maximum (map length) (init xs ++ [last xs ++ y] ++ map (indent ++) ys)
+                            , height  = length (init xs ++ [last xs ++ y] ++ map (indent ++) ys) - 1
+                            , lastWidth = length $ last $ (init xs ++ [last xs ++ y] ++ map (indent ++) ys)
+                            }
+                       == M { maxWidth = maximum ((init (map length xs) ++ [length (last xs) + length y] ++ map (\y -> length y + length (last xs)) ys))
+                            , height  = length (init xs) + 1 + length ys - 1
+                            , lastWidth = last $ ((init (map length xs) ++ [length (last xs) + length y] ++ map (\y -> length y + length (last xs)) ys))
+                            }
+                       == M { maxWidth = maximum (init (map length xs) ++ map (\y -> length y + length (last xs)) (y:ys))
+                            , height  = (length xs - 1) + (length (y:ys) - 1)
+                            , lastWidth = last $ (init (map length xs) ++ map (\y -> length y + length (last xs)) (y:ys))
+                            }
+                       == M { maxWidth = maximum [maximum (init (map length xs)), length (last xs) + maximum (map length (y:ys))]
+                            , height  = (length xs - 1) + (length (y:ys) - 1)
+                            , lastWidth = last $ (map (\y -> length y + length (last xs)) (y:ys))
+                            }
+                       == M { maxWidth = maximum [maximum (map length xs), length (last xs) + maximum (map length (y:ys))]
+                            , height  = (length xs - 1) + (length (y:ys) - 1)
+                            , lastWidth = length (last xs) + last $ (map length (y:ys))
+                            }
+                       == M { maxWidth = maximum (map length xs)
+                            , height  = length xs - 1
+                            , lastWidth = length (last xs)
+                            } <>
+                          M { maxWidth = maximum (map length (y:ys))
+                            , height  = length (y:ys) - 1
+                            , lastWidth = length (last (y:ys))
+                            }
+                      == measure xs <> measure (y:ys)
+
+»
 
 Checking the laws is left as a simple, if somewhat a tedious, exercise (TODO: appendix) to the reader.
 
