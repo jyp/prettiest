@@ -128,7 +128,7 @@ main = do
   args <- getArgs
   case args of
     ["benchmark"] -> performanceAnalysis
-    _ -> renderTex SIGPlan "Prettiest" (preamble (header >> mainText >> bibliographyAll))
+    _ -> renderTex SIGPlan "Prettiest" (preamble (header >> mainText >> bibliographyAll >> appendix))
 
 comment :: TeX -> TeX
 comment _ = mempty
@@ -171,8 +171,28 @@ mainText = «
 
 A pretty printer is a program that prints data structures in a way which
 makes them pleasant to read. (The data structures in question
-often represent programs, but not always.) I propose the following
-three principles of pretty printing:
+often represent programs, but not always.) 
+The functional programming community has been using
+pretty printing to showcase proper functional programming style. The pretty printer of @citet"hughes_design_1995"
+remains an influential example of functional programming design, while that of
+@citet"wadler_prettier_2003" was published as a chapter in a book dedicated to the @qu"fun of programming".
+
+In addition to their esthetical and pedagogical value, the pretty printers of Hughes and Wadler
+are practical implementations which form the basis of industrial-strength pretty-printing packages, which remain popular today. Hughes' design has been
+refined by Peyton Jones, and is available as the
+Hackage package @sans«pretty»@footnote«@url«https://hackage.haskell.org/package/pretty»»,
+while Wadler's design has been extended by Leijen and made available as the
+@sans«wl-print» package@footnote«@url«https://hackage.haskell.org/package/wl-pprint»».
+
+This paper may appear as a bold attempt to improve over landmark pieces of work in the functional programming landscape.
+Yet, our goal is slightly different to that of Hughes and Wadler. Indeed, they mostly aim to
+demonstrate general principles of functional programming development, with an emphasis on the efficency of the algorithm.
+The methodological idea is to derive a greedy algorithm from a functional specification.
+In the process, they give themselves some leeway in what they accept as pretty outputs (TODO: ref).
+In contrast, my primary goal is to produce @emph«the prettiest output», at the cost of efficiency. Yet, the final result is reasonably
+efficient (@sec_timings).
+
+Let us define a pretty printer, first informally, as a program which abides by the following principles:
 
 @pcp_visibility<-principle«Visibility»«A pretty printer shall
 layout all its output within the width of the page.»
@@ -185,34 +205,13 @@ used to display the data.»
 
 Furthermore, the first principle takes precedence over the second one, which itself takes precedence over the third one.
 
+In the rest of the paper, we interpret the above three principles as an optimisation problem, and derive a program
+which solves it efficiently enough.
 
-The functional programming community has been using
-pretty printing to showcase proper functional programming style. The pretty printer of @citet"hughes_design_1995"
-remains an influential example of functional programming design, while that of
-@citet"wadler_prettier_2003" has appeared as chapter of of a book dedicated to the @qu"fun of programming".
-Even though Hughes and Wadler are not explicit about it, it is apparent that (some of) the principles stated above
-guide the design of their libraries.
+@sec_api<-section«Interface (Syntax)»
 
-
-In addition to their esthetical and pedagogical value, the pretty printers of Hughes and Wadler
-are practical implementations which form the basis of industrial-strength pretty-printing packages, which remain popular today. Hughes' design has been
-refined by Peyton Jones, and is available as the
-Hackage package @sans«pretty»@footnote«@url«https://hackage.haskell.org/package/pretty»»,
-while Wadler's design has been extended by Leijen and made available as the
-@sans«wl-print» package@footnote«@url«https://hackage.haskell.org/package/wl-pprint»».
-
-In this paper, I propose a new design for a pretty printing
-library. The interface is inspired by Hughes' and Wadler's, but is
-subtly different. In contrast to Hughes and Wadler, my primary goal is
-to abide by the principles of pretty printing as defined above:
-efficiency is a secondary concern. I will interpret the above three principles
-as an optimisation problem, which one may fear will be expensive to solve. Yet, the final result is reasonably
-efficient (@sec_timings).
-
-@sec_api<-section«API (Syntax)»
-
-Let us assume we want to
-pretty print S-Expressions, and that they are represented as follows:
+Let us use an example to guide the development of our pretty-printing interface.
+Assume that we want to pretty print S-Expressions, and that they are represented as follows:
 
 @haskell«
 data SExpr = SExpr [SExpr] | Atom String
@@ -232,7 +231,7 @@ While it is clear how the first two principles constrain the result, it
 is less clear how the third principle plays out: we must specify more precisely which
 layouts are admissible. To this end, we assert that in a pretty
 display of an S-Expr, we would like the elements to be either
-concatenated horizontally, or aligned vertically. The possible pretty
+concatenated horizontally, or aligned vertically. Thus the legible
 layouts of our @hask«abcd» example would be either
 
 @verbatim«
@@ -249,17 +248,17 @@ or
 »
 
 In general, a pretty printing library must provide the means to express
-the set of admissible layouts: it is up to the user to
+the set of legible layouts: it is up to the user to
 reify @pcp_layout on the data structure of interest. The printer
-will then automatically pick the smallest (@pcp_compact) layout which fits
+will then automatically pick the smallest (@pcp_compact) legible layout which fits
 the page (@pcp_visibility).
 
-Our library provides an API
-to decribe layouts which is similar to Hughes's: we can express both
+Our layout-description API
+is similar to Hughes's: we can express both
 vertical (@hask«$$») and horizontal (@hask«<>») composition of
 documents, as well as embedding raw @hask«text» and provide
-automatic choice between layouts (@hask«<|>»). At this stage, we keep
-the representation of documents abstract, by using a typeclass which
+choice between layouts (@hask«<|>»). At this stage, we keep
+the representation of documents abstract, by using a typeclass (@hask«Doc») which
 provides the above combinators, as well as means of @hask«render»ing a
 document:
 
@@ -288,7 +287,7 @@ vcat  = foldr1 ($$)
 hsep  = foldr1 (<+>)
 »
 
-We can furthermore define automatic choice between horizontal and
+We can furthermore define the choice between horizontal and
 vertical concatenation:
 
 @haskell«
@@ -307,11 +306,11 @@ pretty  (SExpr xs)  =   text "(" <>
                         text ")"
 »
 
-@sec_informal_semantics<-section«Towards semantics»
+@sec_informal_semantics<-section«Semantics: an example»
 
-Our API provies a syntax to describe documents. The natural question is then: what should
+The above API provides a syntax to describe layouts. The natural question is then: what should
 its semantics be?  In other words, how do we turn the three principles into a
-specification of @hask«render»? In particular, how do we turn the above code into a pretty printer of S-Expressions?
+formal specification? In particular, how do we turn the above @hask«pretty» function into a pretty printer of S-Expressions?
 
 Let us use an example to try and answer the question, and outline why neither Wadler's or Hughes' answer is satisfactory. Suppose we want
 to pretty-print the following S-Expr (which is specially crafted to
@@ -481,7 +480,7 @@ it is best if we spend a moment to further refine the API for defining pretty la
 @section«Semantics, continued»
 
 @subsection«Layouts»
-We ignore for a moment choice between possible layouts
+We ignore for a moment the choice between possible layouts
 (@hask«<|>»). As Hughes, we call a document without choice a @emph«layout».
 
 Recall that we have inherited from Hughes a draft API for layouts:
@@ -496,11 +495,11 @@ text  :: Layout l => String -> l
 At this stage, classic functional pearls would state a number of laws
 that the above API has to satisfy, then infer a semantics from them.
 Fortunately, in our case, Hughes and Wadler have already laid out this
-ground work, so we can jump straight to giving a compositional
+ground work, so we can take a shortcut and immediately state a compositional
 semantics. We will later check that the expected laws hold.
 
 Let us interpret a layout as a @emph«non-empty» list of lines to print. As
-Hughes, I'll simply use the type of lists.
+Hughes, I'll simply use the type of lists, trusting the reader to remember the invariant.
 
 @haskell«
 type L = [String] -- non empty.
@@ -548,7 +547,7 @@ Or, diagramatically:
 
 @(horizCat False)
 
-The implementation handles the last line of the first layout and the
+The Haskell encoding of the idea must handle the last line of the first layout and the
 first line of the second layout specially, as follows:
 
 @haskell«
@@ -560,8 +559,10 @@ first line of the second layout specially, as follows:
             indent = replicate n ' '
 »
 
-Given the above definition, we can then refine our API a bit.
-Indeed, concatenation is (nearly) a special case of horizontal composition. That is,
+
+We take a quick detour to refine our API a bit.
+Indeed, as it becomes clear with the above definition, vertical concatenation is (nearly)
+a special case of horizontal composition. That is,
 instead of composing vertically, one can add an empty line to the
 left-hand-side layout and then compose horizontally. The combinator which adds
 an empty line is called @hask«flush», and has the following definition:
@@ -582,7 +583,7 @@ this choice, for two reasons:
 @enumList[«The new API clearly separates the concerns of concatenation and
            left-flushing documents.»
          ,«The horizontal composition (@hask«<>») has a nicer algebraic structure
-          than (@hask«$$»). The vertical composition (@hask«$$») has no unit, while (@hask«<>») has empty layout as unit.
+          than (@hask«$$»). Indeed, the vertical composition (@hask«$$») has no unit, while (@hask«<>») has the empty layout as unit.
           (In Hughes' pretty-printer, not even @hask«<>» has a unit, due to more involved semantics.)»]
 
 To sum up, our API for layouts is the following:
@@ -644,26 +645,26 @@ Again, we give the compositional semantics right away. Documents are
 interpreted as a set of layouts. We implement sets as lists, where
 order and number of occurences won't matter.
 
-The interpretation of disjunction merely appends the list of possible layouts.
+The interpretation of disjunction merely appends the list of possible layouts:
 @haskell«
 instance Doc [L] where
   xs <|> ys = (xs ++ ys)
   fail = []
 »
 
-Consequently, disjunction is associative. 
+Consequently, disjunction is associative.
+
+@haskell«
+
+prop_disj_assoc :: (Doc a, Eq a) => a -> a -> a -> Bool
+prop_disj_assoc a b c = (a <|> b) <|> c == a <|> (b <|> c)
+»
 
 @comment«prop_leftUnit' :: (Doc a, Eq a) => a -> Bool
 prop_leftUnit' a = fail <|> a == a
 
 prop_rightUnit' :: (Doc a, Eq a) => a -> Bool
 prop_rightUnit' a = a <|> fail == a
-»
-
-@haskell«
-
-prop_disj_assoc :: (Doc a, Eq a) => a -> a -> a -> Bool
-prop_disj_assoc a b c = (a <|> b) <|> c == a <|> (b <|> c)
 »
 
 We simply lift the layout operators idiomatically @citep"mcbride_applicative_2007" over sets:
@@ -691,7 +692,7 @@ prop_distrflush a b = flush (a <|> b) == flush a <|> flush b
 @subsection«Semantics»
 
 We can finally define formally what it means to render a document.  To
-pretty print a document, we pick a shortest layout among the valid
+do so document, we pick a shortest layout among the valid
 ones, according to @pcp_visibility:
 @haskell«
   render =   render .  -- (for layouts)
@@ -712,7 +713,7 @@ pageWidth = 80
 »
 
 One may expect that disjuction should also be commutative.
-However, the implementation of @hask«mostFrugal» picks one of
+However, the implementation of @hask«mostFrugal» only picks @emph«one» of
 the most frugal layouts: that is fine as all most frugal layouts are
 equally good. It also means that re-ordering the arguments of a disjunction may
 affect the layout being picked. Therefore, commutativity of disjunction holds
@@ -728,7 +729,7 @@ infix 3 =~
 »
 
 We have now defined semantics compositionally; furthermore this semantics is executable.
-That is, we can define the pretty printing an S-Expr is then written as follows:
+Consequently, we can implement the pretty printing an S-Expr as follows:
 
 @haskell«
 showSExpr x = render (pretty x :: [L])
@@ -737,7 +738,7 @@ showSExpr x = render (pretty x :: [L])
 Running @hask«showSExpr» on our example (@hask«testData») yields the expected output.
 
 While the above semantics provide an executable implementation, it is insanely slow.
-Indeed: every possible combination of choices is constructed then a shortest output is
+Indeed, every possible combination of choices is first constructed, and only then a shortest output is
 picked. Thus, for an input with @ensureMath«n» choices, the running time is @tm«O(2^n)».
 
 
@@ -752,7 +753,7 @@ Let us define an abstract semantics for
 layouts, which ignores the text, and captures only the measure of space used.
 
 The only measures that matter are the maximum width of the layout, the width of its
-last line and its height (and, because layouts cannot be empty we do not
+last line and its height (and, because layouts cannot be empty and it's convenient to start at zero, we do not
 count the last line):
 @singleLayoutDiag
 In code:
@@ -764,14 +765,13 @@ data M = M {  height     :: Int,
 »
 
 Astute readers may have guessed the above semantics by looking at the diagram for
-composition of layouts shown earlier. Indeed, it is the above abstract semantics which justifies
-the abstract representation of a layout that the diagram uses.
-Here is the concatenation
-diagram annotated with those lengths:
+composition of layouts shown earlier. Indeed, it is the above abstract semantics (@hask«M») which justifies
+the abstract representation of a layout that the diagram uses (a box with an odd last line).
+Here is the concatenation diagram annotated with those lengths:
 
 @(horizCat True)
 
-The above diagram can be read out as code as follows:
+The above diagram can be read out as Haskell code, as follows:
 @haskell«
 instance Layout M where
   a <> b =
@@ -780,7 +780,7 @@ instance Layout M where
           height     =  height     a + height     b,
           lastWidth  =  lastWidth  a + lastWidth  b}
 »
-The other combinators are easy to implement:
+The other layout combinators are easy to implement:
 @haskell«
   text s   = M {  height     = 0,
                   maxWidth   = length s,
@@ -791,15 +791,15 @@ The other combinators are easy to implement:
 »
 
 We can even give a rendering for these abstract layouts, by printing an @teletype«x» at each
-occupied position:
+occupied position, completing the class instance:
 @haskell«
   render m = render (replicate (height m) (replicate (maxWidth m) 'x') ++
                      [replicate (lastWidth m) 'x'])
 »
 
-The correctness of the above code relies on intution, and a
+The correctness of the above instance relies on intution, and a
 proper reading of the concatenation diagram. This process being
-informal, so we should to cross-check the final result formally.
+informal, we should cross-check the final result formally.
 To do so, we define a function which computes the measure of a full layout:
 @haskell«
 measure :: L -> M
@@ -846,7 +846,7 @@ text x = filter valid [text x]
 xs <> ys = filter valid [x <> y | x <- xs, y <- ys]
 »
 
-We can do this because @hask«validity» is monotonous:
+We can do so because @hask«validity» is monotonous:
 
 @lem_valid_mono<-lemma«@hask«valid» is monotonous»«
 @spec«
@@ -875,7 +875,7 @@ combined with another layout to produce something valid.
 not (valid a)    => not (valid (a <> b))
 not (valid b)    => not (valid (a <> b))
 not (valid a)    => not (valid (flush a))
-»»«Contraposition of @lem_valid_mono»
+»»«By contraposition of @lem_valid_mono»
 
 @subsection«Pruning out dominated results»
 
@@ -891,13 +891,15 @@ our domination relation such that
           ,«If @hask«a ≺ b», then @hask«a» is at least as frugal as @hask«b».»]
 
 Together, these properties mean that we can always discard dominated
-layouts from a set, as we can discard invalid ones. Indeed, we have:
+layouts from a set, as we could discard invalid ones. Indeed, we have:
 @theorem«domination»«
 a ≺  b  => ctx a ≺  ctx b  =>  height (c a) <= height (c b)
 »«»
 
 We can proceed by defining our relation and proving its properties 1. and 2. above.
-The domination relation is a partial order (a reflexive, transitive and antisymmetric relation). 
+We first remark that the domination relation is a partial order
+(a reflexive, transitive and antisymmetric relation), and thus make it an instance
+of the following class:
 @haskell«
 class Poset a where
   (≺) :: a -> a -> Bool
@@ -920,7 +922,7 @@ The first one is broken down into the two following lemmas:
 
 @lemma«@hask«flush» is monotonic»«
   if @spec«      m1 ≺  m2 » then   @spec«flush m1 ≺ flush m2 »»«
-We make the three following three assumptions
+We have:
 @spec«
 height     m1 <= height     m2
 maxWidth   m1 <= maxWidth   m2
@@ -949,28 +951,30 @@ maxWidth   m1      <= maxWidth m2
 @spec«if    m1 ≺  m2 and  m'1 ≺  m'2   => (m1 <> m'1) ≺  (m2 <> m'2)  »
 
 »«
+We have:
+@spec«
 height     m1 <= height     m2      (1)
 maxWidth   m1 <= maxWidth   m2      (2)
 lastWidth  m1 <= lastWidth  m2      (3)
 height     m'1 <= height     m'2    (4)
 maxWidth   m'1 <= maxWidth   m'2    (5)
 lastWidth  m'1 <= lastWidth  m'2    (6)
-
+»
+and we need to prove the following three conditions:
 @spec«
 height     (m1 <> m'1) <= height     (m2 <> m'2)
 maxWidth   (m1 <> m'1) <= maxWidth   (m2 <> m'2)
 lastWidth  (m1 <> m'1) <= lastWidth  (m2 <> m'2)
 »
-
+Those are by definition equivalent to the following ones:
 @spec«
 height     m1 + height m'1 <= height     m2 + height m'2
 max (maxWidth m1) (lastWidth m1 + maxWidth m'1) <= max (maxWidth m2) (lastWidth m2 + maxWidth m'2)
 lastWidth  m1 + lastWidth m'1 <= lastWidth  m2 + lastWidth m'2
 »
 
-The 1st and 3rd inequalities are consequences of the assumptions combined with the monotonicity of +.
-Additionally, the 2nd inequation uses monotonicity of @hask«max»
-
+The 1st and 3rd inequalities are consequences of the assumptions combined with the monotonicity of @hask«+».
+The 2nd inequation can be obtained likewise, with additionally using the monotonicity of @hask«max»:
 @spec«
 a <= b ∧ c <= d   =>  max a c <= max b d
 »
@@ -1019,10 +1023,8 @@ instance Doc DM where
 
 @sec_timings<-section«Timings»
 
-
-In order to test our pretty printer on large but representative outputs, we have used it to lay out
-S-Exprs representing full binary trees of increasing depth.
-The S-Exprs to print are given by the following function:
+In order to benchmark our pretty printer on large but representative outputs, we have used it to lay out
+S-expressions representing full binary trees of increasing depth, as generated by the following function:
 
 @haskell«
 testExpr 0 = Atom "a"
@@ -1032,7 +1034,7 @@ testExpr n = SExpr [testExpr (n-1),testExpr (n-1)]
 The set of layouts were given by using the pretty printer for S-Expressions
 shown above. The most efficient version of the pretty-printer was used.
 and measured the time to compute the length of the layout. (Computing the length is enough to force the computation of the best layout.)
-Note that the printer heavily exercises the disjuction construct. For each SExpr with two
+This benchmark heavily exercises the disjuction construct. For each SExpr with two
 sub-expressions, the printer introduces a choice. Hence for printing @hask«testExpr n»,
 the pretty printer is offered @tm«2^n-1» choices,
 for a total of @tm«2^{2^n-1}» possible layouts to consider.
@@ -1083,11 +1085,10 @@ instance Layout [(M,L)] where
 
 »
 
-
 @subsection«Hughes-Style nesting»
 
 Hughes proposes a @hask«nest» conbinator, which indents its argument @emph«unless» it appears on the right-hand-side of a horizontal concatenation.
-The above semantics are rather involved, and appear difficult to support in my framework.
+The above semantics are rather involved, and appear difficult to support by an incremental modification of the framework developed in this paper.
 
 Fortunately, @hask«nest» appears to be used chiefly to implement the @hask«hang» combinator, which offers the choice between horizontal concatenation
 and vertical concatenation with an indentation:
@@ -1102,23 +1103,23 @@ it can be implemented in terms of the combinators seen so far:
 @haskell«
 nest :: Layout d => Int -> d -> d
 nest n y = spaces n <> y
-
-spaces n = text (replicate n ' ')
+  where spaces n = text (replicate n ' ')
 »
 
 @subsection«Ribbon length»
 
 Another subtle feature of Hughes' library is the ability to limit
 the amount of text on a single line, ignoring the current indentation.
-While such a feature is easily added to Hughes or Wadler's greedy printer,
+The goal is to avoid long lines mixed with short lines.
+While such a feature is easily added to Hughes or Wadler's greedy pretty printer,
 it is harder to support as such on top of the basis we have so far.
 
-Need to record the length of the 1st line, length of the last line (no indent).
-When concatenating, we add those numbers and check that .... Unfortunately this
+What we would need to do is to record the length of the 1st line and length of the last line without indentation.
+When concatenating, we add those numbers and check that they do not surpass the ribbon length. Unfortunately this
 adds two dimensions to the search space, and renders the final algorithm impossibly slow.
 
-An alternative is to interpret the ribbon length as the maximum size of a self-contain sublayout of one line.
-Then we just filter out the intermediate results that do not satisfy this property.
+An alternative is to interpret the ribbon length as the maximum size of a self-contained sublayout of one line.
+Then we just filter out the intermediate results that do not fit the ribbon, as follows:
 
 @haskell«
 fitRibbon m = height m > 0 || maxWidth m < ribbonLength
@@ -1126,6 +1127,8 @@ fitRibbon m = height m > 0 || maxWidth m < ribbonLength
 
 valid m = validMeasure m && fitRibbon m
 »
+
+This re-interpretation appears to fulfil the original goal as well.
 
 @subsection«Laws vs compositional semantics»
 
@@ -1140,19 +1143,30 @@ precisely because laws do not fully constrain the design; there is
 room for wiggle. However, a compositional semantics is often an even
 better guide which should not be an afterthought.
 
+
+@section«Conclusion»
+Using three informal principles, we have defined what a pretty printer is.
+We have carefully refined this informal definition to a formal semantics (arguably simpler than that of the state of the art), and
+derived a reasonably efficient implementation. Along the way,
+we have demonstrated how to use the standard functional programming methodology.
+
 @acknowledgements«Using the QuickSpec tool, Nicholas Smallbone helped
 finding a bug in the final implementation: the concatenation operator
 did not preserve the invariant that lists were sorted. »
 
-@cmd0"onecolumn"
-@(cmd "section*" «Appendix»)
-@subsection«Raw benchmark runtimes»
-@performanceTable
 
-@subsection«Proof details»
-@paragraph«Proof of measure being a Layout-homomorphism»
-1.
-@spec«
+»
+
+appendix = do
+  cmd0"onecolumn"
+  (cmd "section*" «Appendix»)
+  subsection«Raw benchmark runtimes»
+  performanceTable
+
+  subsection«Proof details»
+  paragraph«Proof of measure being a Layout-homomorphism»
+  enumList [
+   spec«
 measure (a ++ [""])
                     == M { maxWidth = maximum ((map length) (a ++ [""]))
                          , height   = length  (a ++ [""]) - 1
@@ -1172,8 +1186,8 @@ measure (a ++ [""])
                                 }
                     == flush (measure a)
 »
-2.
-@spec«
+   ,
+   spec«
 measure (xs <> (y:ys))
                        == M { maxWidth = maximum ((map length) (init xs ++ [last xs ++ y] ++ map (indent ++) ys))
                             , height  = length (init xs ++ [last xs ++ y] ++ map (indent ++) ys) - 1
@@ -1206,8 +1220,7 @@ measure (xs <> (y:ys))
                       == measure xs <> measure (y:ys)
 »
 
-3.
-@spec«
+   ,spec«
 measure (text s)
                  == M { maxWidth = maximum (map length [s])
                      , height = length [s] - 1
@@ -1217,9 +1230,7 @@ measure (text s)
                       , lastWidth = length s}
                  == text s
 »
-
-»
-
+   ]
 
 improve_pareto_section :: TeX
 improve_pareto_section = «
