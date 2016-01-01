@@ -810,63 +810,17 @@ three laws:
 
 @lemma«Measure is a Layout-homomorphism»«
 @spec«
-measure (a <> b)  == measure a <> measure b
-measure (flush a) == flush (measure a)
-measure (text s)  == text s
-»»«
-1.
-measure (a ++ [""]) == M { maxWidth = maximum (map length) (a ++ [""])
-                         , height   = length  (a ++ [""]) - 1
-                         , lastWidth = length $ last $ (a ++ [""])
-                         }
-                    == M { maxWidth  = maximum ((map length a) ++ [length ""])
-                         , height    = length a + 1 - 1
-                         , lastWidth = length ""
-                         }
-                    == M { maxWidth  = maximum (map length a)
-                         , height    = length a - 1 + 1
-                         , lastWidth = 0
-                         }
-                    == flush M { maxWidth  = maximum (map length a)
-                                , height    = length a - 1
-                                , lastWidth = length $ last $ a
-                                }
-                    == flush (measure a)
-
-
-measure (xs <> (y:ys)) == M { maxWidth = maximum (map length) (init xs ++ [last xs ++ y] ++ map (indent ++) ys)
-                            , height  = length (init xs ++ [last xs ++ y] ++ map (indent ++) ys) - 1
-                            , lastWidth = length $ last $ (init xs ++ [last xs ++ y] ++ map (indent ++) ys)
-                            }
-                       == M { maxWidth = maximum ((init (map length xs) ++ [length (last xs) + length y] ++ map (\y -> length y + length (last xs)) ys))
-                            , height  = length (init xs) + 1 + length ys - 1
-                            , lastWidth = last $ ((init (map length xs) ++ [length (last xs) + length y] ++ map (\y -> length y + length (last xs)) ys))
-                            }
-                       == M { maxWidth = maximum (init (map length xs) ++ map (\y -> length y + length (last xs)) (y:ys))
-                            , height  = (length xs - 1) + (length (y:ys) - 1)
-                            , lastWidth = last $ (init (map length xs) ++ map (\y -> length y + length (last xs)) (y:ys))
-                            }
-                       == M { maxWidth = maximum [maximum (init (map length xs)), length (last xs) + maximum (map length (y:ys))]
-                            , height  = (length xs - 1) + (length (y:ys) - 1)
-                            , lastWidth = last $ (map (\y -> length y + length (last xs)) (y:ys))
-                            }
-                       == M { maxWidth = maximum [maximum (map length xs), length (last xs) + maximum (map length (y:ys))]
-                            , height  = (length xs - 1) + (length (y:ys) - 1)
-                            , lastWidth = length (last xs) + last $ (map length (y:ys))
-                            }
-                       == M { maxWidth = maximum (map length xs)
-                            , height  = length xs - 1
-                            , lastWidth = length (last xs)
-                            } <>
-                          M { maxWidth = maximum (map length (y:ys))
-                            , height  = length (y:ys) - 1
-                            , lastWidth = length (last (y:ys))
-                            }
-                      == measure xs <> measure (y:ys)
-
+measure (a <> b)   == measure a <> measure b
+measure (flush a)  == flush (measure a)
+measure (text s)   == text s
 »
+(Note: on the lhs of the above equations,
+the combinators (@hask«<>, flush, text») come from
+the @hask«L» instance of @hask«Layout», while on the rhs come from the @hask«M» instance.)
 
-Checking the laws is left as a simple, if somewhat a tedious, exercise (TODO: appendix) to the reader.
+»«
+Checking the laws is a simple, if somewhat a tedious, exercise in program calculation deferred to the appendix.
+»
 
 
 @haskell«
@@ -1185,8 +1139,76 @@ better guide which should not be an afterthought.
 finding a bug in the final implementation: the concatenation operator
 did not preserve the invariant that lists were sorted. »
 
-@cmd0"appendix"
+
+@(cmd "section*" «Appendix»)
 @performanceTable
+
+Proof of measure being a Layout-homomorphism.
+1.
+@spec«
+measure (a ++ [""])
+                    == M { maxWidth = maximum ((map length) (a ++ [""]))
+                         , height   = length  (a ++ [""]) - 1
+                         , lastWidth = length $ last $ (a ++ [""])
+                         }
+                    == M { maxWidth  = maximum ((map length a) ++ [0])
+                         , height    = length a + 1 - 1
+                         , lastWidth = length ""
+                         }
+                    == M { maxWidth  = maximum (map length a)
+                         , height    = length a - 1 + 1
+                         , lastWidth = 0
+                         }
+                    == flush M { maxWidth  = maximum (map length a)
+                                , height    = length a - 1
+                                , lastWidth = length $ last $ a
+                                }
+                    == flush (measure a)
+»
+2.
+@spec«
+measure (xs <> (y:ys))
+                       == M { maxWidth = maximum ((map length) (init xs ++ [last xs ++ y] ++ map (indent ++) ys))
+                            , height  = length (init xs ++ [last xs ++ y] ++ map (indent ++) ys) - 1
+                            , lastWidth = length $ last $ (init xs ++ [last xs ++ y] ++ map (indent ++) ys)
+                            }
+                       == M { maxWidth = maximum ((init (map length xs) ++ [length (last xs) + length y] ++ map (\y -> length (last xs) + length y) ys))
+                            , height  = length (init xs) + 1 + length ys - 1
+                            , lastWidth = last $ ((init (map length xs) ++ [length (last xs) + length y] ++ map (\y -> length (last xs) + length y) ys))
+                            }
+                       == M { maxWidth = maximum (init (map length xs) ++ map (\y -> length (last xs) + length y) (y:ys))
+                            , height  = (length xs - 1) + (length (y:ys) - 1)
+                            , lastWidth = last $ (init (map length xs) ++ map (\y -> length (last xs) + length y) (y:ys))
+                            }
+                       == M { maxWidth = maximum [maximum (init (map length xs)), length (last xs) + maximum (map length (y:ys))]
+                            , height  = (length xs - 1) + (length (y:ys) - 1)
+                            , lastWidth = last $ (map (\y -> length (last xs) + length y) (y:ys))
+                            }
+                       == M { maxWidth = maximum [maximum (map length xs), length (last xs) + maximum (map length (y:ys))]
+                            , height  = (length xs - 1) + (length (y:ys) - 1)
+                            , lastWidth = length (last xs) + last $ (map length (y:ys))
+                            }
+                       == M { maxWidth = maximum (map length xs)
+                            , height  = length xs - 1
+                            , lastWidth = length (last xs)
+                            } <>
+                          M { maxWidth = maximum (map length (y:ys))
+                            , height  = length (y:ys) - 1
+                            , lastWidth = length (last (y:ys))
+                            }
+                      == measure xs <> measure (y:ys)
+»
+
+3.
+@spec«
+measure (text s) == M { maxWidth = maximum (map length [s])
+                      , height = length [s] - 1
+                      , lastWidth = length $ last $ [s]}
+                 == M { maxWidth = length s
+                      , height = 0
+                      , lastWidth = length s}
+                 == text s
+»
 
 »
 
