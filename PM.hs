@@ -23,15 +23,16 @@ import Numeric (showFFloat, showEFloat)
 import Criterion (nf)
 import qualified Criterion.Main.Options as C
 import qualified Criterion.Monad as C
-import Criterion.Types (Measured(..), Report(..), SampleAnalysis(..))
+import Criterion.Types (Measured(..), Report(..), SampleAnalysis(..), Benchmarkable)
 import Statistics.Resampling.Bootstrap (Estimate(..))
 import Criterion.Internal (runAndAnalyseOne)
 import System.Environment (getArgs)
 
+($$) :: forall l. Layout l => l -> l -> l
 a $$ b = flush a <> b
 
+benchmark :: forall a. (Eq a, Num a) => a -> Benchmarkable
 benchmark size = nf testOne size
--- C.runAndAnalyseOne 0 "benchn" 
 
 instance Element String where
   type Target String = TeX
@@ -48,6 +49,7 @@ testOne size = height mm
           l = render $ (pretty input :: [L])
           input = testExpr size
 
+dataFileName :: FilePath
 dataFileName = "benchmark-" ++ show pageWidth ++ ".dat"
 
 performanceData :: [(Integer, Integer, (Double,Double,Double))]
@@ -69,7 +71,7 @@ performanceAnalysis = do
   an <- C.withConfig C.defaultConfig $ do
     forM [1..15] $ \size -> do
       (Report { reportAnalysis = SampleAnalysis {anMean = dt}}) <- runAndAnalyseOne size ("bench " ++ show size) (benchmark size)
-      return (size,2 ^ (max 0 (size - 2)), dt)
+      return (size,(2::Integer) ^ (max 0 (size - 2)), dt)
   writeFile dataFileName $ show an
 
 
@@ -88,13 +90,14 @@ performanceBars = [(Point x l, Point x m, Point x h)
 scatterWithErrors :: PlotCanvas a -> [(Vec2 a,Vec2 a,Vec2 a)] -> TexDiagram ()
 scatterWithErrors (bx,t) inputs = do
   let three f (a,b,c) = (f a, f b, f c)
-  forM_ (map (three (interpBox bx . (forward <$> t <*>))) inputs) $ \(l,m,h) -> do
+  forM_ (map (three (interpBox bx . (forward <$> t <*>))) inputs) $ \(_l,m,h) -> do
     -- draw $ path $ polyline [l,h]
     -- stroke "red" $ path $ polyline [m - Point 3 0, m + Point (-3) 0]
     showDot 2 "black" m
     -- forM [l,h] $ \z -> stroke "red" $ path $ polyline [z - Point 2 0, z + Point 2 0]
     -- error bars are so narrow that we do not see them.
 
+performancePlot :: Vec2 (ShowFct TeX Double) -> Vec2 (Transform Double) -> Diagram TeX Tex ()
 performancePlot sho axes =  do
   let points' = sequenceA performancePoints
   c@(bx,_) <- preparePlot sho axes (minimum <$> points') (maximum <$> points')
@@ -103,8 +106,10 @@ performancePlot sho axes =  do
   width bx === constant 200
   D.height bx === constant 100
 
+renderFloat :: forall a. RealFloat a => a -> Tex ()
 renderFloat x = ensureMath $ tex $ showFFloat (Just 0) x ""
 
+performancePlotLog, performancePlotLin :: Diagram TeX Tex ()
 performancePlotLog = performancePlot (pure renderFloat) (Point (logAxis 10) (logAxis 10))
 performancePlotLin = performancePlot (pure renderFloat) (Point (simplLinAxis 2000) (simplLinAxis 0.5))
 
@@ -1139,11 +1144,13 @@ better guide which should not be an afterthought.
 finding a bug in the final implementation: the concatenation operator
 did not preserve the invariant that lists were sorted. »
 
-
+@cmd0"onecolumn"
 @(cmd "section*" «Appendix»)
+@subsection«Raw benchmark runtimes»
 @performanceTable
 
-Proof of measure being a Layout-homomorphism.
+@subsection«Proof details»
+@paragraph«Proof of measure being a Layout-homomorphism»
 1.
 @spec«
 measure (a ++ [""])
@@ -1201,8 +1208,9 @@ measure (xs <> (y:ys))
 
 3.
 @spec«
-measure (text s) == M { maxWidth = maximum (map length [s])
-                      , height = length [s] - 1
+measure (text s)
+                 == M { maxWidth = maximum (map length [s])
+                     , height = length [s] - 1
                       , lastWidth = length $ last $ [s]}
                  == M { maxWidth = length s
                       , height = 0
