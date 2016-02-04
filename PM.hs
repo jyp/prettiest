@@ -5,7 +5,7 @@ import MarXup
 import MarXup.Latex
 import MarXup.Latex.Bib
 import MarXup.Latex.Math (deflike, thmlike, definition, mathpreamble,lemma,theorem)
-import MarXup.Tex
+import MarXup.Tex hiding (label)
 import MarXup.Diagram hiding (height)
 import qualified MarXup.Diagram as D
 import MarXup.LineUp.Haskell
@@ -15,7 +15,7 @@ import Control.Lens (set)
 import Data.Function
 import Data.List (intercalate, minimumBy, sort, groupBy)
 -- import System.Clock
-import Prelude hiding (fail)
+import Prelude hiding (fail,Num(..),(/),(^))
 import Control.Monad (forM_,when,forM)
 import Graphics.Diagrams.Plot
 import System.IO.Unsafe (unsafePerformIO)
@@ -27,18 +27,22 @@ import Criterion.Types (Measured(..), Report(..), SampleAnalysis(..), Benchmarka
 import Statistics.Resampling.Bootstrap (Estimate(..))
 import Criterion.Internal (runAndAnalyseOne)
 import System.Environment (getArgs)
+import Algebra.Classes
 
 ($$) :: forall l. Layout l => l -> l -> l
 a $$ b = flush a <> b
 
-benchmark :: forall a. (Eq a, Num a) => a -> Benchmarkable
+newpage :: TeX
+newpage = cmd0 "newpage"
+
+-- benchmark :: forall a. (Eq a, Num a) => a -> Benchmarkable
 benchmark size = nf testOne size
 
 instance Element String where
   type Target String = TeX
   element = textual
 
-testOne :: forall a. (Eq a, Num a) => a -> Int
+-- testOne :: forall a. (Eq a, Num a) => a -> Int
 testOne size = height mm
     where mm :: M
           mm = minimum $ (pretty input :: DM)
@@ -71,7 +75,7 @@ performanceAnalysis = do
   an <- C.withConfig C.defaultConfig $ do
     forM [1..15] $ \size -> do
       (Report { reportAnalysis = SampleAnalysis {anMean = dt}}) <- runAndAnalyseOne size ("bench " ++ show size) (benchmark size)
-      return (size,(2::Integer) ^ (max 0 (size - 2)), dt)
+      return (size,(2::Integer) ^ (max 0 (fromIntegral size - 2)), dt)
   writeFile dataFileName $ show an
 
 
@@ -93,7 +97,7 @@ scatterWithErrors (bx,t) inputs = do
   forM_ (map (three (interpBox bx . (forward <$> t <*>))) inputs) $ \(_l,m,h) -> do
     -- draw $ path $ polyline [l,h]
     -- stroke "red" $ path $ polyline [m - Point 3 0, m + Point (-3) 0]
-    showDot 2 "black" m
+    showDot (constant 2) "black" m
     -- forM [l,h] $ \z -> stroke "red" $ path $ polyline [z - Point 2 0, z + Point 2 0]
     -- error bars are so narrow that we do not see them.
 
@@ -139,7 +143,7 @@ preamble body = do
   mathpreamble
   cmd "input" $ tex "../PaperTools/latex/unicodedefs"
 
-  title "An Insanely Pretty Printer"
+  title "A prettier, but not greedy printer"
   authorinfo [AuthorInfo "Jean-Philippe Bernardy" "bernardy@chalmers.se" "CTH"]
   env "document" body
 
@@ -171,9 +175,9 @@ mainText = «
 
 A pretty printer is a program that prints data structures in a way which
 makes them pleasant to read. (The data structures in question
-often represent programs, but not always.) 
-The functional programming community has been using
-pretty printing to showcase proper functional programming style. The pretty printer of @citet"hughes_design_1995"
+often represent programs, but not always.)
+Pretty printing has historically been used by the functional programming
+community to showcase proper style. The pretty printer of @citet"hughes_design_1995"
 remains an influential example of functional programming design, while that of
 @citet"wadler_prettier_2003" was published as a chapter in a book dedicated to the @qu"fun of programming".
 
@@ -184,15 +188,15 @@ Hackage package @sans«pretty»@footnote«@url«https://hackage.haskell.org/pack
 while Wadler's design has been extended by Leijen and made available as the
 @sans«wl-print» package@footnote«@url«https://hackage.haskell.org/package/wl-pprint»».
 
-This paper may appear as a bold attempt to improve over landmark pieces of work in the functional programming landscape.
-Yet, our goal is slightly different to that of Hughes and Wadler. Indeed, they mostly aim to
+This paper is a bold attempt to improve some aspects of the aforementioned landmark pieces of work in the functional programming landscape.
+Yet, our goal is slightly different to that of Hughes and Wadler. Indeed, they aim first and formost to
 demonstrate general principles of functional programming development, with an emphasis on the efficency of the algorithm.
 The methodological idea is to derive a greedy algorithm from a functional specification.
-In the process, they give themselves some leeway in what they accept as pretty outputs (TODO: ref).
-In contrast, my primary goal is to produce @emph«the prettiest output», at the cost of efficiency. Yet, the final result is reasonably
+In the process, they give themselves some leeway in what they accept as pretty outputs (see #sec_notSoPretty).
+In contrast, my primary goal is to produce @emph«the prettiest output», at the cost of efficiency. Yet, we the final result is reasonably
 efficient (@sec_timings).
 
-Let us define a pretty printer, first informally, as a program which abides by the following principles:
+Let specify the desired behaviour of a pretty printer, first informally, as the following principles:
 
 @pcp_visibility<-principle«Visibility»«A pretty printer shall
 layout all its output within the width of the page.»
@@ -226,7 +230,7 @@ abcd = SExpr [Atom "a",Atom "b",Atom "c",Atom "d"]
 »
 
 The goal of the pretty printer is to render a given S-Expr according to the
-three principles of pretty printing: @pcp_visibility, @pcp_layout and @pcp_compact.
+three principles of pretty printing: @pcp_visibility, @pcp_compact and @pcp_layout.
 While it is clear how the first two principles constrain the result, it
 is less clear how the third principle plays out: we must specify more precisely which
 layouts are admissible. To this end, we assert that in a pretty
@@ -338,11 +342,11 @@ aligned vertically or concatenated horizontally (for
 @pcp_layout), The second option will be preferred over the first
 (@pcp_compact), as long as the text fits within the page width
 (@pcp_visibility).
-Interpreting the above (so far informal) specification yields the
+Interpreting the above (still informal) specification yields the
 following results. 1. On a 80-column-wide page, we would get the result
 displayed in @fig_eighty.
 2. On a 20-column-wide page, we would like to get the following output (the first line is a helper showing the column of a given character):
-
+@newpage
 @verbatim«
 12345678901234567890
 
@@ -359,7 +363,7 @@ displayed in @fig_eighty.
    (a b c d))))
 »
 
-@subsection«The liminations of Hughes and Wadler»
+@sec_notSoPretty<-subsection«The liminations of Hughes and Wadler»
 
 Let us take a moment to survey the state of the art.  On a 20-column
 page and using Hughes' library, we would get the following output
@@ -400,15 +404,15 @@ unreasonably inefficient for a pretty-printer do decide whether or not
 to split the first line of a document on the basis of the content of
 the last.» (sec. 7.4 of his paper).  Therefore, he chooses a greedy
 algorithm, which processes the input line by line, trying to fit as
-much as possible on the current line, without regard for what comes
+much text as possible on the current line, without regard for what comes
 next.  In our example, the algorithm can fit @teletype«(abcdefgh ((a»
 on the sixth line, but then it has committed to a very deep
 indentation level, which forces to display the remainder of the
-document in a narrow space, wasting space.
+document in a narrow area, wasting vertical space.
 
 How does Wadler's library fare on the example? Unfortunately, we
 cannot answer the question in a strict sense. Indeed, Wadler's API is
-too restrictive to even @emph«express» the layout we are after. That
+too restrictive to even @emph«express» the layout that we are after. That
 is, one can only specify a @emph«constant» amount of indentation, not
 one that depends on the contents of a document.  This means that
 Wadler's library lacks the capability to express that a multi-line
@@ -438,18 +442,26 @@ It does not look too bad --- but there is a spurious line break after the atom
 @teletype«abcdefgh». While Wadler's restriction may be acceptable to some, I find it
 unsatisfying for two reasons. First, spurious line breaks may appear
 in many places, so the rendering may be much longer than necessary, thereby violating @pcp_compact.
-Second, and more importantly, a document which is laid out below another cannot
+Second, and more importantly, a document which is laid out after another cannot
 be properly indented in general. Let us say we would like to
-pretty print the following ml-style snippet:
+pretty print a ml-style equation composed of a @teletype«Pattern» and the following right-hand-side:
+@verbatim«
+expression [listElement x,
+            listElement y,
+            listElement z,
+            listElement w]
+»
+We reasonably hope to obtain the following result, which puts the list to the
+right of the @teletype«expression», best respecting @pcp_layout by clearly showing that the list is an argument of @teletype«expression»:
 @verbatim«
 Pattern = expression [listElement x,
                       listElement y,
                       listElement z,
                       listElement w]
 »
-If the list does not fit on a single line, it must be put below
-@qu"expression". According to @pcp_layout, it should be indented. However, the
-amount of indentation cannot depend on the @teletype«Pattern», so Wadler library would typically output:
+However, using Wadler's library, the indentation of the list can only
+be constant, so even with the best layout specification we would obtain instead
+the following output:
 @verbatim«
 Pattern = expression
   [listElement x,
@@ -457,7 +469,7 @@ Pattern = expression
    listElement z,
    listElement w]
 »
-Aligning the argument of the expression below to the left of the equal sign is bad:
+Aligning the argument of the expression below to the left of the equal sign is bad, because
 it needlessly obscures the structure of the program; @pcp_layout is not
 respected. In sum, the lack of a combinator for relative indentation
 is a serious drawback. In fact, Daan Leijen's
@@ -470,10 +482,10 @@ of pretty printing or provide a greedy algorithm. Hughes does not
 fully respect @pcp_compact. Wadler does not fully respect
 @pcp_layout. Here, I decide to respect both, but I give up on
 greediness.
-Yet, the final algorithm that I arrive at is fast enough for use
-in common pretty-printing tasks.
+Yet, the final algorithm that I arrive at is fast enough for
+common pretty-printing tasks.
 
-But; let us not get carried away: before attacking the problem of making a fast (enough) implementation,
+But; let us not get carried away: before attacking the problem of making an implementation,
 we need to finish the formalisation of the semantics. And before that,
 it is best if we spend a moment to further refine the API for defining pretty layouts.
 
@@ -547,7 +559,7 @@ Or, diagramatically:
 
 @(horizCat False)
 
-The Haskell encoding of the idea must handle the last line of the first layout and the
+Algorithmically, one must handle the last line of the first layout and the
 first line of the second layout specially, as follows:
 
 @haskell«
@@ -584,7 +596,7 @@ this choice, for two reasons:
            left-flushing documents.»
          ,«The horizontal composition (@hask«<>») has a nicer algebraic structure
           than (@hask«$$»). Indeed, the vertical composition (@hask«$$») has no unit, while (@hask«<>») has the empty layout as unit.
-          (In Hughes' pretty-printer, not even @hask«<>» has a unit, due to more involved semantics.)»]
+          (In Hughes' pretty-printer, not even @hask«(<>)» has a unit, due to more involved semantics.)»]
 
 To sum up, our API for layouts is the following:
 @haskell«
@@ -595,7 +607,7 @@ class Layout l where
   render  :: l -> String
 »
 Additionally, as mentioned above, layouts follow a number of algebraic
-laws:
+laws, (written here as QuickCheck properties):
 
 @enumList[
 «Layouts form a monoid, with operator (@hask«<>») and unit @hask«empty»@footnote«recall @hask«empty = text ""»»:
@@ -617,7 +629,7 @@ prop_text_append s t  = text s <> text t == text (s ++ t)
 prop_text_empty       = empty == text ""
 »
 »,
-« @hask«flush» can be pulled out of concatenation, in this way@footnote«This law would look nicer if @hask«flush» was a postfix operator.»:
+« @hask«flush» can be pulled out of concatenation, in this way:
 
 @haskell«
 prop_flush :: (Doc a, Eq a) => a -> a -> Bool
@@ -692,12 +704,12 @@ prop_distrflush a b = flush (a <|> b) == flush a <|> flush b
 @subsection«Semantics»
 
 We can finally define formally what it means to render a document.  To
-do so document, we pick a shortest layout among the valid
+do so, we pick a frugal layout among the visiible
 ones, according to @pcp_visibility:
 @haskell«
   render =   render .  -- (for layouts)
              mostFrugal .
-             filter valid
+             filter valid -- TODO: s/valid/visible
 »
 
 A layout is @hask«valid» if all its lines are fully valid on the page:
@@ -714,8 +726,8 @@ pageWidth = 80
 
 One may expect that disjuction should also be commutative.
 However, the implementation of @hask«mostFrugal» only picks @emph«one» of
-the most frugal layouts: that is fine as all most frugal layouts are
-equally good. It also means that re-ordering the arguments of a disjunction may
+the most frugal layouts. That is fine, as all most frugal layouts are
+equally good. However it also means that re-ordering the arguments of a disjunction may
 affect the layout being picked. Therefore, commutativity of disjunction holds
 only up to the length of the layout being rendered:
 
@@ -748,11 +760,11 @@ picked. Thus, for an input with @ensureMath«n» choices, the running time is @t
 The first insight to arrive at an efficient implementation is that it is
 not necessary to construct layouts fully: only some of their parameters are relevant.
 Let us remember that we want to sift through layouts based on the space that they take.
-Hence, from an algorithm point of view, all that matters a measure of that space.
+Hence, from an algorithmic point of view, all that matters is a measure of that space.
 Let us define an abstract semantics for
-layouts, which ignores the text, and captures only the measure of space used.
+layouts, which ignores the text, and captures only the amount of space used.
 
-The only measures that matter are the maximum width of the layout, the width of its
+The only parameters that matter are the maximum width of the layout, the width of its
 last line and its height (and, because layouts cannot be empty and it's convenient to start at zero, we do not
 count the last line):
 @singleLayoutDiag
@@ -793,8 +805,9 @@ The other layout combinators are easy to implement:
 We can even give a rendering for these abstract layouts, by printing an @teletype«x» at each
 occupied position, completing the class instance:
 @haskell«
-  render m = render (replicate (height m) (replicate (maxWidth m) 'x') ++
-                     [replicate (lastWidth m) 'x'])
+  render m = intercalate "\n"
+      (replicate (height m) (replicate (maxWidth m) 'x') ++
+      [replicate (lastWidth m) 'x'])
 »
 
 The correctness of the above instance relies on intution, and a
@@ -809,7 +822,7 @@ measure xs = M {  maxWidth   = maximum $ map length $ xs,
 »
 
 Then, to check the correctness of the @hask«Layout M» instance, we
-must check that @hask«measure» is a layout homomorphism (ignoring of
+verify that @hask«measure» is a layout homomorphism (ignoring of
 course the @hask«render»er). The homomorphism property can be spelled out as the following
 three laws:
 
@@ -862,7 +875,7 @@ valid (a <> b)   => maxWidth (a <> b) < pageWidth
 
 
 valid (flush a)  => maxWidth a < pageWidth
-                 => maxWidth a < pageWidth 
+                 => maxWidth a < pageWidth
                  => valid a
   »
   »
@@ -1004,7 +1017,7 @@ is dominated, then we merely skip it.  Otherwise, @hask«x» is added to
 the current frontier, and remove all elements dominated
 by @hask«x» are then removed.
 
-The implementation is then as follows:
+The implementation of the pretty-printing combinator then becomes:
 
 @haskell«
 type DM = [M]
@@ -1033,14 +1046,14 @@ testExpr n = SExpr [testExpr (n-1),testExpr (n-1)]
 
 The set of layouts were given by using the pretty printer for S-Expressions
 shown above. The most efficient version of the pretty-printer was used.
-and measured the time to compute the length of the layout. (Computing the length is enough to force the computation of the best layout.)
-This benchmark heavily exercises the disjuction construct. For each SExpr with two
+The then measured the time to compute the length of the layout. (Computing the length is enough to force the computation of the best layout.)
+This benchmark heavily exercises the disjuction construct. Indeed, for each SExpr with two
 sub-expressions, the printer introduces a choice. Hence for printing @hask«testExpr n»,
 the pretty printer is offered @tm«2^n-1» choices,
 for a total of @tm«2^{2^n-1}» possible layouts to consider.
 
 We have run the layout algorithm for @hask«n» ranging from 1 to 15, and measured
-the time to perform pretty-printing. 
+the time to perform pretty-printing.
 The following plot shows the time taken (in seconds) against
 the @emph«number of lines of output». (Using the number of lines rather than @hask«n»
 gives a more reasonable measure of the amount of work to perform for each layout task.)
@@ -1055,7 +1068,7 @@ are not even visible at this scale.
 The plot shows a behaviour that tends to become linear when the output is large enough.
 For such large inputs approximately @(showFFloat (Just 2) regimeSpeed []) lines are laid out per second. We interpret this result as follows.
 Our pretty-printer essentially considers non-dominated layouts. If the input is sufficiently complex, this approximately means to
-consider one layout per possible width (say @show(pageWidth)) --- when the width is given then the length and the width of last line are fixed.
+consider one layout per possible width (@show(pageWidth) in our tests) --- when the width is given then the length and the width of last line are fixed.
 Therefore, the amount of work becomes independent of the number of disjuctions present in the input,
 and depends only on the amount of text to render.
 
@@ -1063,7 +1076,7 @@ and depends only on the amount of text to render.
 
 @subsection«Re-pairing with text»
 
-Eventually, one might be interested in getting the text out. To do so we can pair measures with full-text layouts, while keeping the 
+Eventually, one might be interested in getting a complete pretty printed output, not just the amout of space that it takes. To do so we can pair measures with full-text layouts, while keeping the
 
 @haskell«
 
@@ -1123,7 +1136,7 @@ Then we just filter out the intermediate results that do not fit the ribbon, as 
 
 @haskell«
 fitRibbon m = height m > 0 || maxWidth m < ribbonLength
-  where ribbonLength = round (0.7 * fromIntegral pageWidth)
+  where ribbonLength = 60
 
 valid m = validMeasure m && fitRibbon m
 »
@@ -1389,21 +1402,21 @@ did not preserve the invariant that lists were sorted. »
 
 
 
-lineHeight = 6
+lineHeight = constant 6
 
 abstrLayout :: Expr -> TexDiagram (Object,Point)
 abstrLayout lastWidth = do
-  bx <- box
+  bx <- noDraw $ box "abstrLayout"
   let points@[_nw,_ne,_se,after,_sse,_sw]
         = [bx # NW
           ,bx # NE
-          ,bx # SE + Point 0 lineHeight
+          ,bx # SE + Point zero lineHeight
           ,bx # SW + Point lastWidth lineHeight
-          ,bx # SW + Point lastWidth 0
+          ,bx # SW + Point lastWidth zero
           ,bx # SW]
       p = polygon points
   path p
-  return (Object p bx, after)
+  return (Object "abstrLayout" p (anchors bx), after)
 
 
 abstractLayoutJoin (a,a_last) (b,b_last) = do
@@ -1411,14 +1424,14 @@ abstractLayoutJoin (a,a_last) (b,b_last) = do
   b # NW .=. a_last
   return (j,b_last)
 
-asse a = a # SW + Point 0 lineHeight
+asse a = a # SW + Point zero lineHeight
 
-lw1 = 12
-lw2 = 18
+lw1 = constant 12
+lw2 = constant 18
 
 showDot sz color p =
   using (outline color) $ do
-    c <- circleShape
+    c <- circle "dot"
     c#Center .=. p
     width c === sz
 
@@ -1439,15 +1452,16 @@ hruler = gruler xpart ypart
 vruler = gruler ypart xpart
 
 gruler xp yp p1 p2 lab = do
-  p1' <- point
-  p2' <- point
-  l <- labelObj lab
+  p1Obj <- point "p1'"
+  p2Obj <- point "p2'"
+  let [p1',p2'] = map (#Center) [p1Obj,p2Obj]
+  l <- label "l" lab
   align xp [p1,p1']
   align xp [p2,p2']
   align yp [p1',p2']
   dblarrow l p1' p2'
   -- stroke "red" $
-  boundingBox [anchors p1', anchors p2', anchors l]
+  boundingBox [p1Obj, p2Obj , l]
 
 rulersOfLayout l mw lw (a,mid) = do
   heightRule <- vruler (a # N) (asse a) (hask l)
@@ -1463,8 +1477,8 @@ rulersOfLayout l mw lw (a,mid) = do
 
 singleLayoutDiag :: Tex ()
 singleLayoutDiag = center $ element $ do
-  a@(bx,_) <- draw $ abstrLayout 40
-  width bx === 56
+  a@(bx,_) <- draw $ abstrLayout (constant 40)
+  width bx === constant 56
   D.height bx === 7 *- lineHeight
   rulersOfLayout «height» «maxWidth» «lastWidth» a
   return ()
@@ -1473,8 +1487,8 @@ twoLayouts :: TexDiagram ((Object,Point),(Object,Point))
 twoLayouts = do
   (a,a_last) <- abstrLayout lw1
   (b,b_last) <- abstrLayout lw2
-  width a === 48
-  width b === 56
+  width a === constant 48
+  width b === constant 56
   D.height a === 4 *- lineHeight
   D.height b === 3 *- lineHeight
 
@@ -1484,12 +1498,12 @@ twoLayouts = do
 horizCat :: Bool -> TeX
 horizCat showRulers = center $ element $ do
   (a,b) <- draw $ twoLayouts
-  op <- labelObj "<>"
+  op <- label "<>" "<>"
   let lhsObjs = [fst a,op, fst b]
   align ypart $ [fst a # N, fst b # N]
   align ypart $ [fst a # Center, op # Center]
-  
-  eq <- labelObj "="
+
+  eq <- label "=" "="
   abSep <- draw $ twoLayouts
   ab <- uncurry abstractLayoutJoin $ abSep
   (lhsObjsExtra,rhsObjsExtra) <- if showRulers
@@ -1498,17 +1512,17 @@ horizCat showRulers = center $ element $ do
       (_,_,_lw2) <- rulersOfLayout «l2» «mw2» «lw2» b
 
       (_hTot,mwTot,lwTot) <- rulersOfLayout «l1+l2» «max mw1 (lw1+mw2)» «lw1+lw2» ab
-      spread hdist 10 [h1,op,fst b]
+      spread hdist (constant 10) [h1,op,fst b]
       return ([lw1],[mwTot,lwTot])
     else do
-      spread hdist 10 lhsObjs
+      spread hdist (constant 10) lhsObjs
       return ([],[])
-  spread hdist 10 [eq, fst ab]
+  spread hdist (constant 10) [eq, fst ab]
   align ypart $ map (#Center) [fst ab, eq]
   lhs <- boundingBox $ lhsObjs ++ lhsObjsExtra
   rhs <- boundingBox $ [eq, fst ab] ++ rhsObjsExtra
   align xpart $ map (#W) [rhs,lhs]
-  spread vdist 10 [rhs,lhs]
+  spread vdist (constant 10) [rhs,lhs]
 
   return ()
 
