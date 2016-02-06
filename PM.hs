@@ -143,8 +143,8 @@ preamble body = do
   mathpreamble
   cmd "input" $ tex "../PaperTools/latex/unicodedefs"
 
-  title "A pretty but not greedy printer"
-  authorinfo [AuthorInfo "Jean-Philippe Bernardy" "bernardy@chalmers.se" "CTH"]
+  title "Functional Pearl: a pretty but not greedy printer"
+  authorinfo [AuthorInfo "Jean-Philippe Bernardy" "jean-philippe.bernardy@tweag.io" "Tweag IO"]
   env "document" body
 
 principle :: TeX -> TeX -> Tex TeX
@@ -355,7 +355,7 @@ Interpreting the above (still informal) specification yields the
 following results. 1. On a 80-column-wide page, we would get the result
 displayed in @fig_eighty.
 2. On a 20-column-wide page, we would like to get the following output (the first line is a helper showing the column of a given character):
-@newpage
+
 @verbatim«
 12345678901234567890
 
@@ -846,7 +846,7 @@ the combinators (@hask«<>, flush, text») come from
 the @hask«L» instance of @hask«Layout», while on the rhs come from the @hask«M» instance.)
 
 »«
-Checking the laws is a simple, if somewhat a tedious, exercise in program calculation deferred to the appendix.
+Checking the laws is a simple, if somewhat tedious exercise in program calculation deferred to the appendix.
 »
 
 
@@ -871,22 +871,31 @@ xs <> ys = filter valid [x <> y | x <- xs, y <- ys]
 We can do so because @hask«validity» is monotonous:
 
 @lem_valid_mono<-lemma«@hask«valid» is monotonous»«
+The following two implications hold:
 @spec«
 valid (a <> b)   => valid a  ∧  valid b
 valid (flush a)  => valid a
 »»«
-@spec«
-valid (a <> b)   => maxWidth (a <> b) < pageWidth
-                 => max (maxWidth a) (lastWidth a +  maxWidth b) < pageWidth
-                 => maxWidth a < pageWidth   ∧  lastWidth a +  maxWidth b < pageWidth
-                 => maxWidth a < pageWidth   ∧                 maxWidth b < pageWidth
-                 => valid a  ∧  valid b
+We prove the two parts separately:
+@enumList[
+spec«
+    valid (a <> b)
+=>  maxWidth (a <> b) < pageWidth
+=>  max (maxWidth a) (lastWidth a +  maxWidth b) <
+      pageWidth
+=>  maxWidth a < pageWidth  ∧
+      lastWidth a +  maxWidth b < pageWidth
+=>  maxWidth a < pageWidth   ∧
+      maxWidth b < pageWidth
+=>  valid a  ∧  valid b
+  »,
+spec«
 
 
 valid (flush a)  => maxWidth a < pageWidth
                  => maxWidth a < pageWidth
                  => valid a
-  »
+  »]
   »
 
 Consequently, keeping invalid layouts is useless: they can never be
@@ -902,7 +911,7 @@ not (valid a)    => not (valid (flush a))
 @subsection«Pruning out dominated results»
 
 The second optimisation relies on the insight that even certain valid results
-are dominated by others; that is, they can be discarded early.
+are dominated by others. That is, they can be discarded early.
 
 We write @hask«a ≺ b» when @hask«a» dominates @hask«b». We will arrange
 our domination relation such that
@@ -914,12 +923,13 @@ our domination relation such that
 
 Together, these properties mean that we can always discard dominated
 layouts from a set, as we could discard invalid ones. Indeed, we have:
-@theorem«domination»«
-a ≺  b  => ctx a ≺  ctx b  =>  height (c a) <= height (c b)
-»«»
+@theorem«domination»«For any context @hask«ctx», we have
+@spec«a ≺  b  =>  height (ctx a) <= height (ctx b)»
+»«By composition of the properties 1. and 2.»
 
-We can proceed by defining our relation and proving its properties 1. and 2. above.
-We first remark that the domination relation is a partial order
+We can concretize the above abstract result by
+defining our domination relation and proving its properties 1. and 2.
+Our domination relation is a partial order
 (a reflexive, transitive and antisymmetric relation), and thus make it an instance
 of the following class:
 @haskell«
@@ -975,12 +985,12 @@ maxWidth   m1      <= maxWidth m2
 »«
 We have:
 @spec«
-height     m1 <= height     m2      (1)
-maxWidth   m1 <= maxWidth   m2      (2)
-lastWidth  m1 <= lastWidth  m2      (3)
-height     m'1 <= height     m'2    (4)
-maxWidth   m'1 <= maxWidth   m'2    (5)
-lastWidth  m'1 <= lastWidth  m'2    (6)
+height     m1 <= height     m2
+maxWidth   m1 <= maxWidth   m2
+lastWidth  m1 <= lastWidth  m2
+height     m'1 <= height     m'2
+maxWidth   m'1 <= maxWidth   m'2
+lastWidth  m'1 <= lastWidth  m'2
 »
 and we need to prove the following three conditions:
 @spec«
@@ -990,13 +1000,14 @@ lastWidth  (m1 <> m'1) <= lastWidth  (m2 <> m'2)
 »
 Those are by definition equivalent to the following ones:
 @spec«
-height     m1 + height m'1 <= height     m2 + height m'2
-max (maxWidth m1) (lastWidth m1 + maxWidth m'1) <= max (maxWidth m2) (lastWidth m2 + maxWidth m'2)
-lastWidth  m1 + lastWidth m'1 <= lastWidth  m2 + lastWidth m'2
+height m1 + height m'1 <= height     m2 + height m'2              (1)
+max (maxWidth m1) (lastWidth m1 + maxWidth m'1)
+  <= max (maxWidth m2) (lastWidth m2 + maxWidth m'2)              (2)
+lastWidth  m1 + lastWidth m'1 <= lastWidth  m2 + lastWidth m'2    (3)
 »
 
-The 1st and 3rd inequalities are consequences of the assumptions combined with the monotonicity of @hask«+».
-The 2nd inequation can be obtained likewise, with additionally using the monotonicity of @hask«max»:
+The first and third inequalities are consequences of the assumptions combined with the monotonicity of @hask«+».
+The second inequation can be obtained likewise, with additionally using the monotonicity of @hask«max»:
 @spec«
 a <= b ∧ c <= d   =>  max a c <= max b d
 »
@@ -1023,10 +1034,10 @@ pareto = loop []
 The above function examines elements sequentially, and keeps a pareto frontier
 of the elements seen so far in the @hask«acc» parameter. For each examined element @hask«x», if it
 is dominated, then we merely skip it.  Otherwise, @hask«x» is added to
-the current frontier, and remove all elements dominated
+the current frontier, and all the elements dominated
 by @hask«x» are then removed.
 
-The implementation of the pretty-printing combinator then becomes:
+The implementation of the pretty-printing combinators then becomes:
 
 @haskell«
 type DM = [M]
@@ -1055,7 +1066,7 @@ testExpr n = SExpr [testExpr (n-1),testExpr (n-1)]
 
 The set of layouts were given by using the pretty printer for S-Expressions
 shown above. The most efficient version of the pretty-printer was used.
-The then measured the time to compute the length of the layout. (Computing the length is enough to force the computation of the best layout.)
+We then measured the time to compute the length of the layout. (Computing the length is enough to force the computation of the best layout.)
 This benchmark heavily exercises the disjuction construct. Indeed, for each SExpr with two
 sub-expressions, the printer introduces a choice. Hence for printing @hask«testExpr n»,
 the pretty printer is offered @tm«2^n-1» choices,
@@ -1110,9 +1121,9 @@ instance Layout [(M,L)] where
 @subsection«Hughes-Style nesting»
 
 Hughes proposes a @hask«nest» conbinator, which indents its argument @emph«unless» it appears on the right-hand-side of a horizontal concatenation.
-The above semantics are rather involved, and appear difficult to support by an incremental modification of the framework developed in this paper.
+The above semantics are rather involved, and appear difficult to support by a local modification of the framework developed in this paper.
 
-Fortunately, @hask«nest» appears to be used chiefly to implement the @hask«hang» combinator, which offers the choice between horizontal concatenation
+Fortunately, in practice @hask«nest» is used only to implement the @hask«hang» combinator, which offers the choice between horizontal concatenation
 and vertical concatenation with an indentation:
 @haskell«
 hang :: Doc d => Int -> d -> d -> d
@@ -1151,20 +1162,6 @@ valid m = validMeasure m && fitRibbon m
 »
 
 This re-interpretation appears to fulfil the original goal as well.
-
-@subsection«Laws vs compositional semantics»
-
-Note that laws may only @emph«partially» specify the behaviour, while a
-semantic model will always fully constrain it.
-
-(exercise: does the above set of laws fully constrain the semantic model?)
-
-Notice that Hughes and Wadler give the semantics via laws first and
-come up with a compositional interpretation second. This is fine,
-precisely because laws do not fully constrain the design; there is
-room for wiggle. However, a compositional semantics is often an even
-better guide which should not be an afterthought.
-
 
 @section«Conclusion»
 Using three informal principles, we have defined what a pretty printer is.
