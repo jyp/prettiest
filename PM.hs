@@ -111,7 +111,7 @@ performancePlot sho axes =  do
   D.height bx === constant 100
 
 renderFloat :: forall a. RealFloat a => a -> Tex ()
-renderFloat x = ensureMath $ tex $ showFFloat (Just 0) x ""
+renderFloat x = tex $ showEFloat (Just 0) x ""
 
 performancePlotLog, performancePlotLin :: Diagram TeX Tex ()
 performancePlotLog = performancePlot (pure renderFloat) (Point (logAxis 10) (logAxis 10))
@@ -143,7 +143,7 @@ preamble body = do
   mathpreamble
   cmd "input" $ tex "../PaperTools/latex/unicodedefs"
 
-  title "A prettier, but not greedy printer"
+  title "A pretty but not greedy printer"
   authorinfo [AuthorInfo "Jean-Philippe Bernardy" "bernardy@chalmers.se" "CTH"]
   env "document" body
 
@@ -156,7 +156,7 @@ principle titl body = do
 header :: Tex ()
 header = do
   maketitle
-  -- abstract
+  abstract
   keywords $ [ "Pearl", "Pretty Printing"]
   return ()
 
@@ -165,9 +165,18 @@ bibliographyAll = do
   bibliographystyle "abbrvnat"
   bibliography  "../PaperTools/bibtex/jp"
 
+abstract = env "abstract" «
+  This paper proposes an new specification of pretty printing which is stronger than the state of the art:
+we require the output to be the shortest possible, and we also offer the ability to align sub-documents at will.
+We argue that specification precludes a greedy implementation. Yet,
+we provide an implementation which behaves linearly in the size of the output.
+This implementation is arrived at by using orthodox functional programming methodology.
+»
+
 
 mainText :: Tex ()
 mainText = «
+
 
 @sec_intro<-section«Introduction»
 
