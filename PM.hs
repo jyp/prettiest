@@ -170,7 +170,8 @@ abstract = env "abstract" «
 we require the output to be the shortest possible, and we also offer the ability to align sub-documents at will.
 We argue that specification precludes a greedy implementation. Yet,
 we provide an implementation which behaves linearly in the size of the output.
-This implementation is arrived at by using orthodox functional programming methodology.
+The derivation of the implementation demonstrates
+functional programming methodology.
 »
 
 
@@ -217,7 +218,6 @@ layout all its output within the width of the page.»
 used to display the data.»
 
 Furthermore, the first principle takes precedence over the second one, which itself takes precedence over the third one.
-
 In the rest of the paper, we interpret the above three principles as an optimisation problem, and derive a program
 which solves it efficiently enough.
 
@@ -841,12 +841,12 @@ measure (a <> b)   == measure a <> measure b
 measure (flush a)  == flush (measure a)
 measure (text s)   == text s
 »
-(Note: on the lhs of the above equations,
-the combinators (@hask«<>, flush, text») come from
-the @hask«L» instance of @hask«Layout», while on the rhs come from the @hask«M» instance.)
+(Note: on the left-hand-side of the above equations,
+the combinators (@hask«<>», @hask«flush», @hask«text») come from
+the @hask«L» instance of @hask«Layout», while on the right-hand-side they come from the @hask«M» instance.)
 
 »«
-Checking the laws is a simple, if somewhat tedious exercise in program calculation deferred to the appendix.
+Checking the laws is a simple, if somewhat tedious exercise of program calculation, and thus it is deferred to the appendix.
 »
 
 
