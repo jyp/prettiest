@@ -2,34 +2,18 @@
 
 module Text.PrettyPrint.Compact (
    -- * Documents
-   Doc, 
+   Doc,
 
    -- * Basic combinators
-   mempty, char, text, (<>), nest, line, linebreak, group, softline,
-   softbreak,
+   module Data.Monoid, text, flush, char,
 
-   -- * Alignment
-   --
-   -- The combinators in this section can not be described by Wadler's
-   -- original combinators. They align their output relative to the
-   -- current output position - in contrast to @nest@ which always
-   -- aligns to the current nesting level. This deprives these
-   -- combinators from being \`optimal\'. In practice however they
-   -- prove to be very useful. The combinators in this section should
-   -- be used with care, since they are more expensive than the other
-   -- combinators. For example, @align@ shouldn't be used to pretty
-   -- print all top-level declarations of a language, but using @hang@
-   -- for let expressions is fine.
-   align, hang, indent, encloseSep, list, tupled, semiBraces,
+   hang, encloseSep, list, tupled, semiBraces,
 
    -- * Operators
-   (<+>), (<$>), (</>), (<$$>), (<//>),
+   (<+>), ($$),
 
    -- * List combinators
-   hsep, vsep, fillSep, sep, hcat, vcat, fillCat, cat, punctuate,
-
-   -- * Fillers
-   fill, fillBreak,
+   hsep, sep, hcat, vcat, cat, punctuate,
 
    -- * Bracketing combinators
    enclose, squotes, dquotes, parens, angles, braces, brackets,
@@ -49,15 +33,9 @@ module Text.PrettyPrint.Compact (
    -- column, nesting, width
    ) where
 
-import Control.Applicative
 import Data.Monoid
 
 import Text.PrettyPrint.Compact.Core as Text.PrettyPrint.Compact
-
-type Indentation = Int
-
-infixr 5 </>,<//>,<$$$>,<$$>
-infixr 6 <+>
 
 -- | The document @(list xs)@ comma separates the documents @xs@ and
 -- encloses them in square brackets. The documents are rendered
@@ -109,7 +87,7 @@ encloseSep left right sep ds
     = case ds of
         []  -> left <> right
         [d] -> left <> d <> right
-        _   -> align (cat (zipWith (<>) (left : repeat sep) ds) <> right)
+        _   -> cat (zipWith (<>) (left : repeat sep) ds) <> right
 
 -----------------------------------------------------------
 -- punctuate p [d1,d2,...,dn] => [d1 <> p,d2 <> p, ... ,dn]
@@ -154,9 +132,10 @@ punctuate p (d:ds)  = (d <> p) : punctuate p ds
 -- horizontally with @(\<+\>)@, if it fits the page, or vertically with
 -- @(\<$\>)@.
 --
--- > sep xs  = group (vsep xs)
 sep :: [Doc] -> Doc
-sep             = group . vsep
+sep [] = mempty
+sep xs = hsep xs <|> vcat xs
+
 
 -- | The document @(fillSep xs)@ concatenates documents @xs@
 -- horizontally with @(\<+\>)@ as long as its fits the page, than
@@ -173,38 +152,6 @@ hsep :: [Doc] -> Doc
 hsep            = foldDoc (<+>)
 
 
--- | The document @(vsep xs)@ concatenates all documents @xs@
--- vertically with @(\<$\>)@. If a 'group' undoes the line breaks
--- inserted by @vsep@, all documents are separated with a space.
---
--- > someText = map text (words ("text to lay out"))
--- >
--- > test     = text "some" <+> vsep someText
---
--- This is layed out as:
---
--- @
--- some text
--- to
--- lay
--- out
--- @
---
--- The 'align' combinator can be used to align the documents under
--- their first element
---
--- > test     = text "some" <+> align (vsep someText)
---
--- Which is printed as:
---
--- @
--- some text
---      to
---      lay
---      out
--- @
-vsep :: [Doc] -> Doc
-vsep            = foldDoc (<$$$>)
 
 -- | The document @(cat xs)@ concatenates all documents @xs@ either
 -- horizontally with @(\<\>)@, if it fits the page, or vertically with
@@ -212,7 +159,8 @@ vsep            = foldDoc (<$$$>)
 --
 -- > cat xs  = group (vcat xs)
 cat :: [Doc] -> Doc
-cat             = group . vcat
+cat [] =  mempty
+cat xs = hcat xs <> vcat xs
 
 -- | The document @(fillCat xs)@ concatenates documents @xs@
 -- horizontally with @(\<\>)@ as long as its fits the page, than inserts
@@ -228,13 +176,12 @@ hcat :: [Doc] -> Doc
 hcat            = foldDoc (<>)
 
 -- | The document @(vcat xs)@ concatenates all documents @xs@
--- vertically with @(\<$$\>)@. If a 'group' undoes the line breaks
--- inserted by @vcat@, all documents are directly concatenated.
+-- vertically with @($$)@.
 vcat :: [Doc] -> Doc
-vcat            = foldDoc (<$$>)
+vcat            = foldDoc ($$)
 
 foldDoc :: (Doc -> Doc -> Doc) -> [Doc] -> Doc
-foldDoc f []       = mempty
+foldDoc _ []       = mempty
 foldDoc f ds       = foldr1 f ds
 
 -- | The document @(x \<+\> y)@ concatenates document @x@ and @y@ with a
@@ -242,42 +189,22 @@ foldDoc f ds       = foldr1 f ds
 (<+>) :: Doc -> Doc -> Doc
 x <+> y         = x <> space <> y
 
--- | The document @(x \<\/\> y)@ concatenates document @x@ and @y@ with a
--- 'softline' in between. This effectively puts @x@ and @y@ either
--- next to each other (with a @space@ in between) or underneath each
--- other. (infixr 5)
+-- | The document @(x \<\/\> y)@ puts @x@ and @y@ either next to each other
+-- (with a @space@ in between) or underneath each other. (infixr 5)
 (</>) :: Doc -> Doc -> Doc
-x </> y         = x <> softline <> y
+x </> y         = ((x <> space) <|> flush x) <> y
 
--- | The document @(x \<\/\/\> y)@ concatenates document @x@ and @y@ with
--- a 'softbreak' in between. This effectively puts @x@ and @y@ either
--- right next to each other or underneath each other. (infixr 5)
+-- | The document @(x \<\/\/\> y)@ puts @x@ and @y@ either right next to each
+-- other or underneath each other. (infixr 5)
 (<//>) :: Doc -> Doc -> Doc
-x <//> y        = x <> softbreak <> y
+x <//> y        = (x <|> flush x) <> y
 
--- | The document @(x \<$\> y)@ concatenates document @x@ and @y@ with a
--- 'line' in between. (infixr 5)
-(<$$$>) :: Doc -> Doc -> Doc
-x <$$$> y         = x <> line <> y
 
 -- | The document @(x \<$$\> y)@ concatenates document @x@ and @y@ with
--- a @linebreak@ in between. (infixr 5)
+-- a linebreak in between. (infixr 5)
 (<$$>) :: Doc -> Doc -> Doc
-x <$$> y        = x <> linebreak <> y
+x <$$> y = flush x <> y
 
--- | The document @softline@ behaves like 'space' if the resulting
--- output fits the page, otherwise it behaves like 'line'.
---
--- > softline = group line
-softline :: Doc
-softline        = group line
-
--- | The document @softbreak@ behaves like 'empty' if the resulting
--- output fits the page, otherwise it behaves like 'line'.
---
--- > softbreak  = group linebreak
-softbreak :: Doc
-softbreak       = group linebreak
 
 -- | Document @(squotes x)@ encloses document @x@ with single quotes
 -- \"'\".
@@ -380,10 +307,7 @@ equals          = char '='
 -- characters. It is used instead of 'text' whenever the text contains
 -- newline characters.
 string :: String -> Doc
-string ""       = mempty
-string ('\n':s) = line <> string s
-string s        = case (span (/='\n') s) of
-                    (xs,ys) -> text xs <> string ys
+string = vcat . map text . lines
 
 bool :: Bool -> Doc
 bool b          = text (show b)
@@ -413,84 +337,7 @@ double d        = text (show d)
 rational :: Rational -> Doc
 rational r      = text (show r)
 
------------------------------------------------------------
--- semi primitive: fill and fillBreak
------------------------------------------------------------
 
--- | The document @(fillBreak i x)@ first renders document @x@. It
--- than appends @space@s until the width is equal to @i@. If the
--- width of @x@ is already larger than @i@, the nesting level is
--- increased by @i@ and a @line@ is appended. When we redefine @ptype@
--- in the previous example to use @fillBreak@, we get a useful
--- variation of the previous output:
---
--- > ptype (name,tp)
--- >        = fillBreak 6 (text name) <+> text "::" <+> text tp
---
--- The output will now be:
---
--- @
--- let empty  :: Doc
---     nest   :: Indentation -> Doc -> Doc
---     linebreak
---            :: Doc
--- @
-fillBreak :: Indentation -> Doc -> Doc
-fillBreak f x   = width x (\w ->
-                  if (w > f) then nest f linebreak
-                             else spacing (f - w))
-
-
--- | The document @(fill i x)@ renders document @x@. It than appends
--- @space@s until the width is equal to @i@. If the width of @x@ is
--- already larger, nothing is appended. This combinator is quite
--- useful in practice to output a list of bindings. The following
--- example demonstrates this.
---
--- > types  = [("empty","Doc")
--- >          ,("nest","Indentation -> Doc -> Doc")
--- >          ,("linebreak","Doc")]
--- >
--- > ptype (name,tp)
--- >        = fill 6 (text name) <+> text "::" <+> text tp
--- >
--- > test   = text "let" <+> align (vcat (map ptype types))
---
--- Which is layed out as:
---
--- @
--- let empty  :: Doc
---     nest   :: Indentation -> Doc -> Doc
---     linebreak :: Doc
--- @
-fill :: Indentation -> Doc -> Doc
-fill f d        = width d (\w ->
-                  if (w >= f) then mempty
-                              else spacing (f - w))
-
-width :: Doc -> (Indentation -> Doc) -> Doc
-width d f       = column (\k1 -> d <> column (\k2 -> f (k2 - k1)))
-
-
------------------------------------------------------------
--- semi primitive: Alignment and indentation
------------------------------------------------------------
-
--- | The document @(indent i x)@ indents document @x@ with @i@ spaces.
---
--- > test  = indent 4 (fillSep (map text
--- >         (words "the indent combinator indents these words !")))
---
--- Which lays out with a page width of 20 as:
---
--- @
---     the indent
---     combinator
---     indents these
---     words !
--- @
-indent :: Indentation -> Doc -> Doc
-indent i d      = hang i (spacing i <> d)
 
 -- | The hang combinator implements hanging indentation. The document
 -- @(hang i x)@ renders document @x@ with a nesting level set to the
@@ -511,42 +358,9 @@ indent i d      = hang i (spacing i <> d)
 -- The @hang@ combinator is implemented as:
 --
 -- > hang i x  = align (nest i x)
-hang :: Indentation -> Doc -> Doc
-hang i d        = align (nest i d)
+hang :: Int -> Doc -> Doc -> Doc
+hang n x y = (x <+> y) <|> (x $$ nest' n y)
 
--- | The document @(align x)@ renders document @x@ with the nesting
--- level set to the current column. It is used for example to
--- implement 'hang'.
---
--- As an example, we will put a document right above another one,
--- regardless of the current nesting level:
---
--- > x $$ y  = align (x <$$$> y)
---
--- > test    = text "hi" <+> (text "nice" $$ text "world")
---
--- which will be layed out as:
---
--- @
--- hi nice
---    world
--- @
-align :: Doc -> Doc
-align d         = column (\k ->
-                  nesting (\i -> nest (k - i) d))   --nesting might be negative :-)
-
-
--- | The @line@ document advances to the next line and indents to the
--- current nesting level. Document @line@ behaves like @(text \" \")@
--- if the line break is undone by 'group'.
-line :: Doc
-line            = Line False
-
--- | The @linebreak@ document advances to the next line and indents to
--- the current nesting level. Document @linebreak@ behaves like
--- 'empty' if the line break is undone by 'group'.
-linebreak :: Doc
-linebreak       = Line True
 
 -- | The document @(nest i x)@ renders document @x@ with the current
 -- indentation level increased by i (See also 'hang', 'align' and
@@ -561,9 +375,15 @@ linebreak       = Line True
 --   world
 -- !
 -- @
-nest :: Indentation -> Doc -> Doc
-nest i x        = Nest i x
 
-column, nesting :: (Indentation -> Doc) -> Doc
-column f        = Column f
-nesting f       = Nesting f
+
+space = text " "
+
+
+nest' n x = spaces n <> x
+
+spaces :: Int -> Doc
+spaces n = text $ replicate n ' '
+
+($$) :: Doc -> Doc -> Doc
+a $$ b = flush a <> b
