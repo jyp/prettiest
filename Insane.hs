@@ -1,58 +1,53 @@
-{-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, ViewPatterns #-}
 module Insane where
 
 import Data.List (intercalate,sort,groupBy)
 import Data.Function (on)
-
-empty :: Layout d => d
-empty = text ""
+import Data.Monoid
+import Data.Sequence (singleton, Seq, viewl, viewr, ViewL(..), ViewR(..))
+import qualified Data.Sequence as S
 
 (<+>) :: Layout d => d -> d -> d
-x <+> y = x <-> text " " <-> y
+x <+> y = x <> text " " <> y
 
-hsep,vcat :: DOC d => [d] -> d
-vcat [] = empty
+hsep,vcat :: Document d => [d] -> d
+vcat [] = mempty
 vcat xs = foldr1 ($$) xs
-hsep [] = empty
+hsep [] = mempty
 hsep xs = foldr1 (<+>) xs
 
-sep :: DOC d => [d] -> d
-sep [] = empty
+sep :: Document d => [d] -> d
+sep [] = mempty
 sep xs = hsep xs <|> vcat xs
 
-type L = [String] -- non empty.
+newtype L = L (Seq String) -- non-empty sequence
+  deriving (Eq,Ord)
 
-instance Monoid Doc where
-  mempty = empty
-  mappend = (<->)
+instance Monoid L where
+   mempty = L (singleton "")
+   L (viewr -> xs :> x) `mappend` L (viewl -> y :< ys) = L (xs <> singleton (x ++ y) <> fmap (indent ++) ys)
+      where n = length x
+            indent = Prelude.replicate n ' '
 
+newtype N = N {fromN :: String}
+instance Monoid N where
+  mempty = N ""
+  mappend (N x) (N y) = N (x ++ "\n" ++ y)
 instance Layout L where
-   render = intercalate "\n"
-
-   text s = [s]
-
-   xs <-> (y:ys) = xs0 ++ [x ++ y] ++ map (indent ++) ys
-      where xs0 = init xs
-            x = last xs
-            n = length x
-            indent = replicate n ' '
-
-   flush xs = xs ++ [""]
+   render (L xs) = fromN $ foldMap N xs
+   text = L . singleton
+   flush (L xs) = L (xs <> singleton "")
 
 ($$) :: forall d. Layout d => d -> d -> d
-a $$ b = flush a <-> b
+a $$ b = flush a <> b
 
-class Layout d where
-  (<->) :: d -> d -> d
+class Monoid d => Layout d where
   text :: String -> d
   flush :: d -> d
   render :: d -> String
 
-
-
-class Layout d => DOC d where
+class Layout d => Document d where
   (<|>) :: d -> d -> d
-
 
 data M = M {height    :: Int,
             lastWidth :: Int,
@@ -60,11 +55,15 @@ data M = M {height    :: Int,
             }
   deriving (Show,Eq,Ord)
 
+instance Monoid M where
+  mempty = text ""
+  a `mappend` b =
+    M {maxWidth = max (maxWidth a) (maxWidth b + lastWidth a),
+       height = height a + height b,
+       lastWidth = lastWidth a + lastWidth b}
+
 instance Layout M where
   text s = M {height = 0, maxWidth = length s, lastWidth = length s}
-  a <-> b = M {maxWidth = max (maxWidth a) (maxWidth b + lastWidth a),
-              height = height a + height b,
-              lastWidth = lastWidth a + lastWidth b}
   flush a = M {maxWidth = maxWidth a,
                height = height a + 1,
                lastWidth = 0}
@@ -98,7 +97,7 @@ bests :: forall a. (Ord a, Poset a) => [[a]] -> [a]
 bests = pareto' [] . mergeAll
 
 pareto' :: Poset a => [a] -> [a] -> [a]
-pareto' acc [] = reverse acc
+pareto' acc [] = Prelude.reverse acc
 pareto' acc (x:xs) = if any (≺ x) acc
                        then pareto' acc xs
                        else pareto' (x:acc) xs
@@ -109,35 +108,38 @@ newtype Doc = MkDoc [(M,L)]
 quasifilter :: (a -> Bool) -> [a] -> [a]
 quasifilter p xs = let fxs = filter p xs in if null fxs then take 1 xs else fxs
 
+instance Monoid Doc where
+  mempty = text ""
+  MkDoc xs `mappend` MkDoc ys = MkDoc $ bests [ quasifilter (fits . fst) [x <> y | y <- ys] | x <- xs]
+
 instance Layout Doc where
-  MkDoc xs <-> MkDoc ys = MkDoc $ bests [ quasifilter (fits . fst) [x <-> y | y <- ys] | x <- xs]
   flush (MkDoc xs) = MkDoc $ bests $ map sort $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
   -- flush xs = pareto' [] $ sort $ (map flush xs)
   text s = MkDoc [text s]
+  render (MkDoc []) = error "No suitable layout found."
   render (MkDoc (x:_)) = render x
 
-instance DOC Doc where
+instance Document Doc where
   MkDoc m1 <|> MkDoc m2 = MkDoc (bests [m1,m2])
 
-hang :: DOC d => Int -> d -> d -> d
+hang :: Document d => Int -> d -> d -> d
 hang n x y = (x <+> y) <|> (x $$ nest' n y)
 
 nest' :: Layout d => Int -> d -> d
-nest' n y = spaces n <-> y
+nest' n y = spaces n <> y
 
 spaces :: Layout d => Int -> d
 spaces n = text $ replicate n ' '
 
+--  (a,b) `mappend` (c,d) = (a<>c ,b<>d)
 
 instance (Layout a, Layout b) => Layout (a,b) where
   text s = (text s, text s)
   flush (a,b) = (flush a, flush b)
-  (a,b) <-> (c,d) = (a<->c ,b<->d)
   render = render . snd
 
-instance (DOC a, DOC b) => DOC (a,b) where
+instance (Document a, Document b) => Document (a,b) where
   (a,b) <|> (c,d) = (a<|>c,b<|>d)
 
 instance (Poset a) => Poset (a,b) where
   (a,_) ≺ (b,_) = a ≺ b
-
