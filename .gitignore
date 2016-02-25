@@ -21,3 +21,4 @@ cabal.config
 /texput.log
 /Prettiest.bbl
 /Prettiest.blg
+/.stack-work

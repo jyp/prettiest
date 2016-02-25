@@ -1,4 +1,3 @@
--- | Insane drop-in replacement for John's pretty printer
 module Text.PrettyPrint (module Text.PrettyPrint, Doc) where
 
 import Data.String
@@ -6,7 +5,7 @@ import qualified Insane as I
 import Insane (Doc)
 
 empty :: Doc
-empty = I.empty
+empty = mempty
 
 infixl 6 <>
 infixl 6 <+>

@@ -1,5 +1,5 @@
-name: pretty-compact
-version: 2.0
+name: pretty-paper
+version: 1.0
 synopsis: Pretty-printing library
 description:
   This package contains a pretty-printing library, a set of API's
@@ -17,15 +17,10 @@ maintainer: Jean-Philippe Bernardy <jeanphilippe.bernardy@gmail.com>
 build-type: Simple
 Cabal-Version: >= 1.8
 
-source-repository head
-                  type: git
-                  location: http://github.com/jyp/prettiest.git
-
-
-Library
-        exposed-modules:
-                Text.PrettyPrint.Compact
-                Text.PrettyPrint.Compact.Core
+executable paper
         build-depends:
-                      base >= 3 && < 5,
-                      containers
+                     base,
+                     marxup,
+                     lens
+        main-is:
+           PM.hs
