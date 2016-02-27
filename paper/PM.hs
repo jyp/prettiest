@@ -1067,23 +1067,26 @@ testExpr n = SExpr [testExpr (n-1),testExpr (n-1)]
 The set of layouts were given by using the pretty printer for S-Expressions
 shown above. The most efficient version of the pretty-printer was used.
 We then measured the time to compute the length of the layout. (Computing the length is enough to force the computation of the best layout.)
-This benchmark heavily exercises the disjuction construct. Indeed, for each SExpr with two
-sub-expressions, the printer introduces a choice. Hence for printing @hask«testExpr n»,
-the pretty printer is offered @tm«2^n-1» choices,
+This benchmark heavily exercises the disjuction construct.  Let us compute the number of choices in
+printing @hask«testExpr n».
+For each SExpr with two
+sub-expressions, the printer introduces a choice, therefore the number of choices equal the number of nodes in a
+binary tree of depth @hask«n».
+Thus, for @hask«testExpr n» the pretty printer is offered @tm«2^n-1» choices,
 for a total of @tm«2^{2^n-1}» possible layouts to consider.
 
 We have run the layout algorithm for @hask«n» ranging from 1 to 15, and measured
 the time to perform pretty-printing.
 The following plot shows the time taken (in seconds) against
-the @emph«number of lines of output». (Using the number of lines rather than @hask«n»
-gives a more reasonable measure of the amount of work to perform for each layout task.)
+the @emph«number of lines of output». (By using the number of lines rather than @hask«n»,
+we have a more reasonable measure of the amount of work to perform for each layout task.)
 The following plot shows the data on a double logarithmic scale
 (note that several inputs can be printed on a single line):
 
 @center(element performancePlotLog)
-Precise timing were obtained by using O'Sullivan's @emph«criterion» benchmarking library.
-Error bars are omitted because they are so thin that they
-are not even visible at this scale.
+Precise timings were obtained by using O'Sullivan's @emph«criterion» benchmarking library.
+While @emph«criterion» provides confidence intervals, they are so thin that they
+are not visible at this scale.
 
 The plot shows a behaviour that tends to become linear when the output is large enough.
 For such large inputs approximately @(showFFloat (Just 2) regimeSpeed []) lines are laid out per second. We interpret this result as follows.
@@ -1169,7 +1172,9 @@ We have carefully refined this informal definition to a formal semantics (arguab
 derived a reasonably efficient implementation. Along the way,
 we have demonstrated how to use the standard functional programming methodology.
 
-@acknowledgements«Using the QuickSpec tool, Nicholas Smallbone helped
+@acknowledgements«Most of the work described in this paper was carried out while the author was funded by Chalmers University of Technology.
+Facundo Domingez, Atze van der Ploeg and Arnaud Spiwack gave useful feedback on a draft of this paper.
+Using the QuickSpec tool, Nicholas Smallbone helped
 finding a bug in the final implementation: the concatenation operator
 did not preserve the invariant that lists were sorted. »
 
@@ -1399,10 +1404,6 @@ precisely because laws do not fully constrain the design; there is
 room for wiggle. However, a compositional semantics is often an even
 better guide which should not be an afterthought.
 
-@acknowledgements«Atze van der Ploeg gave useful feedback on a draft of this paper.
-Using the QuickSpec tool, Nicholas Smallbone helped
-finding a bug in the final implementation: the concatenation operator
-did not preserve the invariant that lists were sorted. »
 
 »
 

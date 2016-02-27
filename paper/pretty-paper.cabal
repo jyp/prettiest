@@ -10,8 +10,7 @@ description:
   This library produces more compact outputs than both
   Wadler-Leijen or Hughes-PJ algorithms, at the expense of computational ressources.
   The core API is based on Hughes-PJ, but some combinators of the Leijen API are implemented as well.
-license: GPL
-license-file: LICENSE
+license: CCBY
 category: Text
 maintainer: Jean-Philippe Bernardy <jeanphilippe.bernardy@gmail.com>
 build-type: Simple
@@ -21,6 +20,10 @@ executable paper
         build-depends:
                      base,
                      marxup,
-                     lens
+                     lens,
+                     criterion,
+                     lp-diagrams,
+                     gasp,
+                     statistics
         main-is:
            PM.hs
