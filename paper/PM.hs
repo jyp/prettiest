@@ -23,7 +23,7 @@ import Numeric (showFFloat, showEFloat)
 import Criterion (nf)
 import qualified Criterion.Main.Options as C
 import qualified Criterion.Monad as C
-import Criterion.Types (Measured(..), Report(..), SampleAnalysis(..), Benchmarkable)
+import Criterion.Types (DataRecord(..), Report(..), SampleAnalysis(..))
 import Statistics.Resampling.Bootstrap (Estimate(..))
 import Criterion.Internal (runAndAnalyseOne)
 import System.Environment (getArgs)
@@ -74,7 +74,7 @@ performanceAnalysis :: IO ()
 performanceAnalysis = do
   an <- C.withConfig C.defaultConfig $ do
     forM [1..15] $ \size -> do
-      (Report { reportAnalysis = SampleAnalysis {anMean = dt}}) <- runAndAnalyseOne size ("bench " ++ show size) (benchmark size)
+      (Analysed (Report { reportAnalysis = SampleAnalysis {anMean = dt}})) <- runAndAnalyseOne size ("bench " ++ show size) (benchmark size)
       return (size,(2::Integer) ^ (max 0 (fromIntegral size - 2)), dt)
   writeFile dataFileName $ show an
 
@@ -196,13 +196,13 @@ are practical implementations which form the basis of industrial-strength pretty
 refined by Peyton Jones, and is available as the
 Hackage package @sans«pretty»@footnote«@url«https://hackage.haskell.org/package/pretty»»,
 while Wadler's design has been extended by Leijen and made available as the
-@sans«wl-print» package@footnote«@url«https://hackage.haskell.org/package/wl-pprint»».
+@sans«wl-print» package@footnote«@url«https://hackage.haskell.org/package/wl-pprint»». An ocaml implementation@footnote«@url«https://gallium.inria.fr/~fpottier/pprint/doc»» of Wader's design also exists.
 
 This paper is a bold attempt to improve some aspects of the aforementioned landmark pieces of work in the functional programming landscape.
-Yet, our goal is slightly different to that of Hughes and Wadler. Indeed, they aim first and formost to
+Yet, our goal is slightly different to that of Hughes and Wadler. Indeed, they aim first and foremost to
 demonstrate general principles of functional programming development, with an emphasis on the efficency of the algorithm.
 The methodological idea is to derive a greedy algorithm from a functional specification.
-In the process, they give themselves some leeway in what they accept as pretty outputs (see #sec_notSoPretty).
+In the process, they give themselves some leeway in what they accept as pretty outputs (see @sec_notSoPretty).
 In contrast, my primary goal is to produce @emph«the prettiest output», at the cost of efficiency. Yet, we the final result is reasonably
 efficient (@sec_timings).
 
@@ -327,7 +327,7 @@ formal specification? In particular, how do we turn the above @hask«pretty» fu
 
 Let us use an example to try and answer the question, and outline why neither Wadler's or Hughes' answer is satisfactory. Suppose we want
 to pretty-print the following S-Expr (which is specially crafted to
-demonstrate issues with both Hughes and Wadler libraries):
+demonstrate shortcomings of both Hughes and Wadler libraries):
 
 @haskell«
 testData :: SExpr
@@ -644,7 +644,8 @@ prop_text_empty       = empty == text ""
 prop_flush :: (Doc a, Eq a) => a -> a -> Bool
 prop_flush a b =  flush a <> flush b == flush (flush a <> b)
 »
-One might expect this law to hold instead: @spec«a <> flush b == flush (a <> b)».
+One might expect this law to hold instead:
+@spec«a <> flush b == flush (a <> b)»
 However, the inner @hask«flush» on @hask«b» goes back to the local indentation level, while the outer @hask«flush» goes back to the outer indentation level, which are equal only if @hask«a» ends with an empty line. In turn this condition is guaranteed only when @hask«a» is itself flushed.
 
 »]
@@ -897,7 +898,6 @@ valid (flush a)  => maxWidth a < pageWidth
                  => valid a
   »]
   »
-
 Consequently, keeping invalid layouts is useless: they can never be
 combined with another layout to produce something valid.
 
@@ -954,13 +954,13 @@ The first one is broken down into the two following lemmas:
 
 @lemma«@hask«flush» is monotonic»«
   if @spec«      m1 ≺  m2 » then   @spec«flush m1 ≺ flush m2 »»«
-We have:
+By definition, the assumption expands to
 @spec«
 height     m1 <= height     m2
 maxWidth   m1 <= maxWidth   m2
 lastWidth  m1 <= lastWidth  m2
 »
-and we need to prove the following three conditions
+similarly, the conclusion that we aim to prove expans to the following three conditions
 
 @spec«
 height     (flush m1) <= height     (flush m2)
@@ -968,7 +968,7 @@ maxWidth   (flush m1) <= maxWidth   (flush m2)
 lastWidth  (flush m1) <= lastWidth  (flush m2)
 »
 
-by definition, they reduce to the following inequalities, which are easy consequences of the assumptions.
+by definition, they respectively reduce to the following inequalities, which are easy consequences of the assumptions.
 
 @spec«
 height     m1 + 1  <= height     m2 + 1
@@ -983,7 +983,7 @@ maxWidth   m1      <= maxWidth m2
 @spec«if    m1 ≺  m2 and  m'1 ≺  m'2   => (m1 <> m'1) ≺  (m2 <> m'2)  »
 
 »«
-We have:
+Each of the assumptions expand to three conditions. Thus we have:
 @spec«
 height     m1 <= height     m2
 maxWidth   m1 <= maxWidth   m2
@@ -992,18 +992,20 @@ height     m'1 <= height     m'2
 maxWidth   m'1 <= maxWidth   m'2
 lastWidth  m'1 <= lastWidth  m'2
 »
-and we need to prove the following three conditions:
+and similarly we need to prove the following three conditions to obtain the conclusion:
 @spec«
 height     (m1 <> m'1) <= height     (m2 <> m'2)
 maxWidth   (m1 <> m'1) <= maxWidth   (m2 <> m'2)
 lastWidth  (m1 <> m'1) <= lastWidth  (m2 <> m'2)
 »
-Those are by definition equivalent to the following ones:
+These are respectively equivalent to the following ones, by definition:
 @spec«
-height m1 + height m'1 <= height     m2 + height m'2              (1)
+height m1 + height m'1 <= height     m2 + height m'2
+
 max (maxWidth m1) (lastWidth m1 + maxWidth m'1)
-  <= max (maxWidth m2) (lastWidth m2 + maxWidth m'2)              (2)
-lastWidth  m1 + lastWidth m'1 <= lastWidth  m2 + lastWidth m'2    (3)
+  <= max (maxWidth m2) (lastWidth m2 + maxWidth m'2)
+
+lastWidth  m1 + lastWidth m'1 <= lastWidth  m2 + lastWidth m'2
 »
 
 The first and third inequalities are consequences of the assumptions combined with the monotonicity of @hask«+».
