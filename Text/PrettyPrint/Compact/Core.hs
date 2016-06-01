@@ -1,16 +1,15 @@
 {-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, ViewPatterns #-}
 module Text.PrettyPrint.Compact.Core(Layout(..),Document(..),Doc) where
 
-import Data.List (intercalate,sort,groupBy)
+import Data.List (sort,groupBy,intercalate)
 import Data.Function (on)
 import Data.Monoid
-import Data.Sequence (singleton, Seq, viewl, viewr, ViewL(..), ViewR(..))
-import qualified Data.Sequence as S
-
-
+import Data.Sequence (singleton, Seq, viewl, viewr, ViewL(..), ViewR(..), (|>))
+import Data.String
+import Data.Foldable (toList)
 
 newtype L = L (Seq String) -- non-empty sequence
-  deriving (Eq,Ord)
+  deriving (Eq,Ord,Show)
 
 instance Monoid L where
    mempty = L (singleton "")
@@ -18,14 +17,10 @@ instance Monoid L where
       where n = length x
             indent = Prelude.replicate n ' '
 
-newtype N = N {fromN :: String}
-instance Monoid N where
-  mempty = N ""
-  mappend (N x) (N y) = N (x ++ "\n" ++ y)
 instance Layout L where
-   render (L xs) = fromN $ foldMap N xs
+   render (L xs) = intercalate "\n" $ toList xs
    text = L . singleton
-   flush (L xs) = L (xs <> singleton "")
+   flush (L xs) = L (xs |> "")
 
 
 class Monoid d => Layout d where
@@ -91,6 +86,7 @@ pareto' acc (x:xs) = if any (≺ x) acc
 
 
 newtype Doc = MkDoc [(M,L)]
+  deriving Show
 
 quasifilter :: (a -> Bool) -> [a] -> [a]
 quasifilter p xs = let fxs = filter p xs in if null fxs then take 1 xs else fxs
@@ -122,3 +118,6 @@ instance (Document a, Document b) => Document (a,b) where
 
 instance (Poset a) => Poset (a,b) where
   (a,_) ≺ (b,_) = a ≺ b
+
+instance IsString Doc where
+  fromString = text

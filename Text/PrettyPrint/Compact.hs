@@ -10,7 +10,7 @@ module Text.PrettyPrint.Compact (
    hang, encloseSep, list, tupled, semiBraces,
 
    -- * Operators
-   (<+>), ($$),
+   (<+>), ($$), (</>), (<//>), (<$$>),
 
    -- * List combinators
    hsep, sep, hcat, vcat, cat, punctuate,
@@ -377,13 +377,17 @@ hang n x y = (x <+> y) <|> (x $$ nest' n y)
 -- @
 
 
+space :: Doc
 space = text " "
 
 
+nest' :: Int -> Doc -> Doc
 nest' n x = spaces n <> x
 
 spaces :: Int -> Doc
 spaces n = text $ replicate n ' '
 
+-- | The document @(x \<$$\> y)@ concatenates document @x@ and @y@ with
+-- a linebreak in between. (infixr 5)
 ($$) :: Doc -> Doc -> Doc
-a $$ b = flush a <> b
+($$)  = (<$$>)
