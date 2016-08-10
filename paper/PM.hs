@@ -168,7 +168,7 @@ bibliographyAll = do
 abstract = env "abstract" «
   This paper proposes an new specification of pretty printing which is stronger than the state of the art:
 we require the output to be the shortest possible, and we also offer the ability to align sub-documents at will.
-We argue that specification precludes a greedy implementation. Yet,
+We argue that our specification precludes a greedy implementation. Yet,
 we provide an implementation which behaves linearly in the size of the output.
 The derivation of the implementation demonstrates
 functional programming methodology.
