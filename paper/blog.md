@@ -75,7 +75,7 @@ following s-expr:
 ``` {.example}
 abcd = SExpr $ map (Atom . (:[])) "abcd"
 abcd4 = SExpr [abcd,abcd,abcd,abcd]
-testData = SExpr [Atom "axbxcxd", abcd4] 
+testData = SExpr [Atom "axbxcxd", abcd4]
 ```
 
 Printed on a wide page, we'd get:
@@ -197,7 +197,7 @@ At this point, the reader may raise two objections:
 
 -   Objection 1: *All this fuss for ONE LINE?*
 -   Reply 1: Every computer-science academic has once in their lifetime
-    been in a killing mood due to a one-line-to-long printout causing a
+    been in a killing mood due to a one-line-too-long printout causing a
     paper to spill over the page limit. So that extra line saved *is*
     worth something. Plus, we can construct examples where more space
     can be saved.
