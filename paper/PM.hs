@@ -144,7 +144,7 @@ preamble body = do
   cmd "input" $ tex "../PaperTools/latex/unicodedefs"
 
   title "Functional Pearl: a pretty but not greedy printer"
-  authorinfo [AuthorInfo "Jean-Philippe Bernardy" "jean-philippe.bernardy@tweag.io" "Tweag IO"]
+  authorinfo [AuthorInfo "Jean-Philippe Bernardy" "jean-philippe.bernardy@gu.se" "Gothenburg University, Department of Philosophy, Linguistics and Philosophy of Science"]
   env "document" body
 
 principle :: TeX -> TeX -> Tex TeX
@@ -166,7 +166,7 @@ bibliographyAll = do
   bibliography  "../PaperTools/bibtex/jp"
 
 abstract = env "abstract" «
-  This paper proposes an new specification of pretty printing which is stronger than the state of the art:
+  This paper proposes a new specification of pretty printing which is stronger than the state of the art:
 we require the output to be the shortest possible, and we also offer the ability to align sub-documents at will.
 We argue that our specification precludes a greedy implementation. Yet,
 we provide an implementation which behaves linearly in the size of the output.
@@ -192,21 +192,21 @@ remains an influential example of functional programming design, while that of
 @citet"wadler_prettier_2003" was published as a chapter in a book dedicated to the @qu"fun of programming".
 
 In addition to their esthetical and pedagogical value, the pretty printers of Hughes and Wadler
-are practical implementations which form the basis of industrial-strength pretty-printing packages, which remain popular today. Hughes' design has been
+are practical implementations. Indeed, they form the basis of industrial-strength pretty-printing packages which remain popular today. Hughes' design has been
 refined by Peyton Jones, and is available as the
 Hackage package @sans«pretty»@footnote«@url«https://hackage.haskell.org/package/pretty»»,
 while Wadler's design has been extended by Leijen and made available as the
 @sans«wl-print» package@footnote«@url«https://hackage.haskell.org/package/wl-pprint»». An ocaml implementation@footnote«@url«https://gallium.inria.fr/~fpottier/pprint/doc»» of Wader's design also exists.
 
 This paper is a bold attempt to improve some aspects of the aforementioned landmark pieces of work in the functional programming landscape.
-Yet, our goal is slightly different to that of Hughes and Wadler. Indeed, they aim first and foremost to
+Yet, my goal is slightly different to that of Hughes and Wadler. Indeed, they aim first and foremost to
 demonstrate general principles of functional programming development, with an emphasis on the efficency of the algorithm.
 The methodological idea is to derive a greedy algorithm from a functional specification.
 In the process, they give themselves some leeway in what they accept as pretty outputs (see @sec_notSoPretty).
-In contrast, my primary goal is to produce @emph«the prettiest output», at the cost of efficiency. Yet, we the final result is reasonably
+In contrast, my primary goal is to produce @emph«the prettiest output», at the cost of efficiency. Yet, the final result is reasonably
 efficient (@sec_timings).
 
-Let specify the desired behaviour of a pretty printer, first informally, as the following principles:
+Let us specify the desired behaviour of a pretty printer, first informally, as the following principles:
 
 @pcp_visibility<-principle«Visibility»«A pretty printer shall
 layout all its output within the width of the page.»
@@ -262,7 +262,7 @@ or
 
 In general, a pretty printing library must provide the means to express
 the set of legible layouts: it is up to the user to
-reify @pcp_layout on the data structure of interest. The printer
+instanciate @pcp_layout on the data structure of interest. The printer
 will then automatically pick the smallest (@pcp_compact) legible layout which fits
 the page (@pcp_visibility).
 
@@ -325,9 +325,9 @@ The above API provides a syntax to describe layouts. The natural question is the
 its semantics be?  In other words, how do we turn the three principles into a
 formal specification? In particular, how do we turn the above @hask«pretty» function into a pretty printer of S-Expressions?
 
-Let us use an example to try and answer the question, and outline why neither Wadler's or Hughes' answer is satisfactory. Suppose we want
+Let us use an example to pose the question in concrete terms, and outline why neither Wadler's or Hughes' answer is satisfactory. Suppose that we want
 to pretty-print the following S-Expr (which is specially crafted to
-demonstrate shortcomings of both Hughes and Wadler libraries):
+demonstrate general shortcomings of both Hughes and Wadler libraries):
 
 @haskell«
 testData :: SExpr
@@ -348,13 +348,13 @@ Example expression printed on 80 columns. The first line is a helper showing the
 
 Remember that we would like elements inside an S-Expr to be either
 aligned vertically or concatenated horizontally (for
-@pcp_layout), The second option will be preferred over the first
-(@pcp_compact), as long as the text fits within the page width
-(@pcp_visibility).
-Interpreting the above (still informal) specification yields the
-following results. 1. On a 80-column-wide page, we would get the result
+@pcp_layout), The second option should be preferred over the first
+(for @pcp_compact), as long as the text fits within the page width
+(for @pcp_visibility).
+The above (still informal) interpretation of the three principles demands the
+following outputs. 1. On a 80-column-wide page, we require the output
 displayed in @fig_eighty.
-2. On a 20-column-wide page, we would like to get the following output (the first line is a helper showing the column of a given character):
+2. On a 20-column-wide page, we demand the following output (the first line is a helper showing the column of a given character):
 
 @verbatim«
 12345678901234567890
@@ -417,7 +417,9 @@ much text as possible on the current line, without regard for what comes
 next.  In our example, the algorithm can fit @teletype«(abcdefgh ((a»
 on the sixth line, but then it has committed to a very deep
 indentation level, which forces to display the remainder of the
-document in a narrow area, wasting vertical space.
+document in a narrow area, wasting vertical space. This waste occurs in
+many real examples: any optimistic fitting on an early line may waste
+tremendous amount of space later on.
 
 How does Wadler's library fare on the example? Unfortunately, we
 cannot answer the question in a strict sense. Indeed, Wadler's API is
@@ -427,9 +429,9 @@ one that depends on the contents of a document.  This means that
 Wadler's library lacks the capability to express that a multi-line
 sub-document @hask«b» should be laid out to the right of a document
 @hask«a» (even if @hask«a» is single-line).  Instead, @hask«b» must be
-put below @hask«a». Because of this restriction, with any reasonable
-specification, the best output that Wadler's library
-can produce is the following:
+put below @hask«a». Because of this restriction, even the best
+pretty printer written using Wadler's library can only
+produce the following output:
 
 @verbatim«
 12345678901234567890
@@ -460,8 +462,8 @@ expression [listElement x,
             listElement z,
             listElement w]
 »
-We reasonably hope to obtain the following result, which puts the list to the
-right of the @teletype«expression», best respecting @pcp_layout by clearly showing that the list is an argument of @teletype«expression»:
+Quite reasonably, we hope to obtain the following result, which puts the list to the
+right of the @teletype«expression», clearly showing that the list is an argument of @teletype«expression», and thus properly respecting @pcp_layout:
 @verbatim«
 Pattern = expression [listElement x,
                       listElement y,
@@ -483,11 +485,11 @@ it needlessly obscures the structure of the program; @pcp_layout is not
 respected. In sum, the lack of a combinator for relative indentation
 is a serious drawback. In fact, Daan Leijen's
 implemenation of Wadler's design (@sans«wl-print»), @emph«does» feature
-an alignment combinator. However, the implemenation also uses a greedy algorithm, and thus
+an alignment combinator. However, as Hughes', Leijen's implementation uses a greedy algorithm, and thus
 suffers from the same issue as Hughes' library.
 
-In sum, we have to make a choice between respecting all the principles
-of pretty printing or provide a greedy algorithm. Hughes does not
+In sum, we have to make a choice between either respecting the three principles
+of pretty printing, or providing a greedy algorithm. Hughes does not
 fully respect @pcp_compact. Wadler does not fully respect
 @pcp_layout. Here, I decide to respect both, but I give up on
 greediness.
@@ -520,7 +522,7 @@ ground work, so we can take a shortcut and immediately state a compositional
 semantics. We will later check that the expected laws hold.
 
 Let us interpret a layout as a @emph«non-empty» list of lines to print. As
-Hughes, I'll simply use the type of lists, trusting the reader to remember the invariant.
+Hughes, I shall simply use the type of lists, trusting the reader to remember the invariant of non-emptiness.
 
 @haskell«
 type L = [String] -- non empty.
@@ -546,7 +548,7 @@ thought:
   xs $$ ys = xs ++ ys
 »
 The only potential difficulty is to figure out the interpretation of
-horizontal concatenation (@hask«<>»). We will stick to Hughes' advice:
+horizontal concatenation (@hask«<>»). We stick to Hughes' advice:
 @qu«translate the second operand [to the right], so that is tabs against
 the last character of the first operand». For example:
 
@@ -654,7 +656,7 @@ However, the inner @hask«flush» on @hask«b» goes back to the local indentati
 @subsection«Choice»
 
 We proceed to extend the API with choice between layouts, yielding the
-final API to specify document. The extended API is accessible via a
+final API to specify legible documents. The extended API is accessible via a
 new type class:
 
 @haskell«
@@ -664,8 +666,8 @@ class Layout d => Doc d where
 »
 
 Again, we give the compositional semantics right away. Documents are
-interpreted as a set of layouts. We implement sets as lists, where
-order and number of occurences won't matter.
+interpreted as a set of layouts. We implement sets as lists, and will
+take care not to depend on the order and number of occurences.
 
 The interpretation of disjunction merely appends the list of possible layouts:
 @haskell«
@@ -681,7 +683,6 @@ Consequently, disjunction is associative.
 prop_disj_assoc :: (Doc a, Eq a) => a -> a -> a -> Bool
 prop_disj_assoc a b c = (a <|> b) <|> c == a <|> (b <|> c)
 »
-
 @comment«prop_leftUnit' :: (Doc a, Eq a) => a -> Bool
 prop_leftUnit' a = fail <|> a == a
 
@@ -714,7 +715,7 @@ prop_distrflush a b = flush (a <|> b) == flush a <|> flush b
 @subsection«Semantics»
 
 We can finally define formally what it means to render a document.  To
-do so, we pick a frugal layout among the visiible
+do so, we pick a frugal layout among the visible
 ones, according to @pcp_visibility:
 @haskell«
   render =   render .  -- (for layouts)
@@ -736,7 +737,7 @@ pageWidth = 80
 
 One may expect that disjuction should also be commutative.
 However, the implementation of @hask«mostFrugal» only picks @emph«one» of
-the most frugal layouts. That is fine, as all most frugal layouts are
+the most frugal layouts. That is fine, because all most frugal layouts are
 equally good. However it also means that re-ordering the arguments of a disjunction may
 affect the layout being picked. Therefore, commutativity of disjunction holds
 only up to the length of the layout being rendered:
@@ -750,14 +751,14 @@ infix 3 =~
 (=~) = (==) `on` (length . lines . render)
 »
 
-We have now defined semantics compositionally; furthermore this semantics is executable.
+We have now defined semantics compositionally. Furthermore, this semantics is executable.
 Consequently, we can implement the pretty printing an S-Expr as follows:
 
 @haskell«
 showSExpr x = render (pretty x :: [L])
 »
 
-Running @hask«showSExpr» on our example (@hask«testData») yields the expected output.
+Running @hask«showSExpr» on our example (@hask«testData») yields the output that we demanded in @sec_informal_semantics.
 
 While the above semantics provide an executable implementation, it is insanely slow.
 Indeed, every possible combination of choices is first constructed, and only then a shortest output is
@@ -768,14 +769,14 @@ picked. Thus, for an input with @ensureMath«n» choices, the running time is @t
 @subsection«Measures»
 
 The first insight to arrive at an efficient implementation is that it is
-not necessary to construct layouts fully: only some of their parameters are relevant.
+not necessary to construct fully layouts to calculate their size: only some of their parameters are relevant.
 Let us remember that we want to sift through layouts based on the space that they take.
 Hence, from an algorithmic point of view, all that matters is a measure of that space.
 Let us define an abstract semantics for
 layouts, which ignores the text, and captures only the amount of space used.
 
 The only parameters that matter are the maximum width of the layout, the width of its
-last line and its height (and, because layouts cannot be empty and it's convenient to start at zero, we do not
+last line and its height (and, because layouts cannot be empty and it is convenient to counting start at zero, we do not
 count the last line):
 @singleLayoutDiag
 In code:
@@ -793,7 +794,7 @@ Here is the concatenation diagram annotated with those lengths:
 
 @(horizCat True)
 
-The above diagram can be read out as Haskell code, as follows:
+The above diagram can be read out as Haskell code:
 @haskell«
 instance Layout M where
   a <> b =
@@ -820,7 +821,7 @@ occupied position, completing the class instance:
       [replicate (lastWidth m) 'x'])
 »
 
-The correctness of the above instance relies on intution, and a
+The correctness of the @hask«Layout M» instance relies on intution, and a
 proper reading of the concatenation diagram. This process being
 informal, we should cross-check the final result formally.
 To do so, we define a function which computes the measure of a full layout:
@@ -833,7 +834,7 @@ measure xs = M {  maxWidth   = maximum $ map length $ xs,
 
 Then, to check the correctness of the @hask«Layout M» instance, we
 verify that @hask«measure» is a layout homomorphism (ignoring of
-course the @hask«render»er). The homomorphism property can be spelled out as the following
+course the @hask«render»er). This homomorphism property can be spelled out as the following
 three laws:
 
 @lemma«Measure is a Layout-homomorphism»«
@@ -856,7 +857,7 @@ validMeasure :: M -> Bool
 validMeasure x = maxWidth x <= pageWidth
 »
 
-Having properly refined the problem, and ignoring puny details such as the
+Having properly refined the problem, and continuing to ignore puny details such as the
 actual text being rendered, we may proceed to give a fast
 implementation of the pretty printer.
 
@@ -1058,7 +1059,7 @@ instance Doc DM where
 
 @sec_timings<-section«Timings»
 
-In order to benchmark our pretty printer on large but representative outputs, we have used it to lay out
+In order to benchmark our pretty printer on large but representative outputs, I have used it to lay out
 S-expressions representing full binary trees of increasing depth, as generated by the following function:
 
 @haskell«
@@ -1067,17 +1068,17 @@ testExpr n = SExpr [testExpr (n-1),testExpr (n-1)]
 »
 
 The set of layouts were given by using the pretty printer for S-Expressions
-shown above. The most efficient version of the pretty-printer was used.
-We then measured the time to compute the length of the layout. (Computing the length is enough to force the computation of the best layout.)
-This benchmark heavily exercises the disjuction construct.  Let us compute the number of choices in
+shown above. The most efficient version of the pretty-printer which we described was used.
+I then measured the time to compute the length of the layout. (Computing the length is enough to force the computation of the best layout.)
+This benchmark heavily exercises the disjuction construct.  Indeed, let us compute the number of choices in
 printing @hask«testExpr n».
 For each SExpr with two
-sub-expressions, the printer introduces a choice, therefore the number of choices equal the number of nodes in a
+sub-expressions, the printer introduces a choice, therefore the number of choices is equal to the number of nodes in a
 binary tree of depth @hask«n».
 Thus, for @hask«testExpr n» the pretty printer is offered @tm«2^n-1» choices,
 for a total of @tm«2^{2^n-1}» possible layouts to consider.
 
-We have run the layout algorithm for @hask«n» ranging from 1 to 15, and measured
+I have run the layout algorithm for @hask«n» ranging from 1 to 15, and measured
 the time to perform pretty-printing.
 The following plot shows the time taken (in seconds) against
 the @emph«number of lines of output». (By using the number of lines rather than @hask«n»,
@@ -1101,7 +1102,10 @@ and depends only on the amount of text to render.
 
 @subsection«Re-pairing with text»
 
-Eventually, one might be interested in getting a complete pretty printed output, not just the amout of space that it takes. To do so we can pair measures with full-text layouts, while keeping the
+Eventually, one might be interested in getting a complete
+pretty printed output, not just the amout of space that
+it takes. To do so we can pair measures with full-text
+layouts, while keeping the measure of space for actual computations:
 
 @haskell«
 
@@ -1125,7 +1129,7 @@ instance Layout [(M,L)] where
 
 @subsection«Hughes-Style nesting»
 
-Hughes proposes a @hask«nest» conbinator, which indents its argument @emph«unless» it appears on the right-hand-side of a horizontal concatenation.
+Hughes proposes a @hask«nest» combinator, which indents its argument @emph«unless» it appears on the right-hand-side of a horizontal concatenation.
 The above semantics are rather involved, and appear difficult to support by a local modification of the framework developed in this paper.
 
 Fortunately, in practice @hask«nest» is used only to implement the @hask«hang» combinator, which offers the choice between horizontal concatenation
@@ -1154,7 +1158,7 @@ it is harder to support as such on top of the basis we have so far.
 
 What we would need to do is to record the length of the 1st line and length of the last line without indentation.
 When concatenating, we add those numbers and check that they do not surpass the ribbon length. Unfortunately this
-adds two dimensions to the search space, and renders the final algorithm impossibly slow.
+adds two dimensions to the search space, and slows the final algorithm to impractical speeds.
 
 An alternative is to interpret the ribbon length as the maximum size of a self-contained sublayout of one line.
 Then we just filter out the intermediate results that do not fit the ribbon, as follows:
@@ -1564,3 +1568,7 @@ display :: Tex a -> Tex a
 display = env "center"
 
 footnote = cmd "footnote"
+-- Local Variables:
+-- eval: (setq-local dante-project-root (file-name-directory (directory-file-name default-directory)))
+-- dante-environment: stack
+-- End:
