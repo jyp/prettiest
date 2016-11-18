@@ -1,0 +1,26 @@
+nix-repos:
+  lp-diagrams:
+    location: https://github.com/jyp/lp-diagrams.git
+  gasp:
+    location: https://github.com/jyp/gasp.git
+  marxup:
+    location: https://github.com/jyp/marxup.git
+
+
+shell:
+  extra-external-packages:
+    - z3
+    - texlive.combine {
+                       inherit (texlive)
+                       lm
+                       biblatex
+                       stmaryrd lazylist polytable
+                       logreq
+                       scheme-small wrapfig marvosym wasysym wasy cm-super unicode-math filehook lm-math capt-of
+                       xstring ucharcat;
+                     }
+  extra-haskell-packages:
+    - criterion
+    - gasp
+    - lens
+    - statistics

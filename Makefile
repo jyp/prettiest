@@ -1,19 +1,25 @@
-
+.PRECIOUS: *.dat paper/dist/build/paper/paper
 
 default: Prettiest.pdf
 
 clean:
 	rm -f *.aux *.ptb *.boxes *.log
 
-Prettiest.old.pdf: PM.hs
-	ghc --make PM
-	./PM
+paper/dist/build/paper/paper: paper/PM.hs
+	cd paper
+	cabal build
+
+benchmark-40.dat: paper/dist/build/paper/paper
+	paper/dist/build/paper/paper benchmark
+
+Prettiest.pdf: paper/dist/build/paper/paper
+	paper/dist/build/paper/paper
 	pdflatex Prettiest
 	bibtex Prettiest
-	./PM
+	paper/dist/build/paper/paper
 	pdflatex Prettiest
 
-Prettiest.pdf: benchmark-40.dat benchmark-80.dat paper/PM.hs
+Prettiest.stack.pdf: benchmark-40.dat benchmark-80.dat paper/PM.hs
 	stack build
 	stack exec -- paper
 	pdflatex Prettiest
