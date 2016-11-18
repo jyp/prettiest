@@ -4,7 +4,7 @@
 import MarXup
 import MarXup.Latex
 import MarXup.Latex.Bib
-import MarXup.Latex.Math (deflike, thmlike, definition, mathpreamble,lemma,theorem)
+import MarXup.Latex.Math (deflike, mathpreamble,lemma,theorem)
 import MarXup.Tex hiding (label)
 import MarXup.Diagram hiding (height)
 import qualified MarXup.Diagram as D
@@ -13,10 +13,10 @@ import MarXup.Verbatim
 import MarXup.Latex.Math (ensureMath)
 import Control.Lens (set)
 import Data.Function
-import Data.List (intercalate, minimumBy, sort, groupBy)
+import Data.List (intercalate, minimumBy)
 -- import System.Clock
 import Prelude hiding (fail,Num(..),(/),(^))
-import Control.Monad (forM_,when,forM)
+import Control.Monad (forM_,forM)
 import Graphics.Diagrams.Plot
 import System.IO.Unsafe (unsafePerformIO)
 import Numeric (showFFloat, showEFloat)
@@ -28,6 +28,8 @@ import Statistics.Resampling.Bootstrap (Estimate(..))
 import Criterion.Internal (runAndAnalyseOne)
 import System.Environment (getArgs)
 import Algebra.Classes
+import Control.Monad.IO.Class
+import Prelude (Num)
 
 ($$) :: forall l. Layout l => l -> l -> l
 a $$ b = flush a <> b
@@ -42,15 +44,16 @@ instance Element String where
   type Target String = TeX
   element = textual
 
--- testOne :: forall a. (Eq a, Num a) => a -> Int
+testExpr :: Int -> SExpr
+testOne :: Int -> Int
 testOne size = height mm
     where mm :: M
           mm = minimum $ (pretty input :: DM)
           -- mm' :: M'
           -- mm' = minimum $ (pretty input :: [M'])
-          D1 (mm1:_) = pretty input
-          l :: String
-          l = render $ (pretty input :: [L])
+          D1 (_mm1:_) = pretty input
+          _l :: String
+          _l = render $ (pretty input :: [L])
           input = testExpr size
 
 dataFileName :: FilePath
@@ -72,9 +75,15 @@ regimeSpeed = fromIntegral nlines / time
 
 performanceAnalysis :: IO ()
 performanceAnalysis = do
+  putStrLn "performanceAnalysis..."
+  forM [1..15] $ \size -> do
+    putStrLn $ show size ++ " => " ++ show (testOne size)
+  putStrLn "If the program gets stuck now it is due to a bug in criterion."
   an <- C.withConfig C.defaultConfig $ do
     forM [1..15] $ \size -> do
-      (Analysed (Report { reportAnalysis = SampleAnalysis {anMean = dt}})) <- runAndAnalyseOne size ("bench " ++ show size) (benchmark size)
+      liftIO $ putStrLn $ "running for " ++ show size
+      (Analysed (Report { reportAnalysis = SampleAnalysis {anMean = dt}})) <-
+         runAndAnalyseOne size ("bench " ++ show size) (benchmark size)
       return (size,(2::Integer) ^ (max 0 (fromIntegral size - 2)), dt)
   writeFile dataFileName $ show an
 
@@ -94,7 +103,7 @@ performanceBars = [(Point x l, Point x m, Point x h)
 scatterWithErrors :: PlotCanvas a -> [(Vec2 a,Vec2 a,Vec2 a)] -> TexDiagram ()
 scatterWithErrors (bx,t) inputs = do
   let three f (a,b,c) = (f a, f b, f c)
-  forM_ (map (three (interpBox bx . (forward <$> t <*>))) inputs) $ \(_l,m,h) -> do
+  forM_ (map (three (interpBox bx . (forward <$> t <*>))) inputs) $ \(_l,m,_h) -> do
     -- draw $ path $ polyline [l,h]
     -- stroke "red" $ path $ polyline [m - Point 3 0, m + Point (-3) 0]
     showDot (constant 2) "black" m
@@ -102,9 +111,9 @@ scatterWithErrors (bx,t) inputs = do
     -- error bars are so narrow that we do not see them.
 
 performancePlot :: Vec2 (ShowFct TeX Double) -> Vec2 (Transform Double) -> Diagram TeX Tex ()
-performancePlot sho axes =  do
+performancePlot sho axes' =  do
   let points' = sequenceA performancePoints
-  c@(bx,_) <- preparePlot sho axes (minimum <$> points') (maximum <$> points')
+  c@(bx,_) <- preparePlot sho axes' (minimum <$> points') (maximum <$> points')
   scatterWithErrors c performanceBars
   functionPlot c 5 (\x -> x/regimeSpeed)
   width bx === constant 200
@@ -137,6 +146,7 @@ main = do
 comment :: TeX -> TeX
 comment _ = mempty
 
+preamble :: forall b. Tex b -> Tex b
 preamble body = do
   documentClass "../PaperTools/latex/sigplanconf" ["preprint"]
   stdPreamble
@@ -149,7 +159,7 @@ preamble body = do
 
 principle :: TeX -> TeX -> Tex TeX
 principle titl body = do
-  deflike "Principle" "principle" "Principle" (smallcaps titl) body
+  _ <- deflike "Principle" "principle" "Principle" (smallcaps titl) body
   return $ smallcaps titl
 
 
@@ -165,6 +175,7 @@ bibliographyAll = do
   bibliographystyle "abbrvnat"
   bibliography  "../PaperTools/bibtex/jp"
 
+abstract :: Tex ()
 abstract = env "abstract" «
   This paper proposes a new specification of pretty printing which is stronger than the state of the art:
 we require the output to be the shortest possible, and we also offer the ability to align sub-documents at will.
@@ -1415,6 +1426,7 @@ better guide which should not be an afterthought.
 
 
 
+lineHeight :: Expr
 lineHeight = constant 6
 
 abstrLayout :: Expr -> TexDiagram (Object,Point)
@@ -1432,18 +1444,22 @@ abstrLayout lastWidth = do
   return (Object "abstrLayout" p (anchors bx), after)
 
 
+abstractLayoutJoin :: (Object, Point) -> (Object, t) -> TexDiagram (Object, t)
 abstractLayoutJoin (a,a_last) (b,b_last) = do
   j <- boundingBox [a,b]
   b # NW .=. a_last
   return (j,b_last)
 
+asse :: Object -> Point
 asse a = a # SW + Point zero lineHeight
 
+lw1, lw2 :: Expr
 lw1 = constant 12
 lw2 = constant 18
 
-showDot sz color p =
-  using (outline color) $ do
+showDot :: Expr -> Color -> Point -> TexDiagram ()
+showDot sz colour p =
+  using (outline colour) $ do
     c <- circle "dot"
     c#Center .=. p
     width c === sz
@@ -1461,9 +1477,17 @@ dblarrow lab a b = do
    -- using (outline "blue") $ rectangleShape $ anchors lab
    return ()
 
+hruler :: Point -> Point -> TeX -> Diagram TeX Tex Object
 hruler = gruler xpart ypart
+vruler :: Point -> Point -> TeX -> Diagram TeX Tex Object
 vruler = gruler ypart xpart
 
+gruler :: (Point -> Expr)
+                -> (Point -> Expr)
+                -> Point
+                -> Point
+                -> TeX
+                -> Diagram TeX Tex Object
 gruler xp yp p1 p2 lab = do
   p1Obj <- point "p1'"
   p2Obj <- point "p2'"
@@ -1476,6 +1500,12 @@ gruler xp yp p1 p2 lab = do
   -- stroke "red" $
   boundingBox [p1Obj, p2Obj , l]
 
+rulersOfLayout :: forall a a1 a2.
+                        Verbatim a
+                        -> Verbatim a1
+                        -> Verbatim a2
+                        -> (Object, Point)
+                        -> Diagram TeX Tex (Object, Object, Object)
 rulersOfLayout l mw lw (a,mid) = do
   heightRule <- vruler (a # N) (asse a) (hask l)
   a `leftOf` heightRule
@@ -1493,7 +1523,7 @@ singleLayoutDiag = center $ element $ do
   a@(bx,_) <- draw $ abstrLayout (constant 40)
   width bx === constant 56
   D.height bx === 7 *- lineHeight
-  rulersOfLayout «height» «maxWidth» «lastWidth» a
+  _ <- rulersOfLayout «height» «maxWidth» «lastWidth» a
   return ()
 
 twoLayouts :: TexDiagram ((Object,Point),(Object,Point))
@@ -1540,10 +1570,11 @@ horizCat showRulers = center $ element $ do
   return ()
 
 
+spec :: forall a. Verbatim a -> Tex ()
 spec = haskell
 
 haskell_hidden :: Verbatim a -> TeX
-haskell_hidden x = mempty
+haskell_hidden _ = mempty
 
 verbatim :: Verbatim () -> TeX
 verbatim (Verbatim s _) =
@@ -1567,8 +1598,8 @@ displayLeft body = env'' "list" [] [mempty,tex "\\setlength\\leftmargin{1em}"] $
 display :: Tex a -> Tex a
 display = env "center"
 
+footnote :: forall a. Tex a -> Tex a
 footnote = cmd "footnote"
 -- Local Variables:
--- eval: (setq-local dante-project-root (file-name-directory (directory-file-name default-directory)))
--- dante-environment: stack
+-- dante-repl-command-line: ("nix-shell" "../shell.nix" "--run" "cabal repl")
 -- End:
