@@ -10,7 +10,7 @@ module Text.PrettyPrint.Compact (
    hang, encloseSep, list, tupled, semiBraces,
 
    -- * Operators
-   (<+>), ($$), (</>), (<//>), (<$$>),
+   (<+>), ($$), (</>), (<//>), (<$$>), (<|>),
 
    -- * List combinators
    hsep, sep, hcat, vcat, cat, punctuate,
@@ -134,6 +134,7 @@ punctuate p (d:ds)  = (d <> p) : punctuate p ds
 --
 sep :: [Doc] -> Doc
 sep [] = mempty
+sep [x] = x
 sep xs = hsep xs <|> vcat xs
 
 
@@ -151,8 +152,6 @@ fillSep         = foldDoc (</>)
 hsep :: [Doc] -> Doc
 hsep            = foldDoc (<+>)
 
-
-
 -- | The document @(cat xs)@ concatenates all documents @xs@ either
 -- horizontally with @(\<\>)@, if it fits the page, or vertically with
 -- @(\<$$\>)@.
@@ -160,7 +159,8 @@ hsep            = foldDoc (<+>)
 -- > cat xs  = group (vcat xs)
 cat :: [Doc] -> Doc
 cat [] =  mempty
-cat xs = hcat xs <> vcat xs
+cat [x] = x
+cat xs = hcat xs <|> vcat xs
 
 -- | The document @(fillCat xs)@ concatenates documents @xs@
 -- horizontally with @(\<\>)@ as long as its fits the page, than inserts
