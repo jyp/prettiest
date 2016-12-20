@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, ViewPatterns #-}
 module Text.PrettyPrint.Compact.Core(Layout(..),Document(..),Doc) where
 
-import Data.List (sort,groupBy,intercalate)
+import Data.List (sort,groupBy,intercalate,minimumBy)
 import Data.Function (on)
 import Data.Monoid
 import Data.Sequence (singleton, Seq, viewl, viewr, ViewL(..), ViewR(..), (|>))
@@ -51,17 +51,12 @@ instance Layout M where
                lastWidth = 0}
   render = error "don't use this render"
 
-fits :: M -> Bool
-fits x = maxWidth x <= 80
-
 class Poset a where
   (≺) :: a -> a -> Bool
 
 
 instance Poset M where
   M c1 l1 s1 ≺ M c2 l2 s2 = c1 <= c2 && l1 <= l2 && s1 <= s2
-
-
 
 merge :: Ord a => [a] -> [a] -> [a]
 merge [] xs = xs
@@ -88,12 +83,14 @@ pareto' acc (x:xs) = if any (≺ x) acc
 newtype Doc = MkDoc [(M,L)]
   deriving Show
 
-quasifilter :: (a -> Bool) -> [a] -> [a]
-quasifilter p xs = let fxs = filter p xs in if null fxs then take 1 xs else fxs
 
 instance Monoid Doc where
   mempty = text ""
   MkDoc xs `mappend` MkDoc ys = MkDoc $ bests [ quasifilter (fits . fst) [x <> y | y <- ys] | x <- xs]
+    where quasifilter p xs = let fxs = filter p xs in if null fxs then [minimumBy (compare `on` (maxWidth . fst)) xs] else fxs
+
+fits :: M -> Bool
+fits x = maxWidth x <= 80
 
 instance Layout Doc where
   flush (MkDoc xs) = MkDoc $ bests $ map sort $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
