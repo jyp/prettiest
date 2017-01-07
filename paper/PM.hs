@@ -154,7 +154,7 @@ preamble body = do
   cmd "input" $ tex "../PaperTools/latex/unicodedefs"
 
   title "Functional Pearl: a pretty but not greedy printer"
-  authorinfo [AuthorInfo "Jean-Philippe Bernardy" "jean-philippe.bernardy@gu.se" "Gothenburg University, Department of Philosophy, Linguistics and Theory of Science"]
+  authorinfo [AuthorInfo "Jean-Philippe Bernardy" "jean-philippe.bernardy@gu.se" "University of Gothenburg, Department of Philosophy, Linguistics and Theory of Science"]
   env "document" body
 
 principle :: TeX -> TeX -> Tex TeX
@@ -202,7 +202,7 @@ community to showcase proper style. The pretty printer of @citet"hughes_design_1
 remains an influential example of functional programming design, while that of
 @citet"wadler_prettier_2003" was published as a chapter in a book dedicated to the @qu"fun of programming".
 
-In addition to their esthetical and pedagogical value, the pretty printers of Hughes and Wadler
+In addition to their aesthetic and pedagogical value, the pretty printers of Hughes and Wadler
 are practical implementations. Indeed, they form the basis of industrial-strength pretty-printing packages which remain popular today. Hughes' design has been
 refined by Peyton Jones, and is available as the
 Hackage package @sans«pretty»@footnote«@url«https://hackage.haskell.org/package/pretty»»,
@@ -211,25 +211,25 @@ while Wadler's design has been extended by Leijen and made available as the
 
 This paper is improves some aspects of the aforementioned landmark pieces of work in the functional programming landscape.
 Yet, my goal is slightly different to that of Hughes and Wadler. Indeed, they aim first and foremost to
-demonstrate general principles of functional programming development, with an emphasis on the efficency of the algorithm.
+demonstrate general principles of functional programming development, with an emphasis on the efficiency of the algorithm.
 The methodological idea is to derive a greedy algorithm from a functional specification.
 In the process, they give themselves some leeway in what they accept as pretty outputs (see @sec_notSoPretty).
 In contrast, my primary goal is to produce @emph«the prettiest output», at the cost of efficiency. Yet, the final result is reasonably
 efficient (@sec_timings).
 
-Let us specify the desired behaviour of a pretty printer, first informally, as the following principles:
+Let us specify the desired behavior of a pretty printer, first informally, as the following principles:
 
 @pcp_visibility<-principle«Visibility»«A pretty printer shall
 layout all its output within the width of the page.»
 
 @pcp_layout<-principle«Legibility»« A pretty printer shall make clever use of layout, to make it easy
-             for a human to recognise the hierarchical organisation of data.»
+             for a human to recognize the hierarchical organization of data.»
 
 @pcp_compact<-principle«Frugality»«A pretty printer shall minimize the number of lines
 used to display the data.»
 
 Furthermore, the first principle takes precedence over the second one, which itself takes precedence over the third one.
-In the rest of the paper, we interpret the above three principles as an optimisation problem, and derive a program
+In the rest of the paper, we interpret the above three principles as an optimization problem, and derive a program
 which solves it efficiently enough.
 
 @sec_api<-section«Interface (Syntax)»
@@ -273,7 +273,7 @@ or
 
 In general, a pretty printing library must provide the means to express
 the set of legible layouts: it is up to the user to
-instanciate @pcp_layout on the data structure of interest. The printer
+instantiate @pcp_layout on the data structure of interest. The printer
 will then automatically pick the smallest (@pcp_compact) legible layout which fits
 the page (@pcp_visibility).
 
@@ -383,7 +383,7 @@ displayed in @fig_eighty.
    (a b c d))))
 »
 
-@sec_notSoPretty<-subsection«The liminations of Hughes and Wadler»
+@sec_notSoPretty<-subsection«The limitations of Hughes and Wadler»
 
 Let us take a moment to survey the state of the art.  On a 20-column
 page and using Hughes' library, we would get the following output
@@ -428,7 +428,7 @@ much text as possible on the current line, without regard for what comes
 next.  In our example, the algorithm can fit @teletype«(abcdefgh ((a»
 on the sixth line, but then it has committed to a very deep
 indentation level, which forces to display the remainder of the
-document in a narrow area, wasting vertical space. This waste occurs in
+document in a narrow area, wasting vertical space. Such a waste occurs in
 many real examples: any optimistic fitting on an early line may waste
 tremendous amount of space later on.
 
@@ -495,7 +495,7 @@ Aligning the argument of the expression below to the left of the equal sign is b
 it needlessly obscures the structure of the program; @pcp_layout is not
 respected. In sum, the lack of a combinator for relative indentation
 is a serious drawback. In fact, Daan Leijen's
-implemenation of Wadler's design (@sans«wl-print»), @emph«does» feature
+implementation of Wadler's design (@sans«wl-print»), @emph«does» feature
 an alignment combinator. However, as Hughes', Leijen's implementation uses a greedy algorithm, and thus
 suffers from the same issue as Hughes' library.
 
@@ -508,7 +508,7 @@ Yet, the final algorithm that I arrive at is fast enough for
 common pretty-printing tasks.
 
 But; let us not get carried away: before attacking the problem of making an implementation,
-we need to finish the formalisation of the semantics. And before that,
+we need to finish the formalization of the semantics. And before that,
 it is best if we spend a moment to further refine the API for defining pretty layouts.
 
 @section«Semantics, continued»
@@ -577,7 +577,7 @@ xxxxxx
           yyyy
 »
 
-Or, diagramatically:
+Or, diagrammatically:
 
 @(horizCat False)
 
@@ -678,7 +678,7 @@ class Layout d => Doc d where
 
 Again, we give the compositional semantics right away. Documents are
 interpreted as a set of layouts. We implement sets as lists, and will
-take care not to depend on the order and number of occurences.
+take care not to depend on the order and number of occurrences.
 
 The interpretation of disjunction merely appends the list of possible layouts:
 @haskell«
@@ -746,7 +746,7 @@ A layout is @hask«valid» if all its lines are fully valid on the page:
 pageWidth = 80
 »
 
-One may expect that disjuction should also be commutative.
+One may expect that disjunction should also be commutative.
 However, the implementation of @hask«mostFrugal» only picks @emph«one» of
 the most frugal layouts. That is fine, because all most frugal layouts are
 equally good. However it also means that re-ordering the arguments of a disjunction may
@@ -832,7 +832,7 @@ occupied position, completing the class instance:
       [replicate (lastWidth m) 'x'])
 »
 
-The correctness of the @hask«Layout M» instance relies on intution, and a
+The correctness of the @hask«Layout M» instance relies on intuition, and a
 proper reading of the concatenation diagram. This process being
 informal, we should cross-check the final result formally.
 To do so, we define a function which computes the measure of a full layout:
@@ -874,7 +874,7 @@ implementation of the pretty printer.
 
 @subsection«Early filtering out invalid results»
 
-The first optimisation is to filter out invalid results early; like so:
+The first optimization is to filter out invalid results early; like so:
 
 @spec«
 text x = filter valid [text x]
@@ -918,11 +918,11 @@ combined with another layout to produce something valid.
 not (valid a)    => not (valid (a <> b))
 not (valid b)    => not (valid (a <> b))
 not (valid a)    => not (valid (flush a))
-»»«By contraposition of @lem_valid_mono»
+»»«By contrapositive of @lem_valid_mono»
 
 @subsection«Pruning out dominated results»
 
-The second optimisation relies on the insight that even certain valid results
+The second optimization relies on the insight that even certain valid results
 are dominated by others. That is, they can be discarded early.
 
 We write @hask«a ≺ b» when @hask«a» dominates @hask«b». We will arrange
@@ -972,7 +972,7 @@ height     m1 <= height     m2
 maxWidth   m1 <= maxWidth   m2
 lastWidth  m1 <= lastWidth  m2
 »
-similarly, the conclusion that we aim to prove expans to the following three conditions
+similarly, the conclusion that we aim to prove expands to the following three conditions
 
 @spec«
 height     (flush m1) <= height     (flush m2)
@@ -1081,7 +1081,7 @@ testExpr n = SExpr [testExpr (n-1),testExpr (n-1)]
 The set of layouts were given by using the pretty printer for S-Expressions
 shown above. The most efficient version of the pretty-printer which we described was used.
 I then measured the time to compute the length of the layout. (Computing the length is enough to force the computation of the best layout.)
-This benchmark heavily exercises the disjuction construct.  Indeed, let us compute the number of choices in
+This benchmark heavily exercises the disjunction construct.  Indeed, let us compute the number of choices in
 printing @hask«testExpr n».
 For each SExpr with two
 sub-expressions, the printer introduces a choice, therefore the number of choices is equal to the number of nodes in a
@@ -1102,11 +1102,11 @@ Precise timings were obtained by using O'Sullivan's @emph«criterion» benchmark
 While @emph«criterion» provides confidence intervals, they are so thin that they
 are not visible at this scale.
 
-The plot shows a behaviour that tends to become linear when the output is large enough.
+The plot shows a behavior that tends to become linear when the output is large enough.
 For such large inputs approximately @(showFFloat (Just 2) regimeSpeed []) lines are laid out per second. We interpret this result as follows.
 Our pretty-printer essentially considers non-dominated layouts. If the input is sufficiently complex, this approximately means to
 consider one layout per possible width (@show(pageWidth) in our tests) --- when the width is given then the length and the width of last line are fixed.
-Therefore, the amount of work becomes independent of the number of disjuctions present in the input,
+Therefore, the amount of work becomes independent of the number of disjunctions present in the input,
 and depends only on the amount of text to render.
 
 @section«Discussion»
@@ -1114,7 +1114,7 @@ and depends only on the amount of text to render.
 @subsection«Re-pairing with text»
 
 Eventually, one might be interested in getting a complete
-pretty printed output, not just the amout of space that
+pretty printed output, not just the amount of space that
 it takes. To do so we can pair measures with full-text
 layouts, while keeping the measure of space for actual computations:
 
@@ -1181,7 +1181,7 @@ fitRibbon m = height m > 0 || maxWidth m < ribbonLength
 valid m = validMeasure m && fitRibbon m
 »
 
-This re-interpretation appears to fulfil the original goal as well.
+This re-interpretation appears to fulfill the original goal as well.
 
 @section«Conclusion»
 Using three informal principles, we have defined what a pretty printer is.
@@ -1603,3 +1603,41 @@ footnote = cmd "footnote"
 -- Local Variables:
 -- dante-repl-command-line: ("nix-shell" "../shell.nix" "--run" "cabal repl")
 -- End:
+
+--  LocalWords:  XTypeSynonymInstances XOverloadedStrings pgmF marxup
+--  LocalWords:  XRecursiveDo FlexibleInstances InstanceSigs MarXup
+--  LocalWords:  GeneralizedNewtypeDeriving FlexibleContexts deflike
+--  LocalWords:  RankNTypes TypeFamilies mathpreamble ensureMath forM
+--  LocalWords:  intercalate minimumBy unsafePerformIO showFFloat nf
+--  LocalWords:  showEFloat DataRecord SampleAnalysis getArgs Num cmd
+--  LocalWords:  runAndAnalyseOne forall newpage Eq Benchmarkable DM
+--  LocalWords:  testOne testExpr SExpr dataFileName FilePath dat sz
+--  LocalWords:  pageWidth performanceData readFile estLowerBound dt
+--  LocalWords:  estPoint estUpperBound measTime regimeSpeed nlines
+--  LocalWords:  fromIntegral performanceAnalysis putStrLn withConfig
+--  LocalWords:  defaultConfig liftIO Analysed reportAnalysis anMean
+--  LocalWords:  writeFile performanceTable rrr performancePoints sho
+--  LocalWords:  performanceBars scatterWithErrors PlotCanvas showDot
+--  LocalWords:  TexDiagram interpBox polyline performancePlot tex tm
+--  LocalWords:  ShowFct sequenceA preparePlot functionPlot RealFloat
+--  LocalWords:  renderFloat performancePlotLog performancePlotLin qu
+--  LocalWords:  logAxis simplLinAxis ErrorBar lbound ubound args env
+--  LocalWords:  fromVerbatim renderTex ACMArt mainText mempty acmart
+--  LocalWords:  bibliographyAll documentClass acmlarge stdPreamble
+--  LocalWords:  authorinfo AuthorInfo titl smallcaps maketitle wl xs
+--  LocalWords:  bibliographystyle abbrvnat hughes Peyton Wadler's ys
+--  LocalWords:  Leijen ocaml notSoPretty emph pcp api Expr abcd hask
+--  LocalWords:  ing hsep vcat foldr sep testData abcde abcdefgh Daan
+--  LocalWords:  listElement Leijen's compositional xxxxxxxxxxxxx Ord
+--  LocalWords:  yyyyyyyyyyyyyyyyyyyyy xxxxxxxxx xxxxxxxxxxxx yyyy
+--  LocalWords:  yyyyyyyyyyyyyyyyyyyyyyyyyyyyy xxxxxx horizCat init
+--  LocalWords:  xxxxxxyyyyyyyyyyyyyyyyyyyyy Algorithmically enumList
+--  LocalWords:  leftUnit rightUnit disj citep mcbride applicative
+--  LocalWords:  fmap distrl distrr distrflush mostFrugal TODO commut
+--  LocalWords:  compositionally showSExpr singleLayoutDiag lastWidth
+--  LocalWords:  maxWidth validMeasure lem ctx concretize Poset acc
+--  LocalWords:  antisymmetric monotonicity inequation pareto concat
+--  LocalWords:  O'Sullivan's benchmarking disjunctions snd fst Atze
+--  LocalWords:  sublayout fitRibbon ribbonLength acknowledgements
+--  LocalWords:  Facundo Domingez der Ploeg Arnaud Spiwack QuickSpec
+--  LocalWords:  Smallbone onecolumn
