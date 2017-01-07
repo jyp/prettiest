@@ -207,9 +207,9 @@ are practical implementations. Indeed, they form the basis of industrial-strengt
 refined by Peyton Jones, and is available as the
 Hackage package @sans«pretty»@footnote«@url«https://hackage.haskell.org/package/pretty»»,
 while Wadler's design has been extended by Leijen and made available as the
-@sans«wl-print» package@footnote«@url«https://hackage.haskell.org/package/wl-pprint»». An ocaml implementation@footnote«@url«https://gallium.inria.fr/~fpottier/pprint/doc»» of Wader's design also exists.
+@sans«wl-print» package@footnote«@url«https://hackage.haskell.org/package/wl-pprint»». An ocaml implementation@footnote«@url«https://gallium.inria.fr/~fpottier/pprint/doc»» of Wadler's design also exists.
 
-This paper is a bold attempt to improve some aspects of the aforementioned landmark pieces of work in the functional programming landscape.
+This paper is improves some aspects of the aforementioned landmark pieces of work in the functional programming landscape.
 Yet, my goal is slightly different to that of Hughes and Wadler. Indeed, they aim first and foremost to
 demonstrate general principles of functional programming development, with an emphasis on the efficency of the algorithm.
 The methodological idea is to derive a greedy algorithm from a functional specification.
