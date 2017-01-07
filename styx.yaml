@@ -1,26 +1,44 @@
-nix-repos:
+local-packages:
+  pretty-compact:
+    location: .
+  pretty-paper:
+    location: ./paper
+  marxup:
+    location: ../MarXup/
+
+source-deps:
   lp-diagrams:
     location: https://github.com/jyp/lp-diagrams.git
   gasp:
     location: https://github.com/jyp/gasp.git
-  marxup:
-    location: https://github.com/jyp/marxup.git
+#  marxup:
+#    location: https://github.com/jyp/marxup.git
 
+nix-deps:
+    - criterion
+    - gasp
+    - lens
+    - statistics
 
-shell:
-  extra-external-packages:
+non-haskell-deps:
     - z3
     - texlive.combine {
                        inherit (texlive)
                        lm
                        biblatex
+                       comment
+                       libertine
+                       newtx
+                       
                        stmaryrd lazylist polytable
                        logreq
                        scheme-small wrapfig marvosym wasysym wasy cm-super unicode-math filehook lm-math capt-of
+                       environ
+                       trimspaces
+                       ncctools
+                       ncclatex
+                       todonotes
+                       totpages
                        xstring ucharcat;
                      }
-  extra-haskell-packages:
-    - criterion
-    - gasp
-    - lens
-    - statistics
+

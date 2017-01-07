@@ -361,7 +361,6 @@ rational r      = text (show r)
 hang :: Int -> Doc -> Doc -> Doc
 hang n x y = (x <+> y) <|> (x $$ nest' n y)
 
-
 -- | The document @(nest i x)@ renders document @x@ with the current
 -- indentation level increased by i (See also 'hang', 'align' and
 -- 'indent').

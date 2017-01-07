@@ -141,20 +141,20 @@ main = do
   args <- getArgs
   case args of
     ["benchmark"] -> performanceAnalysis
-    _ -> renderTex SIGPlan "Prettiest" (preamble (header >> mainText >> bibliographyAll >> appendix))
+    _ -> renderTex ACMArt "Prettiest" (preamble (header >> mainText >> bibliographyAll >> appendix))
 
 comment :: TeX -> TeX
 comment _ = mempty
 
 preamble :: forall b. Tex b -> Tex b
 preamble body = do
-  documentClass "../PaperTools/latex/sigplanconf" ["preprint"]
+  documentClass "acmart" ["acmlarge"]
   stdPreamble
   mathpreamble
   cmd "input" $ tex "../PaperTools/latex/unicodedefs"
 
   title "Functional Pearl: a pretty but not greedy printer"
-  authorinfo [AuthorInfo "Jean-Philippe Bernardy" "jean-philippe.bernardy@gu.se" "Gothenburg University, Department of Philosophy, Linguistics and Philosophy of Science"]
+  authorinfo [AuthorInfo "Jean-Philippe Bernardy" "jean-philippe.bernardy@gu.se" "Gothenburg University, Department of Philosophy, Linguistics and Theory of Science"]
   env "document" body
 
 principle :: TeX -> TeX -> Tex TeX
@@ -167,7 +167,7 @@ header :: Tex ()
 header = do
   maketitle
   abstract
-  keywords $ [ "Pearl", "Pretty Printing"]
+  keywords $ ["Pearl", "Pretty Printing"]
   return ()
 
 bibliographyAll :: TeX
