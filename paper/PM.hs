@@ -172,7 +172,7 @@ header = do
 
 bibliographyAll :: TeX
 bibliographyAll = do
-  bibliographystyle "abbrvnat"
+  bibliographystyle "../PaperTools/bibtex/ACM-Reference-Format"
   bibliography  "../PaperTools/bibtex/jp"
 
 abstract :: Tex ()
@@ -1244,15 +1244,18 @@ measure (xs <> (y:ys))
                             , height  = length (init xs ++ [last xs ++ y] ++ map (indent ++) ys) - 1
                             , lastWidth = length $ last $ (init xs ++ [last xs ++ y] ++ map (indent ++) ys)
                             }
-                       == M { maxWidth = maximum ((init (map length xs) ++ [length (last xs) + length y] ++ map (\y -> length (last xs) + length y) ys))
+                       == M { maxWidth = maximum (( init (map length xs) ++ [length (last xs) + length y] ++
+                                                    map (\y -> length (last xs) + length y) ys))
                             , height  = length (init xs) + 1 + length ys - 1
-                            , lastWidth = last $ ((init (map length xs) ++ [length (last xs) + length y] ++ map (\y -> length (last xs) + length y) ys))
+                            , lastWidth = last ((  init (map length xs) ++ [length (last xs) + length y] ++
+                                                   map (\y -> length (last xs) + length y) ys))
                             }
                        == M { maxWidth = maximum (init (map length xs) ++ map (\y -> length (last xs) + length y) (y:ys))
                             , height  = (length xs - 1) + (length (y:ys) - 1)
                             , lastWidth = last $ (init (map length xs) ++ map (\y -> length (last xs) + length y) (y:ys))
                             }
-                       == M { maxWidth = maximum [maximum (init (map length xs)), length (last xs) + maximum (map length (y:ys))]
+                       == M { maxWidth = maximum [  maximum (init (map length xs)),
+                                                    length (last xs) + maximum (map length (y:ys))]
                             , height  = (length xs - 1) + (length (y:ys) - 1)
                             , lastWidth = last $ (map (\y -> length (last xs) + length y) (y:ys))
                             }
@@ -1611,7 +1614,7 @@ display = env "center"
 footnote :: forall a. Tex a -> Tex a
 footnote = cmd "footnote"
 -- Local Variables:
--- dante-repl-command-line: ("nix-shell" "../shell.nix" "--run" "cabal repl")
+-- dante-project-root: "~/repo/prettiest"
 -- End:
 
 --  LocalWords:  XTypeSynonymInstances XOverloadedStrings pgmF marxup

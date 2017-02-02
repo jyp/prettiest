@@ -24,3 +24,5 @@ cabal.config
 /Prettiest.blg
 /.stack-work
 /paper/Prettiest.tex
+/Prettiest.out
+/.styx/
