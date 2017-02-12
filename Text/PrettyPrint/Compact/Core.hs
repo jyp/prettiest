@@ -103,8 +103,6 @@ instance Document Doc where
   MkDoc m1 <|> MkDoc m2 = MkDoc (bests [m1,m2])
 
 
---  (a,b) `mappend` (c,d) = (a<>c ,b<>d)
-
 instance (Layout a, Layout b) => Layout (a,b) where
   text s = (text s, text s)
   flush (a,b) = (flush a, flush b)

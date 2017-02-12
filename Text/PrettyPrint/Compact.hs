@@ -34,6 +34,7 @@ module Text.PrettyPrint.Compact (
    ) where
 
 import Data.Monoid
+import Data.List (intersperse)
 
 import Text.PrettyPrint.Compact.Core as Text.PrettyPrint.Compact
 
@@ -84,10 +85,10 @@ semiBraces      = encloseSep lbrace   rbrace  semi
 -- @
 encloseSep :: Doc -> Doc -> Doc -> [Doc] -> Doc
 encloseSep left right sep ds
-    = case ds of
-        []  -> left <> right
-        [d] -> left <> d <> right
-        _   -> cat (zipWith (<>) (left : repeat sep) ds) <> right
+    = (\mid -> mid <> right) $ case ds of
+        []  -> left <> mempty
+        [d] -> left <> d
+        (d:ds') -> hcat (left:intersperse (sep<>text " ") ds) <|> vcat (left <> d:map (sep <>) ds')
 
 -----------------------------------------------------------
 -- punctuate p [d1,d2,...,dn] => [d1 <> p,d2 <> p, ... ,dn]
