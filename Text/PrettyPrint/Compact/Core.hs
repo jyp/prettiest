@@ -49,7 +49,7 @@ instance Layout M where
   flush a = M {maxWidth = maxWidth a,
                height = height a + 1,
                lastWidth = 0}
-  render = error "don't use this render"
+  render = error "don't use render for M type"
 
 class Poset a where
   (≺) :: a -> a -> Bool
@@ -78,16 +78,21 @@ pareto' acc [] = Prelude.reverse acc
 pareto' acc (x:xs) = if any (≺ x) acc
                        then pareto' acc xs
                        else pareto' (x:acc) xs
+                            -- because of the ordering, we have that
+                            -- for all y ∈ acc, y <= x, and thus x ≺ y
+                            -- is false. No need to refilter acc.
 
 
-newtype Doc = MkDoc [(M,L)]
+newtype Doc = MkDoc [(M,L)] -- list sorted by lexicographic order for the first component
   deriving Show
-
 
 instance Monoid Doc where
   mempty = text ""
   MkDoc xs `mappend` MkDoc ys = MkDoc $ bests [ quasifilter (fits . fst) [x <> y | y <- ys] | x <- xs]
-    where quasifilter p xs = let fxs = filter p xs in if null fxs then [minimumBy (compare `on` (maxWidth . fst)) xs] else fxs
+    where quasifilter p xs = let fxs = filter p xs
+                             in if null fxs
+                                then [minimumBy (compare `on` (maxWidth . fst)) xs]
+                                else fxs
 
 fits :: M -> Bool
 fits x = maxWidth x <= 80
@@ -97,7 +102,8 @@ instance Layout Doc where
   -- flush xs = pareto' [] $ sort $ (map flush xs)
   text s = MkDoc [text s]
   render (MkDoc []) = error "No suitable layout found."
-  render (MkDoc (x:_)) = render x
+  render (MkDoc xs@(x:_)) | maxWidth (fst x) <= 80 = render x
+                          | otherwise = render (minimumBy (compare `on` (maxWidth . fst)) xs)
 
 instance Document Doc where
   MkDoc m1 <|> MkDoc m2 = MkDoc (bests [m1,m2])
