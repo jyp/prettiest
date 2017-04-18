@@ -118,6 +118,14 @@ performancePlot sho axes' =  do
   functionPlot c 5 (\x -> x/regimeSpeed)
   width bx === constant 200
   D.height bx === constant 100
+  xaxisLab <- label "xaxisLab" "number of lines of output"
+  yaxisLab <- label "yaxisLab" "layout time (s)"
+  align xpart $ map (#Center) [bx, xaxisLab]
+  align ypart $ map (#Center) [bx, yaxisLab]
+  yaxisLab `leftOf` bx
+  bx `topOf` xaxisLab
+
+
 
 renderFloat :: forall a. RealFloat a => a -> Tex ()
 renderFloat x = tex $ showEFloat (Just 0) x ""
@@ -148,7 +156,7 @@ comment _ = mempty
 
 preamble :: forall b. Tex b -> Tex b
 preamble body = do
-  documentClass "acmart" ["acmlarge"]
+  documentClass "acmart" ["acmlarge", "natbib"]
   stdPreamble
   mathpreamble
   cmd "input" $ tex "../PaperTools/latex/unicodedefs"
@@ -235,7 +243,8 @@ which solves it efficiently enough for practical purposes.
 @sec_api<-section«Interface (Syntax)»
 
 Let us use an example to guide the development of our pretty-printing interface.
-Assume that we want to pretty print S-Expressions, and that they are represented as follows:
+Assume that we want to pretty print S-Expressions, which can either be atom or a list of S-Expressions.
+Assume further that they are represented as follows:
 
 @haskell«
 data SExpr = SExpr [SExpr] | Atom String
@@ -250,13 +259,13 @@ abcd = SExpr [Atom "a",Atom "b",Atom "c",Atom "d"]
 »
 
 The goal of the pretty printer is to render a given S-Expr according to the
-three principles of pretty printing: @pcp_visibility, @pcp_compact and @pcp_layout.
+three principles of pretty printing: @pcp_visibility, @pcp_layout and @pcp_compact.
 While it is clear how the first two principles constrain the result, it
 is less clear how the third principle plays out: we must specify more precisely which
 layouts are admissible. To this end, we assert that in a pretty
 display of an S-Expr, the elements should be either
-concatenated horizontally, or aligned vertically. Thus, the legible
-layouts of our @hask«abcd» example would be either
+concatenated horizontally, or aligned vertically. (Even though there possible choices, ours is sufficient for illustrative purposes.)
+For example, the legible layouts of the @hask«abcd» S-Expression defined above would be either
 
 @verbatim«
 (a b c d)
@@ -271,6 +280,8 @@ or
  d)
 »
 
+And thus, @tex"{\\sc{}legibility}" will interact in non-trivial ways with @pcp_compact and @pcp_layout.
+
 In general, a pretty printing library must provide the means to express
 the set of legible layouts: it is up to the user to
 instantiate @pcp_layout on the data structure of interest. The printer
@@ -281,7 +292,7 @@ Our layout-description API
 is similar to Hughes': we can express both
 vertical (@hask«$$») and horizontal (@hask«<>») composition of
 documents, as well as embed raw @hask«text» and provide
-choice between layouts (@hask«<|>»). At this stage, we keep
+choice between layouts (@hask«<|>») --- but we lack a dedicated flexible space insertion operator (@hask«<+>»). At this stage, we keep
 the representation of documents abstract, by using a typeclass (@hask«Doc») which
 provides the above combinators, as well as means of @hask«render»ing a
 document:
@@ -295,7 +306,7 @@ render  :: Doc d => d -> String
 »
 
 We can then define a few useful combinators on top of the above: the
-@hask«empty» document; concatenation with an intermediate space
+@hask«empty» document; horizontal concatenation with a fixed intermediate space
 @hask«(<+>)»; vertical and horizontal concatenation of multiple
 documents.
 
@@ -307,8 +318,12 @@ empty = text ""
 x <+> y  = x <> text " " <> y
 
 hsep,vcat :: Doc d => [d] -> d
-vcat  = foldr1 ($$)
-hsep  = foldr1 (<+>)
+vcat  = foldDoc ($$)
+hsep  = foldDoc (<+>)
+
+foldDoc :: Doc d => (d -> d -> d) -> [d] -> d
+foldDoc _ []      = empty
+foldDoc f (x:xs)  = f x (foldDoc f xs)
 »
 
 We can furthermore define the choice between horizontal and
@@ -358,15 +373,16 @@ Example expression printed on 80 columns. The first line is not part of the oupu
  (abcdefgh ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d))))
 »»
 
-Remember that we would like elements inside an S-Expr to be either
+Remember that by assumption we would like elements inside an S-Expr to be either
 aligned vertically or concatenated horizontally (for
-@pcp_layout), The second option should be preferred over the first
+@pcp_layout), and that the second option should be preferred over the first
 (for @pcp_compact), as long as the text fits within the page width
-(for @pcp_visibility).
-The above (still informal) interpretation of the three principles demands the
-following outputs. 1. On a 80-column-wide page, we require the output
-displayed in @fig_eighty.
-2. On a 20-column-wide page, we demand the following output (the first line is not part of the ouput, but it helps by showing column numbers):
+(for @pcp_visibility). More precisely, the three principles demand the output
+with the smallest number of lines which still fits on the page among all the legible
+outputs described above.
+Thus on a 80-column-wide page, they demand the output
+displayed in @fig_eighty and
+on a 20-column-wide page, they demand the following output (the first line is not part of the ouput, but it helps by showing column numbers):
 Yet, neither Hughes' nor Wadler's library can deliver those results.
 
 @verbatim«
@@ -393,6 +409,7 @@ instead:
 
 @verbatim«
 12345678901234567890
+
 ((abcde ((a b c d)
          (a b c d)
          (a b c d)
@@ -438,7 +455,7 @@ How does Wadler's library fare on the example? Unfortunately, we
 cannot answer the question in a strict sense. Indeed, Wadler's API is
 too restrictive to even @emph«express» the layout that we are after. That
 is, one can only specify a @emph«constant» amount of indentation, not
-one that depends on the contents of a document.  This means that
+one that depends on the contents of a document. In other words,
 Wadler's library lacks the capability to express that a multi-line
 sub-document @hask«b» should be laid out to the right of a document
 @hask«a» (even if @hask«a» is single-line).  Instead, @hask«b» must be
@@ -448,6 +465,7 @@ produce the following output:
 
 @verbatim«
 12345678901234567890
+
 ((abcde
   ((a b c d)
    (a b c d)
@@ -498,7 +516,7 @@ it needlessly obscures the structure of the program; @pcp_layout is not
 respected. In sum, the lack of a combinator for relative indentation
 is a serious drawback. In fact, Daan Leijen's
 implementation of Wadler's design (@sans«wl-print»), @emph«does» feature
-an alignment combinator. However, as Hughes', Leijen's implementation uses a greedy algorithm, and thus
+an alignment combinator. However, as Hughes' does, Leijen's uses a greedy algorithm, and thus
 suffers from the same issue as Hughes' library.
 
 In sum, we have to make a choice between either respecting the three principles
@@ -517,7 +535,7 @@ it is best if we spend a moment to further refine the API for defining pretty la
 
 @subsection«Layouts»
 We ignore for a moment the choice between possible layouts
-(@hask«<|>»). As Hughes, we call a document without choice a @emph«layout».
+(@hask«<|>»). As Hughes does, we call a document without choice a @emph«layout».
 
 Recall that we have inherited from Hughes a draft API for layouts:
 
@@ -549,6 +567,14 @@ Preparing a layout for printing is as easy as inserting a newline character betw
   render :: L -> String
   render = intercalate "\n"
 »
+where @hask«intercalate» can be defined as follows:
+@spec«
+  intercalate :: String -> [String] -> String
+  intercalate x []      = []
+  intercalate x (y:ys)  = y ++ x ++ intercalate ys
+»
+
+
 Embedding a string is thus immediate:
 @haskell«
   text :: String -> L
@@ -561,8 +587,8 @@ thought: it suffices to concatenate the input lists.
   xs $$ ys = xs ++ ys
 »
 The only potential difficulty is to figure out the interpretation of
-horizontal concatenation (@hask«<>»). We stick to Hughes' advice:
-@qu«translate the second operand [to the right], so that is tabs against
+horizontal concatenation (@hask«<>»). We follow the advice provided by @citet"hughes_design_1995":
+@qu«translate the second operand [to the right], so that its first character abuts against
 the last character of the first operand». For example:
 
 @verbatim«
@@ -590,11 +616,11 @@ first line of the second layout specially, as follows:
   (<>) :: L -> L -> L
   xs <> (y:ys) = xs0 ++ [x ++ y] ++ map (indent ++) ys
      where  xs0 = init xs
+            x :: String
             x = last xs
             n = length x
             indent = replicate n ' '
 »
-
 
 We take a quick detour to refine our API a bit.
 Indeed, as it becomes clear with the above definition, vertical concatenation is (nearly)
@@ -637,31 +663,35 @@ laws, (written here as QuickCheck properties):
 «Layouts form a monoid, with operator (@hask«<>») and unit @hask«empty»@footnote«recall @hask«empty = text ""»»:
 
 @haskell«
-prop_leftUnit :: (Doc a, Eq a) => a -> Bool
-prop_leftUnit a = empty <> a == a
-
-prop_rightUnit :: (Doc a, Eq a) => a -> Bool
-prop_rightUnit a = a <> empty == a
-
-prop_assoc :: (Doc a, Eq a) => a -> a -> a -> Bool
-prop_assoc a b c = (a <> b) <> c == a <> (b <> c)
+propLeftUnit :: (Doc a, Eq a) => a -> Bool
+propLeftUnit a = empty <> a == a
+»
+@vspace"1ex"
+@haskell«
+propRightUnit :: (Doc a, Eq a) => a -> Bool
+propRightUnit a = a <> empty == a
+»
+@vspace"1ex"
+@haskell«
+propAssoc :: (Doc a, Eq a) => a -> a -> a -> Bool
+propAssoc a b c = (a <> b) <> c == a <> (b <> c)
 »»
 ,
 «@hask«text» is a monoid homomorphism:
 @spec«
-prop_text_append s t  = text s <> text t == text (s ++ t)
-prop_text_empty       = empty == text ""
+propTextAppend s t  = text s <> text t == text (s ++ t)
+propTextEmpty       = empty == text ""
 »
 »,
 « @hask«flush» can be pulled out of concatenation, in this way:
 
 @haskell«
-prop_flush :: (Doc a, Eq a) => a -> a -> Bool
-prop_flush a b =  flush a <> flush b == flush (flush a <> b)
+propFlush :: (Doc a, Eq a) => a -> a -> Bool
+propFlush a b =  flush a <> flush b == flush (flush a <> b)
 »
 One might expect this law to hold instead:
-@spec«a <> flush b == flush (a <> b)»
-However, the inner @hask«flush» on @hask«b» goes back to the local indentation level, while the outer @hask«flush» goes back to the outer indentation level, which are equal only if @hask«a» ends with an empty line. In turn this condition is guaranteed only when @hask«a» is itself flushed.
+@spec«flush a <> flush b == flush (a <> b)»
+However, the inner @hask«flush» on @hask«b» goes back to the local indentation level, while the outer @hask«flush» goes back to the outer indentation level, which are equal only if @hask«a» ends with an empty line. In turn this condition is guaranteed only when @hask«a» is itself flushed on the rhs.
 
 »]
 
@@ -693,17 +723,18 @@ Consequently, disjunction is associative.
 
 @haskell«
 
-prop_disj_assoc :: (Doc a, Eq a) => a -> a -> a -> Bool
-prop_disj_assoc a b c = (a <|> b) <|> c == a <|> (b <|> c)
+propDisjAssoc :: (Doc a, Eq a) => a -> a -> a -> Bool
+propDisjAssoc a b c = (a <|> b) <|> c == a <|> (b <|> c)
 »
-@comment«prop_leftUnit' :: (Doc a, Eq a) => a -> Bool
-prop_leftUnit' a = fail <|> a == a
+@comment«propLeftUnit' :: (Doc a, Eq a) => a -> Bool
+propLeftUnit' a = fail <|> a == a
 
-prop_rightUnit' :: (Doc a, Eq a) => a -> Bool
-prop_rightUnit' a = a <|> fail == a
+propRightUnit' :: (Doc a, Eq a) => a -> Bool
+propRightUnit' a = a <|> fail == a
 »
 
 We simply lift the layout operators idiomatically @citep"mcbride_applicative_2007" over sets:
+elements in sets are treated combinatorially.
 
 @haskell«
 instance Layout [L] where
@@ -715,41 +746,42 @@ instance Layout [L] where
 Consequently, concatenation and @hask«flush» distribute over disjunction:
 
 @spec«
-prop_distrl :: (Doc a, Eq a) => a -> Bool
-prop_distrl a = (a <|> b) <> c == (a <> c) <|> (b <> c)
+propDistrL :: (Doc a, Eq a) => a -> Bool
+propDistrL a = (a <|> b) <> c == (a <> c) <|> (b <> c)
 
-prop_distrr :: (Doc a, Eq a) => a -> Bool
-prop_distrr a = c <> (a <|> b) == (c <> a) <|> (c <> b)
+propDistrR :: (Doc a, Eq a) => a -> Bool
+propDistrR a = c <> (a <|> b) == (c <> a) <|> (c <> b)
 
-prop_distrflush :: (Doc a, Eq a) => a -> a -> Bool
-prop_distrflush a b = flush (a <|> b) == flush a <|> flush b
+propDistrFlush :: (Doc a, Eq a) => a -> a -> Bool
+propDistrFlush a b = flush (a <|> b) == flush a <|> flush b
 »
 
 @subsection«Semantics»
-
-We can finally define formally what it means to render a document.  The idea
-is to solve the optimisation problem stated by @pcp_visibility and @pcp_compact (with the constraints of @pcp_layout that we just stated).
-Namely,
-we pick a most frugal layout among the visible
-ones:
+We can finally define formally what it means to render a document.
+We wrote above that prettiest layout is that the solution of the optimisation problem given
+by combining all three principles. Namely, to pick a most frugal layout among the visible ones:
 @haskell«
   render =   render .  -- (for layouts)
              mostFrugal .
              filter visible
 »
-
-Note that the call to @hask«render» in the above is for layouts.
-A layout is @hask«visible» if all its lines are fully valid on the page:
+Note that the call to @hask«render» in the above is for the @hask«L» instance.
+The rest of the above definition breaks down as follows.
+@pcp_visibility is formalized by the @hask«visible» function, which states that all lines must fit on the page:
 @haskell«
-    where
-          visible :: L -> Bool
-          visible xs = maximum (map length xs) <= pageWidth
-
-          mostFrugal :: [L] -> L
-          mostFrugal = minimumBy (compare `on` length)
+visible :: L -> Bool
+visible xs = maximum (map length xs) <= pageWidth
 
 pageWidth = 80
 »
+@pcp_compact is formalized by the @hask«mostFrugal» function, which picks a layout with the least number of lines:
+@haskell«
+mostFrugal :: [L] -> L
+mostFrugal = minimumBy (compare `on` length)
+»
+@pcp_layout is realized by the applications-specific set of layouts, specified by the API of @sec_api, which
+comes as an input to @hask«render».
+
 
 One may expect that disjunction should also be commutative.
 However, the implementation of @hask«mostFrugal» only picks @emph«one» of
@@ -759,8 +791,8 @@ affect the layout being picked. Therefore, commutativity of disjunction holds
 only up to the length of the layout being rendered:
 
 @haskell«
-prop_disj_commut :: (Doc a, Eq a) => a -> a -> a -> Bool
-prop_disj_commut a b c = a <|> b =~ b <|> a
+propDisjCommut :: (Doc a, Eq a) => a -> a -> Bool
+propDisjCommut a b = a <|> b =~ b <|> a
 
 infix 3 =~
 (=~) :: Layout a => a -> a -> Bool
@@ -777,7 +809,7 @@ showSExpr x = render (pretty x :: [L])
 Running @hask«showSExpr» on our example (@hask«testData») yields the output that we demanded in @sec_informal_semantics... Yet
 one should not expect to see it any time soon.
 
-Indeed, while the above semantics provides an executable implementation, it is insanely slow.
+Indeed, while the above semantics provides an executable implementation, it is impracticably slow.
 Indeed, every possible combination of choices is first constructed, and only then a shortest output is
 picked. Thus, for an input with @ensureMath«n» choices, the running time is @tm«O(2^n)».
 
@@ -786,7 +818,7 @@ picked. Thus, for an input with @ensureMath«n» choices, the running time is @t
 @subsection«Measures»
 
 The first insight needed to arrive at an efficient implementation is the following. It is
-not necessary to construct fully layouts to calculate their size: only some of their parameters are relevant.
+not necessary to construct layouts fully to calculate their size: only some of their parameters are relevant.
 Let us remember that we want to sift through layouts based on the space that they take.
 Hence, from an algorithmic point of view, all that matters is a measure of that space.
 Let us define an abstract semantics for
@@ -870,8 +902,8 @@ Checking the laws is a simple, if somewhat tedious exercise of program calculati
 
 
 @haskell«
-validMeasure :: M -> Bool
-validMeasure x = maxWidth x <= pageWidth
+valid :: M -> Bool
+valid x = maxWidth x <= pageWidth
 »
 
 Having properly refined the problem, and continuing to ignore the detail of
@@ -901,16 +933,16 @@ We prove the two parts separately:
 spec«
     valid (a <> b)
 =>  maxWidth (a <> b) < pageWidth
-=>  max (maxWidth a) (lastWidth a +  maxWidth b) < pageWidth
-=>  maxWidth a < pageWidth  ∧ lastWidth a +  maxWidth b < pageWidth
-=>  maxWidth a < pageWidth  ∧ maxWidth b < pageWidth
+=>  max (maxWidth a) (lastWidth a +  maxWidth b) <= pageWidth
+=>  maxWidth a < pageWidth  ∧ lastWidth a +  maxWidth b <= pageWidth
+=>  maxWidth a < pageWidth  ∧ maxWidth b <= pageWidth
 =>  valid a  ∧  valid b
   »,
 spec«
 
 
-valid (flush a)  => maxWidth (flush a) < pageWidth
-                 => maxWidth a < pageWidth
+valid (flush a)  => maxWidth (flush a) <= pageWidth
+                 => maxWidth a <= pageWidth
                  => valid a
   »]
   »
@@ -933,8 +965,9 @@ We write @hask«a ≺ b» when @hask«a» dominates @hask«b». We will arrange
 our domination relation such that
 @enumList[«Layout operators are monotonous with respect to domination.
            Consequently, for any document context
+           @hask«ctx :: Doc d => d -> d»,
 
-           @hask«ctx :: Doc d => d -> d», if @hask«a ≺ b» then @hask«ctx a ≺ ctx b»»
+          if @hask«a ≺ b» then @hask«ctx a ≺ ctx b»»
           ,«If @hask«a ≺ b», then @hask«a» is at least as frugal as @hask«b».»]
 
 Together, these properties mean that we can always discard dominated
@@ -1064,9 +1097,9 @@ type DM = [M]
 
 instance Layout DM where
   xs <> ys =  pareto $ concat
-              [ filter validMeasure [x <> y | y <- ys] | x <- xs]
+              [ filter valid [x <> y | y <- ys] | x <- xs]
   flush xs = pareto $ (map flush xs)
-  text s = filter validMeasure [text s]
+  text s = filter valid [text s]
   render = render . minimum
 
 instance Doc DM where
@@ -1074,7 +1107,7 @@ instance Doc DM where
   xs <|> ys = pareto (xs ++ ys)
 »
 
-@sec_timings<-section«Timings»
+@sec_timings<-section«Empirical performance evaluation»
 
 In order to benchmark our pretty printer on large but representative outputs, I have used it to lay out
 S-expressions representing full binary trees of increasing depth, as generated by the following function:
@@ -1101,7 +1134,7 @@ The following plot shows the time taken (in seconds) against
 the @emph«number of lines of output». (By using the number of lines rather than @hask«n»,
 we have a more reasonable measure of the amount of work to perform for each layout task.)
 The following plot shows the data on a double logarithmic scale
-(note that both the $n=0$ and $n=1$ inputs can be printed on a single line):
+(note that both the @hask«n»=0 and @hask«n»=1 inputs can be printed on a single line):
 
 @center(element performancePlotLog)
 Precise timings were obtained by using O'Sullivan's @emph«criterion» benchmarking library, on a Macbook Pro (2015), using GHC 7.10.
@@ -1137,9 +1170,9 @@ instance Layout (M,L) where
 
 instance Layout [(M,L)] where
   xs <> ys =  pareto $ concat
-              [ filter (validMeasure . fst) [x <> y | y <- ys] | x <- xs]
+              [ filter (valid . fst) [x <> y | y <- ys] | x <- xs]
   flush xs = pareto $ (map flush xs)
-  text s = filter (validMeasure . fst) [text s]
+  text s = filter (valid . fst) [text s]
   render = render . minimumBy (compare `on` fst)
 
 »
@@ -1180,13 +1213,14 @@ algorithm adds two dimensions to the search space, and slows the final algorithm
 
 An alternative approach to avoid too long lines is to interpret the ribbon length as the maximum
 size of a self-contained sublayout fitting on a single line. This interpretation can
-be implemented simply, by filtering out intermediate results that do not fit the ribbon, as follows:
+be implemented simply, by filtering out intermediate results that do not fit the ribbon.
+This can be done be re-defining @hask«valid» as follows:
 
 @haskell«
 fitRibbon m = height m > 0 || maxWidth m < ribbonLength
   where ribbonLength = 60
 
-valid m = validMeasure m && fitRibbon m
+valid' m = valid m && fitRibbon m
 »
 
 This re-interpretation appears to fulfill the original goal as well.
@@ -1194,19 +1228,20 @@ This re-interpretation appears to fulfill the original goal as well.
 @section«Conclusion»
 Using three informal principles, we have defined what a pretty printer is.
 We have carefully refined this informal definition to a formal semantics (arguably simpler than that of the state of the art).
-We have avoided to cut any corner, and thus could not obtain a greedy algorithm, but we still have
+We have avoided cutting corners, and thus could not obtain a greedy algorithm, but we still have
 derived a reasonably efficient implementation. Along the way,
 we have demonstrated how to use the standard functional programming methodology. The standard methodology worked well:
 we could use program calculation all the way.
 
+
+
 @acknowledgements«Most of the work described in this paper was carried out while the author was funded by Chalmers University of Technology.
-Facundo Domingez, Atze van der Ploeg and Arnaud Spiwack gave useful feedback on a draft of this paper.
+Facundo Domingez, Atze van der Ploeg and Arnaud Spiwack as well as anonymous ICFP reviewers provided useful feedback on a draft of this paper.
 Using the QuickSpec tool, Nicholas Smallbone helped
 finding a bug in the final implementation: the concatenation operator
 did not preserve the invariant that lists were sorted. »
-
-
 »
+
 
 appendix = do
   cmd0"onecolumn"
@@ -1359,7 +1394,7 @@ take care to keep lists sorted, in particular in the concatenation operation.
 Let us propose the following implementation:
 
 @haskell«
-  D1 xs <> D1 ys = D1 $ pareto' $ mergeAll [ filter validMeasure [x <> y | y <- ys] | x <- xs]
+  D1 xs <> D1 ys = D1 $ pareto' $ mergeAll [ filter valid [x <> y | y <- ys] | x <- xs]
 »
 
 For each of the inner list comprehensions to generate sorted output, we need the following lemma.
@@ -1564,10 +1599,10 @@ horizCat showRulers = center $ element $ do
   ab <- uncurry abstractLayoutJoin $ abSep
   (lhsObjsExtra,rhsObjsExtra) <- if showRulers
     then do
-      (h1,_,lw1) <- rulersOfLayout «l1» «mw1» «lw1» a
-      (_,_,_lw2) <- rulersOfLayout «l2» «mw2» «lw2» b
+      (h1,_,lw1) <- rulersOfLayout «l_a» «mw_a» «lw_a» a
+      (_,_,_lw2) <- rulersOfLayout «l_b» «mw_b» «lw_b» b
 
-      (_hTot,mwTot,lwTot) <- rulersOfLayout «l1+l2» «max mw1 (lw1+mw2)» «lw1+lw2» ab
+      (_hTot,mwTot,lwTot) <- rulersOfLayout «l_a+l_b» «max mw_a (lw_a+mw_b)» «lw_a+lw_b» ab
       spread hdist (constant 10) [h1,op,fst b]
       return ([lw1],[mwTot,lwTot])
     else do
@@ -1598,10 +1633,10 @@ hask :: Verbatim a -> Tex ()
 hask = ensureMath . haskellInline
 
 
-url :: TeX -> TeX
-url x = do
+url :: Verbatim a -> TeX
+url (Verbatim s _) = do
   usepkg "url" 100 []
-  cmd "url" x
+  cmd "url" (tex s)
 
 displayLeft :: Tex a -> Tex a
 displayLeft body = env'' "list" [] [mempty,tex "\\setlength\\leftmargin{1em}"] $ do
@@ -1614,7 +1649,8 @@ display = env "center"
 footnote :: forall a. Tex a -> Tex a
 footnote = cmd "footnote"
 -- Local Variables:
--- dante-project-root: "~/repo/prettiest"
+-- dante-project-root: "~/repo/prettiest/paper"
+-- dante-repl-command-line: ("nix-shell" "../.styx/shell.nix" "--run" "cabal repl")
 -- End:
 
 --  LocalWords:  XTypeSynonymInstances XOverloadedStrings pgmF marxup
@@ -1648,7 +1684,7 @@ footnote = cmd "footnote"
 --  LocalWords:  leftUnit rightUnit disj citep mcbride applicative
 --  LocalWords:  fmap distrl distrr distrflush mostFrugal TODO commut
 --  LocalWords:  compositionally showSExpr singleLayoutDiag lastWidth
---  LocalWords:  maxWidth validMeasure lem ctx concretize Poset acc
+--  LocalWords:  maxWidth lem ctx concretize Poset acc
 --  LocalWords:  antisymmetric monotonicity inequation pareto concat
 --  LocalWords:  O'Sullivan's benchmarking disjunctions snd fst Atze
 --  LocalWords:  sublayout fitRibbon ribbonLength acknowledgements

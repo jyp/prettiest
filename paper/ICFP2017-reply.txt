@@ -1,0 +1,48 @@
+I would first like to thank the reviewers for their fair, thoughtful
+and encouraging reviews.
+
+
+# Response to review A:
+
+> One aspect I really enjoyed about this paper is the introduction of
+> the three principles that make a pretty printer. They are informally
+> introduced on p1, which is good, but I would also like to have a
+> formally explained version somewhere; this is brushed on in S4.3,
+> where it's clear the functions `mostFrugal` and `filter visible` play
+> a part, but I think that this should be elaborated and turned into a
+> more formal part of the story.
+
+Even though the draft paper does not emphasize it, I believe that
+`mostFrugal` is a crisp formalization of the frugality principle, and
+that `filter visible` is a crisp formalization of visibility.
+
+It would be helpful if the reviewer could point to an intermediate
+formalization if they have one in mind.
+
+> There are some gaps in the literature review that need to be plugged:
+> this is a very minor point that can easily be cleared up, but there
+> should probably be a reference to the chapter on pretty printing
+> in Bird's "Thinking Functionally with Haskell" book, and also to the
+> more recent work by Olaf Chitil "Pretty Printing with lazy deques" 2005.
+
+I agree that this gap should be adressed in the final version of the paper.
+
+
+
+# Response to reviews B and C:
+
+I agree that the evaluation section can be improved and I'll be happy
+to do so. If I understood correctly the demands of the reviewers (see
+below), I believe that they can be met before the (planned) second round of
+reviews. To sum up:
+
+- benchmark the text generation (not only the measurement of the space taken)
+
+- test on random s-exprs
+
+- test on real-world data (eg. 1K-10K lines xml and json)
+
+- test without domination pruning
+
+- as far as possible (due to differing behaviour) perform the above
+  tests with hughes and wadler libraries
