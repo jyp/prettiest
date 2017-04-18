@@ -14,7 +14,6 @@ import MarXup.Latex.Math (ensureMath)
 import Control.Lens (set)
 import Data.Function
 import Data.List (intercalate, minimumBy)
--- import System.Clock
 import Prelude hiding (fail,Num(..),(/),(^))
 import Control.Monad (forM_,forM)
 import Graphics.Diagrams.Plot
@@ -29,7 +28,6 @@ import Criterion.Internal (runAndAnalyseOne)
 import System.Environment (getArgs)
 import Algebra.Classes
 import Control.Monad.IO.Class
-import Prelude (Num)
 
 ($$) :: forall l. Layout l => l -> l -> l
 a $$ b = flush a <> b
@@ -173,8 +171,8 @@ principle titl body = do
 
 header :: Tex ()
 header = do
-  maketitle
   abstract
+  maketitle
   keywords $ ["Pearl", "Pretty Printing"]
   return ()
 
@@ -1233,7 +1231,8 @@ derived a reasonably efficient implementation. Along the way,
 we have demonstrated how to use the standard functional programming methodology. The standard methodology worked well:
 we could use program calculation all the way.
 
-
+The source code for the paper and benchmarks, as well as a fully fledged pretty printing library based on its principles is available
+online: @url«https://github.com/jyp/prettiest».
 
 @acknowledgements«Most of the work described in this paper was carried out while the author was funded by Chalmers University of Technology.
 Facundo Domingez, Atze van der Ploeg and Arnaud Spiwack as well as anonymous ICFP reviewers provided useful feedback on a draft of this paper.

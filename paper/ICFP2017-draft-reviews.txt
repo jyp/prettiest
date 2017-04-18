@@ -210,8 +210,9 @@ Fixed
 >   somewhere formally, or we should simply rely on intuition and not
 >   assert correctness.
 
-It is in fact explained in the next sentence that we proceed formally
-and the text continues explaining how.
+
+Precisely. It is in fact explained in the next sentence that we must
+give a formal explanation, and the formal development follows.
 
 > p12 `valid`: This function is not introduced, but I suspect it is the
 >   same as `validMeasure`.
