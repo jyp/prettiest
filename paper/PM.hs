@@ -99,7 +99,7 @@ performanceBars = [(Point x l, Point x m, Point x h)
 
 
 scatterWithErrors :: PlotCanvas a -> [(Vec2 a,Vec2 a,Vec2 a)] -> TexDiagram ()
-scatterWithErrors (bx,t) inputs = do
+scatterWithErrors (bx,_outerBox,t) inputs = do
   let three f (a,b,c) = (f a, f b, f c)
   forM_ (map (three (interpBox bx . (forward <$> t <*>))) inputs) $ \(_l,m,_h) -> do
     -- draw $ path $ polyline [l,h]
@@ -111,7 +111,7 @@ scatterWithErrors (bx,t) inputs = do
 performancePlot :: Vec2 (ShowFct TeX Double) -> Vec2 (Transform Double) -> Diagram TeX Tex ()
 performancePlot sho axes' =  do
   let points' = sequenceA performancePoints
-  c@(bx,_) <- preparePlot sho axes' (minimum <$> points') (maximum <$> points')
+  c@(bx,outerBox,_) <- preparePlot sho axes' (minimum <$> points') (maximum <$> points')
   scatterWithErrors c performanceBars
   functionPlot c 5 (\x -> x/regimeSpeed)
   width bx === constant 200
@@ -120,8 +120,8 @@ performancePlot sho axes' =  do
   yaxisLab <- label "yaxisLab" "layout time (s)"
   align xpart $ map (#Center) [bx, xaxisLab]
   align ypart $ map (#Center) [bx, yaxisLab]
-  yaxisLab `leftOf` bx
-  bx `topOf` xaxisLab
+  yaxisLab `leftOf` outerBox
+  outerBox `topOf` xaxisLab
 
 
 
@@ -228,7 +228,7 @@ Let us specify the desired behavior of a pretty printer, first informally, as th
 @pcp_visibility<-principle«Visibility»« A pretty printer shall
 layout all its output within the width of the page.»
 
-@pcp_layout<-principle«Legibility»« A pretty printer shall make clever use of layout, to make it easy
+@pcp_layout<-principle«Legibility»« A pretty printer shall make appropriate use of layout, to make it easy
              for a human to recognize the hierarchical organization of data.»
 
 @pcp_compact<-principle«Frugality»« A pretty printer shall minimize the number of lines
@@ -238,11 +238,18 @@ Furthermore, the first principle takes precedence over the second one, which its
 In the rest of the paper, we interpret the above three principles as an optimization problem, and derive a program
 which solves it efficiently enough for practical purposes.
 
+Before diving into the details, a couple of methodological points. 
+First, Haskell is used throughout this paper in its quality the langua franca of functional programming pearls.
+Yet, we make no essential use of laziness. Second, 
+the source code for the paper and benchmarks, as well as a fully fledged pretty printing library based on its principles is available
+online: @url«https://github.com/jyp/prettiest».
+
+
 @sec_api<-section«Interface (Syntax)»
 
 Let us use an example to guide the development of our pretty-printing interface.
 Assume that we want to pretty print S-Expressions, which can either be atom or a list of S-Expressions.
-Assume further that they are represented as follows:
+They can be represented in Haskell as follows:
 
 @haskell«
 data SExpr = SExpr [SExpr] | Atom String
@@ -290,8 +297,9 @@ Our layout-description API
 is similar to Hughes': we can express both
 vertical (@hask«$$») and horizontal (@hask«<>») composition of
 documents, as well as embed raw @hask«text» and provide
-choice between layouts (@hask«<|>») --- but we lack a dedicated flexible space insertion operator (@hask«<+>»). At this stage, we keep
-the representation of documents abstract, by using a typeclass (@hask«Doc») which
+choice between layouts (@hask«<|>») --- but we lack a dedicated flexible space insertion operator (@hask«<+>»).
+We give formal definition those in @sec_formal_semantics, but at this stage we keep
+the implementation of documents abstract. We do so by using a typeclass (@hask«Doc») which
 provides the above combinators, as well as means of @hask«render»ing a
 document:
 
@@ -333,7 +341,7 @@ sep []  = empty
 sep xs  = hsep xs <|> vcat xs
 »
 
-Turning S-expressions into a @hask«Doc» is then child's play:
+Turning S-expressions into a @hask«Doc» is then straightforward:
 
 @haskell«
 pretty :: Doc d => SExpr -> d
@@ -349,7 +357,7 @@ The above API provides a syntax to describe layouts. The next natural question i
 its semantics be?  In other words, how do we turn the three principles into a
 formal specification? In particular, how do we turn the above @hask«pretty» function into a pretty printer of S-Expressions?
 
-Let us use an example to pose the question in concrete terms, and outline why neither Wadler's or Hughes' answer is satisfactory for our purposes.
+Let us use an example to pose the question in concrete terms, and outline why neither Wadler's nor Hughes' answer is satisfactory for our purposes.
 Suppose that we want
 to pretty-print the following S-Expr (which is specially crafted to
 demonstrate general shortcomings of both Hughes and Wadler libraries):
@@ -437,7 +445,7 @@ instead:
 
 The above output uses way more space than necessary, violating
 @pcp_compact.  Why is that? Hughes states that @qu«it would be
-unreasonably inefficient for a pretty-printer do decide whether or not
+unreasonably inefficient for a pretty-printer to decide whether or not
 to split the first line of a document on the basis of the content of
 the last.» (sec. 7.4 of his paper).  Therefore, he chooses a greedy
 algorithm, which processes the input line by line, trying to fit as
@@ -479,12 +487,12 @@ produce the following output:
 »
 
 The above result does not look too bad --- but there is a spurious line break after the atom
-@teletype«abcdefgh». While Wadler's restriction may be acceptable to some, I find it
+@teletype«abcde». While Wadler's restriction may be acceptable to some, I find it
 unsatisfying for two reasons. First, spurious line breaks may appear
 in many places, so the rendering may be much longer than necessary, thereby violating @pcp_compact.
 Second, and more importantly, a document which is laid out after another cannot
-be properly indented in general. Let us say we would like to
-pretty print a ml-style equation composed of a @teletype«Pattern» and the following right-hand-side:
+be properly indented in general. Suppose that we would like to
+pretty print a ML-style equation composed of a @teletype«Pattern» and the following right-hand-side:
 @verbatim«
 expression [listElement x,
             listElement y,
@@ -511,13 +519,13 @@ Pattern = expression
 »
 Aligning the argument of the expression below to the left of the equal sign is bad, because
 it needlessly obscures the structure of the program; @pcp_layout is not
-respected. In sum, the lack of a combinator for relative indentation
-is a serious drawback. In fact, Daan Leijen's
+respected. In summary, the lack of a combinator for relative indentation
+is a serious drawback. In fact, Leijen's
 implementation of Wadler's design (@sans«wl-print»), @emph«does» feature
 an alignment combinator. However, as Hughes' does, Leijen's uses a greedy algorithm, and thus
 suffers from the same issue as Hughes' library.
 
-In sum, we have to make a choice between either respecting the three principles
+In summary, we have to make a choice between either respecting the three principles
 of pretty printing, or providing a greedy algorithm. Hughes does not
 fully respect @pcp_compact. Wadler does not fully respect
 @pcp_layout. Here, I decide to respect both, but I give up on
@@ -525,11 +533,11 @@ greediness.
 Yet, the final algorithm that I arrive at is fast enough for
 common pretty-printing tasks.
 
-But; let us not get carried away: before attacking the problem of making an implementation,
+But let us not get carried away. Before attacking the problem of making an implementation,
 we need to finish the formalization of the semantics. And before that,
 it is best if we spend a moment to further refine the API for defining pretty layouts.
 
-@section«Semantics (formally)»
+@sec_formal_semantics<-section«Semantics (formally)»
 
 @subsection«Layouts»
 We ignore for a moment the choice between possible layouts
@@ -621,7 +629,7 @@ first line of the second layout specially, as follows:
 »
 
 We take a quick detour to refine our API a bit.
-Indeed, as it becomes clear with the above definition, vertical concatenation is (nearly)
+Indeed, as becomes clear with the above definition, vertical concatenation is (nearly)
 a special case of horizontal composition. That is,
 instead of composing vertically, one can add an empty line to the
 left-hand-side layout and then compose horizontally. The combinator which adds
@@ -655,7 +663,8 @@ class Layout l where
   render  :: l -> String
 »
 Additionally, as mentioned above, layouts follow a number of algebraic
-laws, (written here as QuickCheck properties):
+laws, (written here as QuickCheck properties@footnote«but which can be checked only if properly monomorphized using
+either of the concrete implementations provided later.»):
 
 @enumList[
 «Layouts form a monoid, with operator (@hask«<>») and unit @hask«empty»@footnote«recall @hask«empty = text ""»»:
@@ -706,7 +715,7 @@ class Layout d => Doc d where
   fail :: d
 »
 
-Again, we give the compositional semantics right away. Documents are
+Again, we give the compositional semantics straight away. Documents are
 interpreted as a set of layouts. We implement sets as lists, and we will
 take care not to depend on the order and number of occurrences.
 
@@ -775,7 +784,8 @@ pageWidth = 80
 @pcp_compact is formalized by the @hask«mostFrugal» function, which picks a layout with the least number of lines:
 @haskell«
 mostFrugal :: [L] -> L
-mostFrugal = minimumBy (compare `on` length)
+mostFrugal = minimumBy size
+  where size = compare `on` length
 »
 @pcp_layout is realized by the applications-specific set of layouts, specified by the API of @sec_api, which
 comes as an input to @hask«render».
@@ -804,19 +814,22 @@ Consequently, we can implement the pretty printing an S-Expr as follows:
 showSExpr x = render (pretty x :: [L])
 »
 
-Running @hask«showSExpr» on our example (@hask«testData») yields the output that we demanded in @sec_informal_semantics... Yet
-one should not expect to see it any time soon.
-
+Running @hask«showSExpr» on our example (@hask«testData») may eventually yield the output that we demanded in @sec_informal_semantics.
+But one should not expect to see it any time soon.
 Indeed, while the above semantics provides an executable implementation, it is impracticably slow.
 Indeed, every possible combination of choices is first constructed, and only then a shortest output is
 picked. Thus, for an input with @ensureMath«n» choices, the running time is @tm«O(2^n)».
 
 
 @section«A More Efficient Implementation»
+The last chunk of work is to transform above, clearly correct but inefficient implementation
+to a functionally equivalent, but efficient one.
+We do so we need two insights.
+
 @subsection«Measures»
 
-The first insight needed to arrive at an efficient implementation is the following. It is
-not necessary to construct layouts fully to calculate their size: only some of their parameters are relevant.
+The first insight is that it is
+not necessary to fully construct layouts to calculate their size: only some of their parameters are relevant.
 Let us remember that we want to sift through layouts based on the space that they take.
 Hence, from an algorithmic point of view, all that matters is a measure of that space.
 Let us define an abstract semantics for
@@ -1231,9 +1244,6 @@ derived a reasonably efficient implementation. Along the way,
 we have demonstrated how to use the standard functional programming methodology. The standard methodology worked well:
 we could use program calculation all the way.
 
-The source code for the paper and benchmarks, as well as a fully fledged pretty printing library based on its principles is available
-online: @url«https://github.com/jyp/prettiest».
-
 @acknowledgements«Most of the work described in this paper was carried out while the author was funded by Chalmers University of Technology.
 Facundo Domingez, Atze van der Ploeg and Arnaud Spiwack as well as anonymous ICFP reviewers provided useful feedback on a draft of this paper.
 Using the QuickSpec tool, Nicholas Smallbone helped
@@ -1344,7 +1354,7 @@ x0 = x1 and y0 = y1 and z0 < z1
 »
 
 which is incompatible with @hask«m1 ≺ m0».
-In sum, so no element @hask«m0» already in the frontier can be dominated by @hask«m1».
+In summary, so no element @hask«m0» already in the frontier can be dominated by @hask«m1».
 
 Consequently, on a sorted list, we can skip the re-filtering of the @hask«acc»umulated frontier, as follows:
 
@@ -1575,7 +1585,7 @@ singleLayoutDiag = center $ element $ do
 
 twoLayouts :: TexDiagram ((Object,Point),(Object,Point))
 twoLayouts = do
-  (a,a_last) <- abstrLayout lw1
+  (a,a_last) <- using (fill "lightgray") (abstrLayout lw1)
   (b,b_last) <- abstrLayout lw2
   width a === constant 48
   width b === constant 56

@@ -300,72 +300,132 @@ process provides.
 > 
 > p1, In the final version of the paper the code should be made
 > publically available and a link included in the introduction.
-> 
+
+Added
+
 > p1, The paper would benefit from the addition of a short abstract
 > to provide a summary of the paper to attract potential readers.
-> 
+
+Added
+
 > p1, "clever use" -> "appropriate use" ?
-> 
+
+Changed
+
 > p2, At the end of section 1 it would be worth mentioning explicitly
 > that the principles may be in conflict, i.e. it may be necessary to
 > violate one principle in order for another to be satisfied, hence
 > the need for imposing an ordering on the principles.
-> 
+
+Improved
+
 > p2, Explain what S-expressions are to make the paper self contained;
 > not all potential readers will be familiar with these.
-> 
+
+Done
+
 > p2, Clarify that Haskell is used throughout for coding purposes.
-> 
+
+Done
+
 > p2, Displayed examples are currently not indented, but code is.  It
 > would be beneficial to also indent the examples a few spaces too.
-> 
+
+TODO
+
 > p2, When first mentioning horizontal composition, it would good to
 > give a forward reference to section 4.1 where its meaning is
 > clarified, as many readers will be wondering at this point if the
 > meaning is the same as Hughes', which it is.
-> 
+
+Text is now improved
+
 > p3, "child's play" -> "straightforward".
-> 
+
+Fixed
+
 > p3, "Wadler's or Hughes'" -> "Wadler's nor Hughes'".
-> 
+
+Fixed
+
 > p3, The page break in the middle of the example is unfortunate,
 > and could be avoided by putting the example in a figure.
-> 
+
+TODO
+
 > p3, The example could be simplified -- in particular, two instances
 > of "abcd" rather than five would suffice to illustrate the problem.
-> 
+
+I chose to leave as it is for dramatic purposes.
+
 > p4, There is no need to start a new section at 3.1, as this just
 > carries on directly from the problem that was identified.
-> 
+
+This heading is used as an anchor point for reference a few pages
+later. I do believe that it is useful.
+
 > p4, "do decide" -> "to decide".
-> 
+
+Fixed
+
 > p5, "Let us say" -> "Suppose".
-> 
+
+Fixed
+
 > p5, "after the atom abcdefgh" -> "after the atom abcde" ?
-> 
+
+Fixed
+
 > p5, "ml-style" -> "ML-style".
-> 
+
+Fixed
+
 > p6, "In sum" -> "In conclusion" (in two places).
-> 
+
+I decided to use "in summary", which I believe is more appropriate
+
 > p6, "Daan Leijen's" -> "Leijen's".
-> 
+
+Change
+ 
 > p6, The sentence "But; let us not..." does not parse.
-> 
+
+Improved
+
 > p7, There is no need to include both versions of the <> picture --
-> the diagrammatic version suffices on its own.  It would also be
+> the diagrammatic version suffices on its own.
+
+TODO
+
+> It would also be
 > beneficial to colour in one of the boxes, e.g. in light grey.
-> 
+
+Done
+
 > p7, "as it becomes" -> "as becomes".
-> 
+
+Changed
+
 > p8, Can the Quickcheck properties be checked using Quickcheck?
 > If so, it would be useful to say this explicitly.
-> 
+
+Clarified: they can be checked only if properly monomorphized using
+either of the concrete implementations provided later.
+ 
 > p8, Including the types for the properties makes them difficult to
 > read - it would be better to omit the types and say either that they
 > can all be inferred or are straightforward to define.
-> 
+
+Unfortunately the types cannot be properly inferred due to the
+monomorphism restriction of Haskell. This sort of combines badly with
+the problem mentioned in the reply to the previous comment. So, I've
+decided to keep the type signatures and relax the typesetting a bit
+for legibility.
+
 > p8, "right away" -> "straight away".
-> 
+
+Changed
+
 > p9, The definition of render is nice!  But it may be better to write
 > 
 >    render = render . minimumBy size . filter visible
@@ -375,19 +435,32 @@ process provides.
 >    size = compare `on` length
 > 
 > as this makes the definition for render more naturally 'readable'.
-> 
+
+Per request of another reviewer, I've rewritten this paragraph to make
+the formalities more obvious. I've also added the `size` definition.
+
 > p9, The use of "..." at the bottom of the page is too informal.
-> 
+
+Improved
+
 > p10, There is no need to take a new paragraph at the start of the page.
-> 
+
+Fixed.
+ 
 > p10, "insanely slow" is too informal for an ICFP paper.
-> 
+
+Fixed
+
 > p10, Some introductory text for section 5 is required, to explain
 > that the aim now is to apply program fusion techniques to obtain a
 > more efficient version of the render function.
-> 
+
+TODO
+
 > p10, "construct fully" -> "fully construct".
-> 
+
+Fixed
+
 > p11, Can the laws be checked automatically using QuickCheck?
 > 
 > p11, Some introductory text is required before validMeasure. It also
