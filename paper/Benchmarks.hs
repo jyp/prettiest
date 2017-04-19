@@ -89,7 +89,10 @@ fitting = isJust . testLayout
 performanceAnalysisRandom :: IO ()
 performanceAnalysisRandom = do
   putStrLn "performanceAnalysisRandom..."
-  exprs <- filter fitting <$> forM [0..12] (\i -> randExpr (2^i))
+  let n = 13 -- number of data points
+      maxsz = 3000 -- max number of open parens
+      f = exp (log maxsz / n)
+  exprs <- filter fitting <$> forM [0..n] (\i -> randExpr (floor (f**i)))
   putStrLn "If the program gets stuck now it is due to a bug in criterion. (It does not work on MacOS)"
   an <- C.withConfig C.defaultConfig $ do
     forM (zip exprs [1..]) $ \(e,i) -> do
