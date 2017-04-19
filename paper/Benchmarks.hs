@@ -90,7 +90,7 @@ fitting = isJust . testLayout
 performanceAnalysisRandom :: IO ()
 performanceAnalysisRandom = do
   putStrLn "performanceAnalysisRandom..."
-  let n = 13 -- number of data points
+  let n = 40 -- number of data points
       maxsz = 3000 -- max number of open parens
       f = exp (log maxsz / n)
   exprs <- filter fitting <$> forM [0..n] (\i -> randExpr (floor (f**i)))
