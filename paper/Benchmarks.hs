@@ -12,8 +12,9 @@ import System.Random
 import qualified Criterion.Main.Options as C
 import qualified Criterion.Monad as C
 import Data.Maybe
+import Data.List
 
-data OC = Open | Close
+data OC = Open | Close | A
 
 genRandomOC :: Int -> IO [OC]
 genRandomOC maxLen = go 0 0
@@ -58,16 +59,21 @@ ocToSExprs :: OCP [SExpr]
 ocToSExprs = do
   l <- look
   case l of
+    Just A -> do
+      skip
+      rest <- ocToSExprs
+      return (Atom "a":rest)
     Just Open -> do
       h <- ocToSExpr
       rest <- ocToSExprs
       return (h:rest)
-    _ -> return [Atom "a"]
+    _ -> return []
+
 
 randExpr :: Int -> IO SExpr
 randExpr maxlen = do
   oc <- genRandomOC maxlen
-  return $ SExpr $ snd $ runOCP ocToSExprs oc
+  return $ SExpr $ snd $ runOCP ocToSExprs $ intersperse A oc
 
 testLayout :: SExpr -> Maybe Int
 testLayout input = case (pretty input :: DM) of
