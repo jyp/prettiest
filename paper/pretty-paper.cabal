@@ -15,8 +15,22 @@ maintainer: Jean-Philippe Bernardy <jeanphilippe.bernardy@gmail.com>
 build-type: Simple
 Cabal-Version: >= 1.8
 
+Library
+  exposed-modules: PM
+  build-depends:
+     base,
+     marxup,
+     lens,
+     criterion,
+     lp-diagrams,
+     gasp,
+     statistics,
+     random
+  hs-source-dirs: lib
+
 executable paper
         build-depends:
+                     pretty-paper,
                      base,
                      marxup,
                      lens,
@@ -30,13 +44,14 @@ executable paper
 
 executable bench
         build-depends:
+                     pretty-paper,
                      base,
-                     marxup,
                      lens,
                      criterion,
-                     lp-diagrams,
                      gasp,
                      statistics,
                      random
         main-is:
            Benchmarks.hs
+
+

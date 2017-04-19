@@ -5,7 +5,7 @@ default: Prettiest.pdf
 clean:
 	rm -f *.aux *.ptb *.boxes *.log
 
-.styx/bin/paper .styx/bin/bench: paper/PM.hs
+.styx/bin/paper .styx/bin/bench: paper/lib/PM.hs
 	styx cabal install pretty-paper
 
 benchmark-80.dat: .styx/bin/bench
