@@ -59,10 +59,10 @@ testOne size = height mm
 dataFileName :: FilePath
 dataFileName = "benchmark-" ++ show pageWidth ++ ".dat"
 
-performanceData :: [(Integer, Integer, (Double,Double,Double))]
-performanceData = unsafePerformIO $ do
-  d <- readFile dataFileName
-  return [(sz,h,(estLowerBound e, estPoint e, estUpperBound e)) | (sz,h, e) <- read d]
+performanceData :: String -> [(Integer, Integer, (Double,Double,Double))]
+performanceData fname = unsafePerformIO $ do
+  d <- readFile fname
+  return [(i,h,(estLowerBound e, estPoint e, estUpperBound e)) | (i,h,e) <- read d]
   -- forM [1..15] $ \size -> do
   --   (Measured { measTime = dt},_) <- C.measure (benchmark size) 1
   --   return (size,2 ^ (max 0 (size - 2)), dt)
@@ -71,7 +71,7 @@ performanceData = unsafePerformIO $ do
 
 regimeSpeed :: Double
 regimeSpeed = fromIntegral nlines / time
-  where ((_,nlines,(_,time,_)):_) = reverse performanceData
+  where ((_,nlines,(_,time,_)):_) = reverse (performanceData dataFileName)
 
 performanceAnalysis :: IO ()
 performanceAnalysis = do
@@ -87,34 +87,34 @@ performanceAnalysis = do
       return (size,testOne size, dt)
   writeFile dataFileName $ show an
 
+performanceTable  :: String -> TeX
+performanceTable fname = tabular [] "rrr" [[textual (show s), textual (show h),textual (show t)] | (s,h,t) <- performanceData fname]
 
-performanceTable :: TeX
-performanceTable = tabular [] "rrr" [[textual (show s), textual (show h),textual (show t)] | (s,h,t) <- performanceData]
+performancePoints :: String -> [Point' Double]
+performancePoints fname = [x | (_,x,_) <- performanceBars fname]
 
-performancePoints :: [Point' Double]
-performancePoints = [x | (_,x,_) <- performanceBars]
-
-performanceBars :: [(Point' Double,Point' Double,Point' Double)]
-performanceBars = [(Point x l, Point x m, Point x h)
-                  | (_,nlines,(l,m,h)) <- performanceData, let x = fromIntegral nlines]
+performanceBars :: String -> [(Point' Double,Point' Double,Point' Double)]
+performanceBars fname = [(Point x l, Point x m, Point x h)
+                  | (_,nlines,(l,m,h)) <- performanceData fname, let x = fromIntegral nlines]
 
 
 
 scatterWithErrors :: PlotCanvas a -> [(Vec2 a,Vec2 a,Vec2 a)] -> TexDiagram ()
-scatterWithErrors (bx,_outerBox,t) inputs = do
+scatterWithErrors (bx,_outerBox,xform) inputs = do
   let three f (a,b,c) = (f a, f b, f c)
-  forM_ (map (three (interpBox bx . (forward <$> t <*>))) inputs) $ \(_l,m,_h) -> do
+  forM_ (map (three (interpBox bx . (forward <$> xform <*>))) inputs) $ \(_l,m,_h) -> do
     -- draw $ path $ polyline [l,h]
     -- stroke "red" $ path $ polyline [m - Point 3 0, m + Point (-3) 0]
     showDot (constant 2) "black" m
     -- forM [l,h] $ \z -> stroke "red" $ path $ polyline [z - Point 2 0, z + Point 2 0]
     -- error bars are so narrow that we do not see them.
 
-performancePlot :: Vec2 (ShowFct TeX Double) -> Vec2 (Transform Double) -> Diagram TeX Tex ()
-performancePlot sho axes' =  do
-  let points' = sequenceA performancePoints
+performancePlot :: String -> Vec2 (ShowFct TeX Double) -> Vec2 (Transform Double) -> Diagram TeX Tex ()
+performancePlot fname sho axes' =  do
+  let  points = (performancePoints fname)
+       points' = sequenceA points
   c@(bx,outerBox,_) <- preparePlot sho axes' (minimum <$> points') (maximum <$> points')
-  scatterWithErrors c performanceBars
+  scatterPlot c points
   functionPlot c 5 (\x -> x/regimeSpeed)
   width bx === constant 200
   D.height bx === constant 100
@@ -130,9 +130,9 @@ performancePlot sho axes' =  do
 renderFloat :: forall a. RealFloat a => a -> Tex ()
 renderFloat x = tex $ showEFloat (Just 0) x ""
 
-performancePlotLog, performancePlotLin :: Diagram TeX Tex ()
-performancePlotLog = performancePlot (pure renderFloat) (Point (logAxis 10) (logAxis 10))
-performancePlotLin = performancePlot (pure renderFloat) (Point (simplLinAxis 2000) (simplLinAxis 0.5))
+performancePlotLog, performancePlotLin :: String -> Diagram TeX Tex ()
+performancePlotLog fname = performancePlot fname (pure renderFloat) (Point (logAxis 10) (logAxis 10))
+performancePlotLin fname = performancePlot fname (pure renderFloat) (Point (simplLinAxis 2000) (simplLinAxis 0.5))
 
 
 -- data ErrorBar a = ErrorBar {lbound, mean, ubound :: a}
@@ -1155,7 +1155,7 @@ we have a more reasonable measure of the amount of work to perform for each layo
 The following plot shows the data on a double logarithmic scale
 (note that both the @hask«n»=0 and @hask«n»=1 inputs can be printed on a single line):
 
-@center(element performancePlotLog)
+@center(element (performancePlotLog dataFileName))
 Precise timings were obtained by using O'Sullivan's @emph«criterion» benchmarking library, on an Intel XEON E5-2640 v4 (single core), using GHC 8.0.
 While @emph«criterion» provides confidence intervals, they are so thin that they
 are not visible at this scale, thus we have not attempted to render them.
@@ -1166,6 +1166,8 @@ Our pretty-printer essentially considers non-dominated layouts. If the input is 
 consider approximately one layout per possible width (@show(pageWidth) in our tests) --- when the width is given then the length and the width of last line are fixed.
 Therefore, the amount of work becomes independent of the number of disjunctions present in the input,
 and depends only on the amount of text to render.
+
+@center(element (performancePlotLog "benchmark-random.dat"))
 
 @section«Discussion»
 To obtain a complete library from the above design,
@@ -1269,7 +1271,7 @@ appendix = do
   cmd0"onecolumn"
   (cmd "section*" «Appendix»)
   subsection«Raw benchmark runtimes»
-  performanceTable
+  performanceTable dataFileName
 
   subsection«Proof details»
   paragraph«Proof of measure being a Layout-homomorphism»

@@ -84,19 +84,19 @@ benchmark :: SExpr -> Benchmarkable
 benchmark size = nf testLayout size
 
 fitting :: SExpr -> Bool
-fitting = isJust . testLayout 
+fitting = isJust . testLayout
 
 performanceAnalysisRandom :: IO ()
 performanceAnalysisRandom = do
   putStrLn "performanceAnalysisRandom..."
-  exprs <- filter fitting <$> forM [(1::Int)..10] (\_ -> randExpr 10000)
+  exprs <- filter fitting <$> forM [0..12] (\i -> randExpr (2^i))
   putStrLn "If the program gets stuck now it is due to a bug in criterion. (It does not work on MacOS)"
   an <- C.withConfig C.defaultConfig $ do
     forM (zip exprs [1..]) $ \(e,i) -> do
       liftIO $ putStrLn $ "running bench " ++ show i
       (Analysed (Report { reportAnalysis = SampleAnalysis {anMean = dt}})) <-
          runAndAnalyseOne i ("bench " ++ show i) (benchmark e)
-      return (testLayout e, dt)
+      return (i,fromJust (testLayout e), dt)
   writeFile "benchmark-random.dat" $ show an
 
 main :: IO ()
