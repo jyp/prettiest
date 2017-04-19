@@ -84,7 +84,7 @@ performanceAnalysis = do
       liftIO $ putStrLn $ "running for " ++ show size
       (Analysed (Report { reportAnalysis = SampleAnalysis {anMean = dt}})) <-
          runAndAnalyseOne size ("bench " ++ show size) (benchmark size)
-      return (size,(2::Integer) ^ (max 0 (fromIntegral size - 2)), dt)
+      return (size,testOne size, dt)
   writeFile dataFileName $ show an
 
 
@@ -1156,7 +1156,7 @@ The following plot shows the data on a double logarithmic scale
 (note that both the @hask«n»=0 and @hask«n»=1 inputs can be printed on a single line):
 
 @center(element performancePlotLog)
-Precise timings were obtained by using O'Sullivan's @emph«criterion» benchmarking library, on a Macbook Pro (2015), using GHC 7.10.
+Precise timings were obtained by using O'Sullivan's @emph«criterion» benchmarking library, on an Intel XEON E5-2640 v4 (single core), using GHC 8.0.
 While @emph«criterion» provides confidence intervals, they are so thin that they
 are not visible at this scale, thus we have not attempted to render them.
 

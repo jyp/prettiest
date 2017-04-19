@@ -1,15 +1,21 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, InstanceSigs, FlexibleContexts, RankNTypes, TypeFamilies, LambdaCase #-}
 
+import Control.Monad (ap, forM, forM_)
+import Control.Monad.IO.Class
+import Criterion (nf)
+import Criterion.Internal (runAndAnalyseOne)
+import Criterion.Types (DataRecord(..), Report(..), SampleAnalysis(..), Benchmarkable)
+import PM (render, L, M(..), DM(..), pretty, SExpr(..))
+import Statistics.Resampling.Bootstrap (Estimate(..))
 import System.Random
-import Control.Monad (ap)
-import PM (render, L, M, pretty, SExpr(..))
+import qualified Criterion.Main.Options as C
+import qualified Criterion.Monad as C
 
 data OC = Open | Close
 
-
-genRandomExpr :: Int -> IO [OC]
-genRandomExpr maxLen = go 0 0
+genRandomOC :: Int -> IO [OC]
+genRandomOC maxLen = go 0 0
   where
     go :: Int -> Int -> IO [OC]
     go opened closed
@@ -57,11 +63,35 @@ ocToSExprs = do
       return (h:rest)
     _ -> return [Atom "a"]
 
-randExpr :: IO ()
-randExpr = do
-  oc <- genRandomExpr 500
-  let expr = snd $ runOCP ocToSExprs oc
-  putStrLn $ render $ (pretty (SExpr expr) :: [(M,L)])
+randExpr maxlen = do
+  oc <- genRandomOC maxlen
+  return $ SExpr $ snd $ runOCP ocToSExprs oc
+
+testLayout :: SExpr -> Int
+testLayout input = height mm
+    where mm :: M
+          mm = minimum $ (pretty input :: DM)
+          _l :: String
+          _l = render $ (pretty input :: [L])
+
+benchmark :: SExpr -> Benchmarkable
+benchmark size = nf testLayout size
+
+performanceAnalysisRandom :: IO ()
+performanceAnalysisRandom = do
+  putStrLn "performanceAnalysisRandom..."
+  exprs <- forM [1..10] $ \_ -> randExpr 10000
+  putStrLn "If the program gets stuck now it is due to a bug in criterion. (It does not work on MacOS)"
+  an <- C.withConfig C.defaultConfig $ do
+    forM (zip exprs [1..]) $ \(e,i) -> do
+      liftIO $ putStrLn $ "running bench " ++ show i
+      (Analysed (Report { reportAnalysis = SampleAnalysis {anMean = dt}})) <-
+         runAndAnalyseOne i ("bench " ++ show i) (benchmark e)
+      return (testLayout e, dt)
+  writeFile "benchmark-random.dat" $ show an
+
+main = do
+  performanceAnalysisRandom
 
 {-> randExpr
 

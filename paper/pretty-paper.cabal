@@ -26,4 +26,17 @@ executable paper
                      statistics,
                      random
         main-is:
-           PM.hs
+           Paper.hs
+
+executable bench
+        build-depends:
+                     base,
+                     marxup,
+                     lens,
+                     criterion,
+                     lp-diagrams,
+                     gasp,
+                     statistics,
+                     random
+        main-is:
+           Benchmarks.hs
