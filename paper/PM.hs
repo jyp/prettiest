@@ -4,7 +4,7 @@
 import MarXup
 import MarXup.Latex
 import MarXup.Latex.Bib
-import MarXup.Latex.Math (deflike, mathpreamble,lemma,theorem)
+import MarXup.Latex.Math (deflike, mathpreamble,lemma,theorem,definition)
 import MarXup.Tex hiding (label)
 import MarXup.Diagram hiding (height)
 import qualified MarXup.Diagram as D
@@ -638,7 +638,7 @@ an empty line is called @hask«flush», and has the following definition:
   flush :: L -> L
   flush xs = xs ++ [""]
 »
-Horizontal concatenation is then:
+Vertical concatenation is then:
 @spec«
   ($$) :: L -> L -> L
   a $$ b = flush a <> b
@@ -663,8 +663,8 @@ class Layout l where
   render  :: l -> String
 »
 Additionally, as mentioned above, layouts follow a number of algebraic
-laws, (written here as QuickCheck properties@footnote«but which can be checked only if properly monomorphized using
-either of the concrete implementations provided later.»):
+laws, (written here as QuickCheck properties@footnote«These properties can (and were) checked when properly monomorphized using
+either of the concrete implementations provided later. The same applies for all properties stated in the paper.»):
 
 @enumList[
 «Layouts form a monoid, with operator (@hask«<>») and unit @hask«empty»@footnote«recall @hask«empty = text ""»»:
@@ -883,7 +883,7 @@ occupied position, completing the class instance:
 
 The correctness of the @hask«Layout M» instance relies on intuition, and a
 proper reading of the concatenation diagram. This process being
-informal, we should cross-check the final result formally.
+informal, we must cross-check the final result formally.
 To do so, we define a function which computes the measure of a full layout:
 @haskell«
 measure :: L -> M
@@ -911,7 +911,7 @@ the @hask«L» instance of @hask«Layout», while on the right-hand-side they co
 Checking the laws is a simple, if somewhat tedious exercise of program calculation, and thus it is deferred to the appendix.
 »
 
-
+Using the measure, we can check that a layout is fully visible simply by checking that @hask«maxWidth» is small enough:
 @haskell«
 valid :: M -> Bool
 valid x = maxWidth x <= pageWidth
@@ -930,9 +930,10 @@ text x = filter valid [text x]
 xs <> ys = filter valid [x <> y | x <- xs, y <- ys]
 »
 
-We can do so because @hask«validity» is monotonous:
+We can do so because de-construction preserves @hask«valid»ity:
+the validity of a document implies the validity of its part.
 
-@lem_valid_mono<-lemma«@hask«valid» is monotonous.»«
+@lem_valid_mono<-lemma«de-construction preserves validity.»«
 
 The following two implications hold:
 @spec«
@@ -974,7 +975,7 @@ are dominated by others. That is, they can be discarded early.
 
 We write @hask«a ≺ b» when @hask«a» dominates @hask«b». We will arrange
 our domination relation such that
-@enumList[«Layout operators are monotonous with respect to domination.
+@enumList[«Layout operators are monotonic with respect to domination.
            Consequently, for any document context
            @hask«ctx :: Doc d => d -> d»,
 
@@ -983,14 +984,14 @@ our domination relation such that
 
 Together, these properties mean that we can always discard dominated
 layouts from a set, as we could discard invalid ones. Indeed, we have:
-@theorem«(Domination)»«For any context @hask«ctx», we have
+@theorem«(Domination)»« For any context @hask«ctx», we have
 @spec«a ≺  b  =>  height (ctx a) <= height (ctx b)»
 »«By composition of the properties 1. and 2.»
 
 We can concretize the above abstract result by
 defining our domination relation and proving its properties 1. and 2.
 Our domination relation is a partial order
-(a reflexive, transitive and antisymmetric relation), and thus make it an instance
+(a reflexive, transitive and antisymmetric relation), and thus we can make it an instance
 of the following class:
 @haskell«
 class Poset a where
@@ -1081,10 +1082,11 @@ a <= b ∧ c <= d   =>  max a c <= max b d
 
 
 @subsection«Pareto frontier»
-Filtering out the dominated elements is an operation known as the
-computation of the Pareto frontier, which can be implemented as
-follows.
-
+The subset of non-dominated elements is known as the Pareto frontier @citep"deb_multi_2016".
+@definition«Pareto frontier»«
+@tm«\mathnormal{Pareto}(X) = \{ x∈X | ¬∃y∈X. x ≠ y ∧ y ≺ x\}»
+»
+When sets are represented as lists without duplicates, the Pareto frontier can be computed as follows.
 @haskell«
 pareto :: Poset a => [a]  -> [a]
 pareto = loop []
@@ -1095,7 +1097,7 @@ pareto = loop []
                else  loop (x:filter (not . (x ≺)) acc) xs
 »
 
-The above function examines elements sequentially, and keeps a pareto frontier
+The above @hask«loop» function examines elements sequentially, and keeps a Pareto frontier
 of the elements seen so far in the @hask«acc» parameter. For each examined element @hask«x», if it
 is dominated, then we merely skip it.  Otherwise, @hask«x» is added to
 the current frontier, and all the elements dominated
@@ -1117,6 +1119,9 @@ instance Doc DM where
   fail = []
   xs <|> ys = pareto (xs ++ ys)
 »
+
+The above is the final, optimized version of the layout-computation algorithm.
+Its actual performance is evaluated in the next section.
 
 @sec_timings<-section«Empirical performance evaluation»
 
@@ -1160,6 +1165,8 @@ Therefore, the amount of work becomes independent of the number of disjunctions 
 and depends only on the amount of text to render.
 
 @section«Discussion»
+To obtain a complete library from the above design,
+one should pay attention to a few more points that we discuss in this section.
 
 @subsection«Re-pairing with text»
 
@@ -1200,7 +1207,7 @@ hang :: Doc d => Int -> d -> d -> d
 hang n x y = (x <> y) <|> (x $$ nest n y)
 »
 
-In this context, nesting occurs on the right-hand-side of horizontal concatenation, and thus its semantics is much simpler. In fact,
+In this context, nesting occurs on the right-hand-side of vertical concatenation, and thus its semantics is much simpler. In fact,
 in the context of @hask«hang»,
 it can be implemented easily in terms of the combinators provided so far:
 
@@ -1244,8 +1251,8 @@ derived a reasonably efficient implementation. Along the way,
 we have demonstrated how to use the standard functional programming methodology. The standard methodology worked well:
 we could use program calculation all the way.
 
-@acknowledgements«Most of the work described in this paper was carried out while the author was funded by Chalmers University of Technology.
-Facundo Domingez, Atze van der Ploeg and Arnaud Spiwack as well as anonymous ICFP reviewers provided useful feedback on a draft of this paper.
+@acknowledgements«Most of the work described in this paper was carried out while the author was employed by Chalmers University of Technology.
+Facundo Domingez, Atze van der Ploeg and Arnaud Spiwack as well as anonymous ICFP reviewers provided useful feedback on drafts of this paper.
 Using the QuickSpec tool, Nicholas Smallbone helped
 finding a bug in the final implementation: the concatenation operator
 did not preserve the invariant that lists were sorted. »

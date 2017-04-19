@@ -3,6 +3,10 @@ local-packages:
     location: .
   pretty-paper:
     location: ./paper
+  # marxup:
+  #   location: ../MarXup
+  # lp-diagrams:
+  #   location: ../lp-diagrams
 
 nixpkgs:
   commit: 92b1e39e1c43a55a1460571782e3c7444556814b
@@ -15,7 +19,7 @@ source-deps:
     location: https://github.com/jyp/gasp.git
   marxup:
     location: https://github.com/jyp/MarXup
-    revision: e73f292ed80596a16204c3e531d96eea525e1cf8
+  #   revision: e73f292ed80596a16204c3e531d96eea525e1cf8
 
 nix-deps:
     - criterion

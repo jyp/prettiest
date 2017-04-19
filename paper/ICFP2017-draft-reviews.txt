@@ -455,49 +455,77 @@ Fixed
 > that the aim now is to apply program fusion techniques to obtain a
 > more efficient version of the render function.
 
-TODO
+Added
 
 > p10, "construct fully" -> "fully construct".
 
 Fixed
 
 > p11, Can the laws be checked automatically using QuickCheck?
-> 
+
+Clarified
+
 > p11, Some introductory text is required before validMeasure. It also
 > seems that validMeasure should actually be called 'valid'?
-> 
+
+Fixed
+
 > p12, Explain the choice of the term 'monotonous'.  Isn't there a
 > standard mathematical way of saying that if a property is true when
 > an operator is applied then its also true of the arguments, i.e. the
 > opposite of saying that the property is preserved by an operator?
-> 
+
+I have changed the formulation
+
 > p12, Lemma 5.3 is not necessary, and should be removed.
-> 
+
+TODO
+
 > p12, Missing space after the closing bracket in the name of thm 5.4.
-> 
+
+Fixed
+
 > p13, "thus make" -> "thus we can make".
-> 
+
+Fixed
+
 > p13, The proofs of lemmas 5.5 and 5.6 should either be omitted, or
 > moved to the appendix, as they are just simple calculations.
-> 
+
+TODO
+
 > p14, A reference for 'Pareto frontier' is required, along with some
 > explanation of what this means to make the paper self-contained.
-> 
+
+Fixed
+
 > p14, "pareto" -> "Pareto".
-> 
+
+Fixed
+
 > p14, Some concluding text is required for section 5.
-> 
+
+Added
+
 > p15, Some latex math symbols $ are showing up in the text.
-> 
+
+Fixed
+ 
 > p15, Some introductory text is required for section 7.
-> 
+
+Added
+
 > p17, The conclusion is too short at just over five lines, and seems
 > to have been written in rather a hurry at the last minute.  This
 > needs to be expanded to a proper conclusion.
-> 
+
+TODO
+
 > p18, The appendix should be omitted in the published version, as it
 > doesn't add much that most readers would be interested in.
-> 
+
+TODO
+
 > ===========================================================================
 >                            ICFP 2017 Review #1C
 > ---------------------------------------------------------------------------
@@ -550,18 +578,32 @@ Fixed
 > a < b -> height (ctx a) <= height (ctx b)
 > ```
 > Please correct me if I am wrong.
-> 
+
+I think that the paper is correct.  The key is that the premiss is the
+domination relation: it does not require just a relation on the height
+but also on the two other components of the measure.
+
 > * Typos
 > 
 > page 3
-> - "horizontally (for Legibility)," -> "horizontally (for Legibility)."  
-> 
+> - "horizontally (for Legibility)," ->
+>   "horizontally (for Legibility)."  
+
+I did not understand this one.
+
 > page 5
 > - "after the atom abcdefgh" -> "after the atom abcde"
-> 
+
+Fixed
+
 > page 7
 > - "Horizontal concatenation is then:" -> "Vertical concatenation is then:"
-> 
+
+Fixed
+
 > page 16
 > - "on the right-hand-side of horizontal concatenation" -> "on the right-hand-side of vertical concatenation"
 >   (I am not sure about this)
+
+Paper was wrong. Fixed
+
