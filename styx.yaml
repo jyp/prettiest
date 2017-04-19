@@ -9,17 +9,18 @@ local-packages:
   #   location: ../lp-diagrams
 
 nixpkgs:
-  commit: 92b1e39e1c43a55a1460571782e3c7444556814b
-  sha256: 1y62n4h70kh9a0pyigssfwfrdc1kfx9i4743722f2c6kf67j1v20
+  commit: 878bbaf4e9d49c251d90f0790d2e7ebcf622ddd0
+  sha256: 118zrg05kmhvcs6di2myv735yaz8sdxsjrw6z4a52717lllz34w9
 
 source-deps:
   lp-diagrams:
     location: https://github.com/jyp/lp-diagrams.git
+    revision: cc9a31305421f6bc72cc1f107f1270bd178c78a1
   gasp:
     location: https://github.com/jyp/gasp.git
   marxup:
     location: https://github.com/jyp/MarXup
-  #   revision: e73f292ed80596a16204c3e531d96eea525e1cf8
+    revision: 3a4ece072123a3e98a6e9178522c53c24422b0df
 
 nix-deps:
     - criterion
