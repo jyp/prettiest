@@ -6,13 +6,14 @@ import Control.Monad.IO.Class
 import Criterion (nf)
 import Criterion.Internal (runAndAnalyseOne)
 import Criterion.Types (DataRecord(..), Report(..), SampleAnalysis(..), Benchmarkable)
-import PM (render, L, M(..), DM(..), pretty, SExpr(..))
+import PM (render, L, M(..), DM(..), pretty, SExpr(..), dataFileName, testExpr)
 import Statistics.Resampling.Bootstrap (Estimate(..))
 import System.Random
 import qualified Criterion.Main.Options as C
 import qualified Criterion.Monad as C
 import Data.Maybe
 import Data.List
+import System.Environment (getArgs)
 
 data OC = Open | Close | A
 
@@ -78,7 +79,7 @@ randExpr maxlen = do
 testLayout :: SExpr -> Maybe Int
 testLayout input = case (pretty input :: DM) of
                      [] -> Nothing
-                     mm -> Just $ height $ minimum mm
+                     mm -> Just (1 + (height (minimum mm)))
 
 benchmark :: SExpr -> Benchmarkable
 benchmark size = nf testLayout size
@@ -102,13 +103,27 @@ performanceAnalysisRandom = do
       return (i,fromJust (testLayout e), dt)
   writeFile "benchmark-random.dat" $ show an
 
+performanceAnalysis :: IO ()
+performanceAnalysis = do
+  putStrLn "performanceAnalysis..."
+  putStrLn "If the program gets stuck now it is due to a bug in criterion. (It does not work on MacOS)"
+  an <- C.withConfig C.defaultConfig $ do
+    forM [1..15] $ \size -> do
+      liftIO $ putStrLn $ "running for " ++ show size
+      (Analysed (Report { reportAnalysis = SampleAnalysis {anMean = dt}})) <-
+         runAndAnalyseOne size ("bench " ++ show size) ((benchmark . testExpr) size)
+      return (size,fromJust (testLayout $ testExpr size), dt)
+  writeFile dataFileName $ show an
+
+
 main :: IO ()
 main = do
-  performanceAnalysisRandom
+  [a] <- getArgs
+  case a of
+    "full" -> performanceAnalysis
+    "random" -> performanceAnalysisRandom
 
 -- Local Variables:
 -- dante-project-root: "~/repo/prettiest/paper"
 -- dante-repl-command-line: ("nix-shell" "../.styx/shell.nix" "--run" "cabal repl")
 -- End:
-
-  

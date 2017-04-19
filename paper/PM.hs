@@ -17,44 +17,25 @@ import Control.Lens (set)
 import Data.Function
 import Data.List (intercalate, minimumBy)
 import Prelude hiding (fail,Num(..),(/),(^))
-import Control.Monad (forM_,forM)
 import Graphics.Diagrams.Plot
 import System.IO.Unsafe (unsafePerformIO)
 import Numeric (showFFloat, showEFloat)
-import Criterion (nf)
-import qualified Criterion.Main.Options as C
-import qualified Criterion.Monad as C
-import Criterion.Types (DataRecord(..), Report(..), SampleAnalysis(..), Benchmarkable)
 import Statistics.Resampling.Bootstrap (Estimate(..))
-import Criterion.Internal (runAndAnalyseOne)
-import System.Environment (getArgs)
 import Algebra.Classes
-import Control.Monad.IO.Class
-import Prelude (Num)
+import Control.Monad (forM_)
+
 ($$) :: forall l. Layout l => l -> l -> l
 a $$ b = flush a <> b
+
+
+testExpr :: Int -> SExpr
 
 newpage :: TeX
 newpage = cmd0 "newpage"
 
-benchmark :: Int -> Benchmarkable
-benchmark size = nf testOne size
-
 instance Element String where
   type Target String = TeX
   element = textual
-
-testExpr :: Int -> SExpr
-testOne :: Int -> Int
-testOne size = height mm
-    where mm :: M
-          mm = minimum $ (pretty input :: DM)
-          -- mm' :: M'
-          -- mm' = minimum $ (pretty input :: [M'])
-          D1 (_mm1:_) = pretty input
-          _l :: String
-          _l = render $ (pretty input :: [L])
-          input = testExpr size
 
 dataFileName :: FilePath
 dataFileName = "benchmark-" ++ show pageWidth ++ ".dat"
@@ -63,29 +44,10 @@ performanceData :: String -> [(Integer, Integer, (Double,Double,Double))]
 performanceData fname = unsafePerformIO $ do
   d <- readFile fname
   return [(i,h,(estLowerBound e, estPoint e, estUpperBound e)) | (i,h,e) <- read d]
-  -- forM [1..15] $ \size -> do
-  --   (Measured { measTime = dt},_) <- C.measure (benchmark size) 1
-  --   return (size,2 ^ (max 0 (size - 2)), dt)
-  --   -- time $ show mm1
-  --   -- time $ show mm'
 
 regimeSpeed :: Double
 regimeSpeed = fromIntegral nlines / time
   where ((_,nlines,(_,time,_)):_) = reverse (performanceData dataFileName)
-
-performanceAnalysis :: IO ()
-performanceAnalysis = do
-  putStrLn "performanceAnalysis..."
-  forM [1..15] $ \size -> do
-    putStrLn $ show size ++ " => " ++ show (testOne size)
-  putStrLn "If the program gets stuck now it is due to a bug in criterion. (It does not work on MacOS)"
-  an <- C.withConfig C.defaultConfig $ do
-    forM [1..15] $ \size -> do
-      liftIO $ putStrLn $ "running for " ++ show size
-      (Analysed (Report { reportAnalysis = SampleAnalysis {anMean = dt}})) <-
-         runAndAnalyseOne size ("bench " ++ show size) (benchmark size)
-      return (size,testOne size, dt)
-  writeFile dataFileName $ show an
 
 performanceTable  :: String -> TeX
 performanceTable fname = tabular [] "rrr" [[textual (show s), textual (show h),textual (show t)] | (s,h,t) <- performanceData fname]
@@ -96,8 +58,6 @@ performancePoints fname = [x | (_,x,_) <- performanceBars fname]
 performanceBars :: String -> [(Point' Double,Point' Double,Point' Double)]
 performanceBars fname = [(Point x l, Point x m, Point x h)
                   | (_,nlines,(l,m,h)) <- performanceData fname, let x = fromIntegral nlines]
-
-
 
 scatterWithErrors :: PlotCanvas a -> [(Vec2 a,Vec2 a,Vec2 a)] -> TexDiagram ()
 scatterWithErrors (bx,_outerBox,xform) inputs = do
@@ -125,17 +85,12 @@ performancePlot fname sho axes' =  do
   yaxisLab `leftOf` outerBox
   outerBox `topOf` xaxisLab
 
-
-
 renderFloat :: forall a. RealFloat a => a -> Tex ()
 renderFloat x = tex $ showEFloat (Just 0) x ""
 
 performancePlotLog, performancePlotLin :: String -> Diagram TeX Tex ()
 performancePlotLog fname = performancePlot fname (pure renderFloat) (Point (logAxis 10) (logAxis 10))
 performancePlotLin fname = performancePlot fname (pure renderFloat) (Point (simplLinAxis 2000) (simplLinAxis 0.5))
-
-
--- data ErrorBar a = ErrorBar {lbound, mean, ubound :: a}
 
 tm :: Verbatim a -> Tex ()
 tm x = do
@@ -145,11 +100,7 @@ tm x = do
   return ()
 
 main :: IO ()
-main = do
-  args <- getArgs
-  case args of
-    ["benchmark"] -> performanceAnalysis
-    _ -> renderTex ACMArt "Prettiest" (preamble (header >> mainText >> bibliographyAll >> appendix))
+main = renderTex ACMArt "Prettiest" (preamble (header >> mainText >> bibliographyAll >> appendix))
 
 comment :: TeX -> TeX
 comment _ = mempty
@@ -1270,8 +1221,8 @@ did not preserve the invariant that lists were sorted. »
 appendix = do
   cmd0"onecolumn"
   (cmd "section*" «Appendix»)
-  subsection«Raw benchmark runtimes»
-  performanceTable dataFileName
+  -- subsection«Raw benchmark runtimes»
+  -- performanceTable dataFileName
 
   subsection«Proof details»
   paragraph«Proof of measure being a Layout-homomorphism»

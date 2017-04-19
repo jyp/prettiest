@@ -8,11 +8,11 @@ clean:
 .styx/bin/paper .styx/bin/bench: paper/PM.hs
 	styx cabal install pretty-paper
 
-benchmark-40.dat: .styx/bin/paper
-	.styx/bin/paper benchmark
+benchmark-80.dat: .styx/bin/bench
+	.styx/bin/bench full
 
 benchmark-random.dat: .styx/bin/bench
-	.styx/bin/bench
+	.styx/bin/bench random
 
 Prettiest.pdf: .styx/bin/paper
 	styx exec -- paper
