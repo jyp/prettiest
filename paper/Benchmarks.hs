@@ -11,6 +11,7 @@ import Statistics.Resampling.Bootstrap (Estimate(..))
 import System.Random
 import qualified Criterion.Main.Options as C
 import qualified Criterion.Monad as C
+import Data.Maybe
 
 data OC = Open | Close
 
@@ -63,24 +64,26 @@ ocToSExprs = do
       return (h:rest)
     _ -> return [Atom "a"]
 
+randExpr :: Int -> IO SExpr
 randExpr maxlen = do
   oc <- genRandomOC maxlen
   return $ SExpr $ snd $ runOCP ocToSExprs oc
 
-testLayout :: SExpr -> Int
-testLayout input = height mm
-    where mm :: M
-          mm = minimum $ (pretty input :: DM)
-          _l :: String
-          _l = render $ (pretty input :: [L])
+testLayout :: SExpr -> Maybe Int
+testLayout input = case (pretty input :: DM) of
+                     [] -> Nothing
+                     mm -> Just $ height $ minimum mm
 
 benchmark :: SExpr -> Benchmarkable
 benchmark size = nf testLayout size
 
+fitting :: SExpr -> Bool
+fitting = isJust . testLayout 
+
 performanceAnalysisRandom :: IO ()
 performanceAnalysisRandom = do
   putStrLn "performanceAnalysisRandom..."
-  exprs <- forM [1..10] $ \_ -> randExpr 10000
+  exprs <- filter fitting <$> forM [(1::Int)..10] (\_ -> randExpr 10000)
   putStrLn "If the program gets stuck now it is due to a bug in criterion. (It does not work on MacOS)"
   an <- C.withConfig C.defaultConfig $ do
     forM (zip exprs [1..]) $ \(e,i) -> do
@@ -90,112 +93,9 @@ performanceAnalysisRandom = do
       return (testLayout e, dt)
   writeFile "benchmark-random.dat" $ show an
 
+main :: IO ()
 main = do
   performanceAnalysisRandom
-
-{-> randExpr
-
-((((((a) (a) ((a) a) ((a) a) a)
-    ((a) ((((a) a) (a) a)
-          (((a) (a) ((a) a) a)
-           ((a) ((a) (((a) a) (a) a) (a) (((a) ((a) a) ((a) a) a) (a) a) a) a)
-           a)
-          (a)
-          (((((a) (a) (a) a) a) ((((a) a) (((a) (a) (a) a) a) a)
-                                 (a)
-                                 a) (a) ((a) (a) a) ((a) (a) a) (a) a) (a) a)
-          a) a)
-    a) (a) a) a)
- ((((((a) a) a) a) a) (a) a)
- ((a) a)
- (a)
- (((a) (a) a) (a) a)
- ((a) (((a) a) (a) ((a) (a) a) (a) a) a)
- (((a) ((a) a) a) ((((a) a) a) a) (a) (a) a)
- ((a) ((a) (a) (a) a) (a) a)
- (a)
- (a)
- ((a) (a) (a) ((a) a) a)
- (a)
- ((a) a)
- ((a) (a) ((a) a) a)
- (a)
- (((a) a) (a) (a) (a) ((((((a) (a) (((((a) (a) a) (a) (a) (a) a) a)
-                                    a) (a) a) (a) ((a) (a) (a) a) (a) (a) a)
-                         a) (a) (a) a) (a) (a) a) a)
- ((a) a)
- (a)
- ((a) (((a) a) a) a)
- (a)
- (a)
- (a)
- (a)
- (a)
- (a)
- (a)
- ((a) a)
- (a)
- (((a) (((a) a) a) (a) a) (a) a)
- ((((a) ((a) a) a) a) a)
- (a)
- (a)
- ((a) (((a) ((a) a) a) a) (a) a)
- (((a) a) (a) ((((a) a) (a) a) a) ((a) a) (a) a)
- (a)
- ((a) ((a) ((a) a) (a) a) (a) (a) ((a) a) a)
- ((a) a)
- (a)
- ((a) a)
- (a)
- ((a) (a) a)
- ((((a) ((a) a) a) a) a)
- ((a) a)
- (((a) (a) a)
-  (((((a) (((((a) ((((a) a)
-                    (a)
-                    ((a) a)
-                    (a)
-                    (a)
-                    ((a) a)
-                    ((a) (((((a) (a) (a) ((a) a) ((a) (a) ((((a) a) a)
-                                                           (a)
-                                                           a) (((a) a)
-                                                               a) a) (a) a)
-                            (a)
-                            a) (((a) (a) a) a) a) a) (a) ((a) a) (a) (a) a)
-                    ((a) a)
-                    ((a) (a) ((a) ((a) a) a) a)
-                    a) a) (((a) (a) a) a) (a) ((a) a) a)
-             (((a) a) (a) (a) ((a) a) a)
-             a) (a) (a) ((a) a) a) (((a) ((a) ((a) (a) a) a) (a) a)
-                                    a) (a) (((a) a) a) a) a) (a) a) (a) a) a)
-  (a)
-  a)
- ((a) (((((a) a) a) (a) ((a) a) (((a) ((a) a) a) a) (a) a) a) a)
- ((((a) ((a) (a) (a) (a) a) ((((a) a) (a) a) a) a)
-   ((a) (((a) a) (a) a) ((a) a) ((a) a) (a) (a) a)
-   ((((((a) (((a) (a) ((a) (a) a) a) (a) (a) a) ((a) ((a) a) a) a)
-       (((a) a) a)
-       a) a) ((((a) a) a) a) a) a)
-   a) (((((a) a) (((a) a) (a) ((a) (a) a) a) a)
-        ((((((a) (a) a)
-            a) (a) a) (a) ((((a) a) a) a) ((a) (a) a) (a) (a) (a) ((a) a) a) a)
-        a) a) (a) a)
- (((a) (a) (a) (a) a) (a) (a) a)
- ((a) a)
- (a)
- ((a) ((a) a) (a) (((a) (a) (a) a)
-                   (a)
-                   ((a) a)
-                   (a)
-                   (((a) ((a) a) (a) a) a)
-                   ((a) (a) a)
-                   ((a) a)
-                   ((((a) a) a) (((a) (((((a) ((a) a) a) a) (a) a)
-                                       a) a) a) (a) a)
-                   a) a)
- a)
--}
 
 -- Local Variables:
 -- dante-project-root: "~/repo/prettiest/paper"
