@@ -1,6 +1,8 @@
 {-# OPTIONS_GHC -XTypeSynonymInstances -XOverloadedStrings -XRecursiveDo -pgmF marxup -F #-}
 {-# LANGUAGE FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, InstanceSigs, FlexibleContexts, RankNTypes, TypeFamilies #-}
 
+module PM where
+
 import MarXup
 import MarXup.Latex
 import MarXup.Latex.Bib
@@ -22,20 +24,20 @@ import Numeric (showFFloat, showEFloat)
 import Criterion (nf)
 import qualified Criterion.Main.Options as C
 import qualified Criterion.Monad as C
-import Criterion.Types (DataRecord(..), Report(..), SampleAnalysis(..))
+import Criterion.Types (DataRecord(..), Report(..), SampleAnalysis(..), Benchmarkable)
 import Statistics.Resampling.Bootstrap (Estimate(..))
 import Criterion.Internal (runAndAnalyseOne)
 import System.Environment (getArgs)
 import Algebra.Classes
 import Control.Monad.IO.Class
-
+import Prelude (Num)
 ($$) :: forall l. Layout l => l -> l -> l
 a $$ b = flush a <> b
 
 newpage :: TeX
 newpage = cmd0 "newpage"
 
--- benchmark :: forall a. (Eq a, Num a) => a -> Benchmarkable
+benchmark :: Int -> Benchmarkable
 benchmark size = nf testOne size
 
 instance Element String where
@@ -76,7 +78,7 @@ performanceAnalysis = do
   putStrLn "performanceAnalysis..."
   forM [1..15] $ \size -> do
     putStrLn $ show size ++ " => " ++ show (testOne size)
-  putStrLn "If the program gets stuck now it is due to a bug in criterion."
+  putStrLn "If the program gets stuck now it is due to a bug in criterion. (It does not work on MacOS)"
   an <- C.withConfig C.defaultConfig $ do
     forM [1..15] $ \size -> do
       liftIO $ putStrLn $ "running for " ++ show size
@@ -329,6 +331,7 @@ hsep  = foldDoc (<+>)
 
 foldDoc :: Doc d => (d -> d -> d) -> [d] -> d
 foldDoc _ []      = empty
+foldDoc _ [x]     = x
 foldDoc f (x:xs)  = f x (foldDoc f xs)
 »
 
@@ -1159,8 +1162,8 @@ are not visible at this scale, thus we have not attempted to render them.
 
 The plot shows a behavior that tends to become linear when the output is large enough.
 For such large inputs approximately @(showFFloat (Just 2) regimeSpeed []) lines are laid out per second. We interpret this result as follows.
-Our pretty-printer essentially considers non-dominated layouts. If the input is sufficiently complex, this approximately means to
-consider one layout per possible width (@show(pageWidth) in our tests) --- when the width is given then the length and the width of last line are fixed.
+Our pretty-printer essentially considers non-dominated layouts. If the input is sufficiently complex, this means to
+consider approximately one layout per possible width (@show(pageWidth) in our tests) --- when the width is given then the length and the width of last line are fixed.
 Therefore, the amount of work becomes independent of the number of disjunctions present in the input,
 and depends only on the amount of text to render.
 
@@ -1193,6 +1196,9 @@ instance Layout [(M,L)] where
   text s = filter (valid . fst) [text s]
   render = render . minimumBy (compare `on` fst)
 
+instance Doc [(M,L)] where
+  fail = []
+  xs <|> ys = pareto (xs ++ ys)
 »
 
 @subsection«Hughes-Style nesting»

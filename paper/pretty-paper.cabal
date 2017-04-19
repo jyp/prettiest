@@ -23,6 +23,7 @@ executable paper
                      criterion,
                      lp-diagrams,
                      gasp,
-                     statistics
+                     statistics,
+                     random
         main-is:
            PM.hs
