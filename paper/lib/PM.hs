@@ -1638,7 +1638,7 @@ footnote = cmd "footnote"
 --  LocalWords:  testOne testExpr SExpr dataFileName FilePath dat sz
 --  LocalWords:  pageWidth performanceData readFile estLowerBound dt
 --  LocalWords:  estPoint estUpperBound measTime regimeSpeed nlines
---  LocalWords:  fromIntegral performanceAnalysis putStrLn withConfig
+--  LocalWords:  fromIntegral putStrLn withConfig
 --  LocalWords:  defaultConfig liftIO Analysed reportAnalysis anMean
 --  LocalWords:  writeFile performanceTable rrr performancePoints sho
 --  LocalWords:  performanceBars scatterWithErrors PlotCanvas showDot
