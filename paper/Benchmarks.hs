@@ -6,7 +6,7 @@ import Control.Monad.IO.Class
 import Criterion (nf)
 import Criterion.Internal (runAndAnalyseOne)
 import Criterion.Types (DataRecord(..), Report(..), SampleAnalysis(..), Benchmarkable)
-import PM (render, L, M(..), DM(..), pretty, SExpr(..), dataFileName, testExpr)
+import PM (render, L, M(..), DM(..), pretty, SExpr(..), dataFileName, testExpr, OC(..), randomDyck)
 import Statistics.Resampling.Bootstrap (Estimate(..))
 import System.Random
 import qualified Criterion.Main.Options as C
@@ -16,21 +16,7 @@ import Data.List
 import System.Environment (getArgs)
 import BenchmarkLibs
 
-data OC = Open | Close | A
 
-genRandomOC :: Int -> IO [OC]
-genRandomOC maxLen = go 0 0
-  where
-    go :: Int -> Int -> IO [OC]
-    go opened closed
-      | closed >= maxLen = return []
-      | opened >= maxLen = close
-      | closed >= opened = open
-      | otherwise = do
-          b <- randomIO
-          if b then open else close
-      where open  = (Open: ) <$> go (1+opened) closed
-            close = (Close:) <$> go opened (1+closed)
 
 newtype OCP a = OCP {runOCP :: [OC] -> ([OC],a)} deriving (Functor)
 instance Applicative OCP where
@@ -74,7 +60,7 @@ ocToSExprs = do
 
 randExpr :: Int -> IO SExpr
 randExpr maxlen = do
-  oc <- genRandomOC maxlen
+  oc <- randomDyck maxlen
   return $ SExpr $ snd $ runOCP ocToSExprs $ intersperse A oc
 
 testLayout :: SExpr -> Maybe Int
@@ -140,5 +126,6 @@ main = do
 
 -- Local Variables:
 -- dante-project-root: "~/repo/prettiest/paper"
+-- dante-target: "bench"
 -- dante-repl-command-line: ("nix-shell" "../.styx/shell.nix" "--run" "cabal --sandbox-config-file=../cabal.sandbox.config repl --only bench")
 -- End:
