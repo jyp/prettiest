@@ -69,7 +69,7 @@ scatterWithErrors (bx,_outerBox,xform) inputs = do
     -- forM [l,h] $ \z -> stroke "red" $ path $ polyline [z - Point 2 0, z + Point 2 0]
     -- error bars are so narrow that we do not see them.
 
-performancePlot :: String -> Vec2 (ShowFct TeX Double) -> Vec2 (Transform Double) -> Diagram TeX Tex ()
+performancePlot :: String -> Vec2 (ShowFct TeX Double) -> Vec2 (Transform Double) -> Diagram TeX Tex (PlotCanvas Double)
 performancePlot fname sho axes' =  do
   let  points = (performancePoints fname)
        points' = sequenceA points
@@ -82,15 +82,28 @@ performancePlot fname sho axes' =  do
   yaxisLab <- label "yaxisLab" "layout time (s)"
   align xpart $ map (#Center) [bx, xaxisLab]
   align ypart $ map (#Center) [bx, yaxisLab]
-  yaxisLab `leftOf` outerBox
+  hdist yaxisLab outerBox === constant 10
   outerBox `topOf` xaxisLab
+  return c
 
 renderFloat :: forall a. RealFloat a => a -> Tex ()
 renderFloat x = tex $ showEFloat (Just 0) x ""
 
-performancePlotLog, performancePlotLin :: String -> Diagram TeX Tex ()
+performancePlotLog, performancePlotLin :: String -> Diagram TeX Tex (PlotCanvas Double)
 performancePlotLog fname = performancePlot fname (pure renderFloat) (Point (logAxis 10) (logAxis 10))
 performancePlotLin fname = performancePlot fname (pure renderFloat) (Point (simplLinAxis 2000) (simplLinAxis 0.5))
+
+performancePlotFull :: Diagram TeX Tex () 
+performancePlotFull = do
+  c <- performancePlotLog "benchmark-80.dat"
+  return ()
+
+performancePlotRandom :: Diagram TeX Tex () 
+performancePlotRandom = do
+  c <- performancePlotLog "benchmark-random.dat"
+  functionPlot c 5 (\x -> x/(regimeSpeed * 10))
+  return ()
+
 
 tm :: Verbatim a -> Tex ()
 tm x = do
@@ -195,7 +208,8 @@ Before diving into the details, a couple of methodological points.
 First, Haskell is used throughout this paper in its quality the langua franca of functional programming pearls.
 Yet, we make no essential use of laziness. Second, 
 the source code for the paper and benchmarks, as well as a fully fledged pretty printing library based on its principles is available
-online: @url«https://github.com/jyp/prettiest».
+online: @url«https://github.com/jyp/prettiest». A Haskell library based on the algorithm developed here
+can be found on Hackage: @url«https://hackage.haskell.org/package/pretty-compact».
 
 
 @sec_api<-section«Interface (Syntax)»
@@ -1104,10 +1118,10 @@ The following plot shows the time taken (in seconds) against
 the @emph«number of lines of output». (By using the number of lines rather than @hask«n»,
 we have a more reasonable measure of the amount of work to perform for each layout task.)
 The following plot shows the data on a double logarithmic scale
-(note that both the @hask«n»=0 and @hask«n»=1 inputs can be printed on a single line):
+(note that inputs for @hask«n»@tm«∈[0,1,2,3]» can all be printed on a single line):
 
-@center(element (performancePlotLog dataFileName))
-Precise timings were obtained by using O'Sullivan's @emph«criterion» benchmarking library, on an Intel XEON E5-2640 v4 (single core), using GHC 8.0.
+@center«@performancePlotFull»
+Precise timings were obtained by using O'Sullivan's @emph«criterion» benchmarking library, on an Intel Xeon E5-2640 v4 (running on a single core), using GHC 8.0.
 While @emph«criterion» provides confidence intervals, they are so thin that they
 are not visible at this scale, thus we have not attempted to render them.
 
@@ -1118,7 +1132,7 @@ consider approximately one layout per possible width (@show(pageWidth) in our te
 Therefore, the amount of work becomes independent of the number of disjunctions present in the input,
 and depends only on the amount of text to render.
 
-@center(element (performancePlotLog "benchmark-random.dat"))
+@center«@performancePlotRandom»
 
 @section«Discussion»
 To obtain a complete library from the above design,

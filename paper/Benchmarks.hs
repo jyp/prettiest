@@ -14,6 +14,7 @@ import qualified Criterion.Monad as C
 import Data.Maybe
 import Data.List
 import System.Environment (getArgs)
+import BenchmarkLibs
 
 data OC = Open | Close | A
 
@@ -90,7 +91,7 @@ fitting = isJust . testLayout
 performanceAnalysisRandom :: IO ()
 performanceAnalysisRandom = do
   putStrLn "performanceAnalysisRandom..."
-  let n = 40 -- number of data points
+  let n = 50 -- number of data points
       maxsz = 3000 -- max number of open parens
       f = exp (log maxsz / n)
   exprs <- filter fitting <$> forM [0..n] (\i -> randExpr (floor (f**i)))
@@ -108,12 +109,25 @@ performanceAnalysis = do
   putStrLn "performanceAnalysis..."
   putStrLn "If the program gets stuck now it is due to a bug in criterion. (It does not work on MacOS)"
   an <- C.withConfig C.defaultConfig $ do
-    forM [1..15] $ \size -> do
+    forM [1..16] $ \size -> do
       liftIO $ putStrLn $ "running for " ++ show size
       (Analysed (Report { reportAnalysis = SampleAnalysis {anMean = dt}})) <-
          runAndAnalyseOne size ("bench " ++ show size) ((benchmark . testExpr) size)
       return (size,fromJust (testLayout $ testExpr size), dt)
   writeFile dataFileName $ show an
+
+performanceAnalysisRW :: String -> IO ()
+performanceAnalysisRW fname = do
+  putStrLn "performanceAnalysisRW..."
+  putStrLn "If the program gets stuck now it is due to a bug in criterion. (It does not work on MacOS)"
+  an <- C.withConfig C.defaultConfig $ do
+    forM [(pcTest,"PC"), (wlTest,"WL"), (hpjTest,"HPJ")] $ \(f,name) -> do
+      liftIO $ putStrLn $ "running for " ++ name
+      j <- liftIO $ readJSONValue fname
+      (Analysed (Report { reportAnalysis = SampleAnalysis {anMean = dt}})) <-
+         runAndAnalyseOne 7 ("bench " ++ fname ++ name) ((\x -> nf f x) j)
+      return (name, dt)
+  writeFile "rw-4kjson.dat" $ show an
 
 
 main :: IO ()
@@ -122,8 +136,9 @@ main = do
   case a of
     "full" -> performanceAnalysis
     "random" -> performanceAnalysisRandom
+    "json" -> performanceAnalysisRW "4k.json"
 
 -- Local Variables:
 -- dante-project-root: "~/repo/prettiest/paper"
--- dante-repl-command-line: ("nix-shell" "../.styx/shell.nix" "--run" "cabal repl")
+-- dante-repl-command-line: ("nix-shell" "../.styx/shell.nix" "--run" "cabal --sandbox-config-file=../cabal.sandbox.config repl --only bench")
 -- End:

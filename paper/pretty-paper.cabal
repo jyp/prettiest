@@ -50,7 +50,17 @@ executable bench
                      criterion,
                      gasp,
                      statistics,
-                     random
+                     random,
+                     aeson,
+                     pretty,
+                     wl-pprint,
+                     pretty-compact,
+                     bytestring,
+                     attoparsec,
+                     unordered-containers,
+                     text
+        -- other-modules:
+        --    BenchmarksLibs
         main-is:
            Benchmarks.hs
 
