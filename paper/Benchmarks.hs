@@ -118,11 +118,16 @@ performanceAnalysisRW fname = do
 
 main :: IO ()
 main = do
-  [a] <- getArgs
-  case a of
-    "full" -> performanceAnalysis
-    "random" -> performanceAnalysisRandom
-    "json" -> performanceAnalysisRW "4k.json"
+  as <- getArgs
+  case as of
+    ["all"] -> do
+      performanceAnalysis
+      performanceAnalysisRandom
+      performanceAnalysisRW "1k.json"
+      performanceAnalysisRW "10k.json"
+    ["full"] -> performanceAnalysis
+    ["random"] -> performanceAnalysisRandom
+    ["json", f] -> performanceAnalysisRW f
 
 -- Local Variables:
 -- dante-project-root: "~/repo/prettiest/paper"
