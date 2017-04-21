@@ -32,21 +32,36 @@ non-haskell-deps:
     - z3
     - texlive.combine {
                        inherit (texlive)
-                       lm
+                       algorithm2e
                        biblatex
+                       boondox
+                       cmll
+                       collection-fontsrecommended
                        comment
-                       libertine
-                       newtx
-                       stmaryrd lazylist polytable
-                       logreq
-                       scheme-small wrapfig marvosym wasysym
-                       wasy cm-super unicode-math filehook lm-math capt-of
                        environ
-                       trimspaces
-                       ncctools
+                       fontaxes
+                       inconsolata
+                       kastrup
+                       libertine
+                       listings
+                       lm
+                       logreq
+                       mweights
                        ncclatex
+                       ncctools
+                       newtx
+                       newtxsf
+                       newtxtt
+                       newunicodechar
+                       prftree
+                       relsize
+                       scheme-small wrapfig marvosym wasysym
+                       stmaryrd lazylist polytable
                        todonotes
                        totpages
+                       trimspaces
+                       wasy cm-super unicode-math filehook lm-math capt-of
+                       xargs
                        xstring ucharcat;
                      }
 
