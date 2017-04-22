@@ -52,7 +52,10 @@ table caption body = env "table" $ do
 typicalPerfTable :: Tex SortedLabel
 typicalPerfTable = table "Performance on typical JSON data" (tabular' [] "lrrr" typicalPerfData)
 
-typicalPerfData = [["Input", "Ours", "Wadler-Leijen", "Hughes-PJ"], ["JSON 4k", "48.58", "6.32", "12.41"]]
+typicalPerfData = [["Input", "Ours", "Wadler-Leijen", "Hughes-PJ"]
+                   ,["JSON 1k", "9.7", "1.5", "3.0"]
+                   ,["JSON 4k", "48.6", "6.3", "12.4"]
+                   ,["JSON 10k", "145.5", "14.8", "30.0"]]
 
 
 testExpr :: Int -> SExpr
