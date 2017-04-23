@@ -6,7 +6,7 @@ import Control.Monad.IO.Class
 import Criterion (nf)
 import Criterion.Internal (runAndAnalyseOne)
 import Criterion.Types (DataRecord(..), Report(..), SampleAnalysis(..), Benchmarkable)
-import PM (render, L, M(..), DM(..), pretty, SExpr(..), dataFileName, testExpr, OC(..), randomDyck)
+import PM (render, L, M(..), DM(..), NoDom(..), pretty, SExpr(..), dataFileName, testExpr, OC(..), randomDyck)
 import Statistics.Resampling.Bootstrap (Estimate(..))
 import System.Random
 import qualified Criterion.Main.Options as C
@@ -15,8 +15,6 @@ import Data.Maybe
 import Data.List
 import System.Environment (getArgs)
 import BenchmarkLibs
-
-
 
 newtype OCP a = OCP {runOCP :: [OC] -> ([OC],a)} deriving (Functor)
 instance Applicative OCP where
@@ -68,8 +66,12 @@ testLayout input = case (pretty input :: DM) of
                      [] -> Nothing
                      mm -> Just (1 + (height (minimum mm)))
 
-benchmark :: SExpr -> Benchmarkable
-benchmark size = nf testLayout size
+testLayoutNoDom :: SExpr -> Maybe Int
+testLayoutNoDom input = case (pretty input :: NoDom) of
+                     NoDom [] -> Nothing
+                     NoDom mm -> Just (1 + (height (minimum mm)))
+
+benchmark testLayout size = nf testLayout size
 
 fitting :: SExpr -> Bool
 fitting = isJust . testLayout
@@ -86,19 +88,18 @@ performanceAnalysisRandom = do
     forM (zip exprs [1..]) $ \(e,i) -> do
       liftIO $ putStrLn $ "running bench " ++ show i
       (Analysed (Report { reportAnalysis = SampleAnalysis {anMean = dt}})) <-
-         runAndAnalyseOne i ("bench " ++ show i) (benchmark e)
+         runAndAnalyseOne i ("bench " ++ show i) (benchmark testLayout e)
       return (i,fromJust (testLayout e), dt)
   writeFile "benchmark-random.dat" $ show an
 
-performanceAnalysis :: IO ()
-performanceAnalysis = do
+performanceAnalysis testLayout = do
   putStrLn "performanceAnalysis..."
   putStrLn "If the program gets stuck now it is due to a bug in criterion. (It does not work on MacOS)"
   an <- C.withConfig C.defaultConfig $ do
     forM [1..16] $ \size -> do
       liftIO $ putStrLn $ "running for " ++ show size
       (Analysed (Report { reportAnalysis = SampleAnalysis {anMean = dt}})) <-
-         runAndAnalyseOne size ("bench " ++ show size) ((benchmark . testExpr) size)
+         runAndAnalyseOne size ("bench " ++ show size) ((benchmark testLayout . testExpr) size)
       return (size,fromJust (testLayout $ testExpr size), dt)
   writeFile dataFileName $ show an
 
@@ -121,11 +122,12 @@ main = do
   as <- getArgs
   case as of
     ["all"] -> do
-      performanceAnalysis
+      performanceAnalysis testLayout
       performanceAnalysisRandom
       performanceAnalysisRW "1k.json"
       performanceAnalysisRW "10k.json"
-    ["full"] -> performanceAnalysis
+    ["full"] -> performanceAnalysis testLayout
+    ["nodom"] -> performanceAnalysis testLayoutNoDom
     ["random"] -> performanceAnalysisRandom
     ["json", f] -> performanceAnalysisRW f
 

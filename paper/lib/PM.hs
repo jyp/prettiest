@@ -26,6 +26,18 @@ import Algebra.Classes
 import Control.Monad (forM_)
 import System.Random
 
+newtype NoDom = NoDom [M]
+
+instance Layout NoDom where
+  NoDom xs <> NoDom ys =  NoDom (concat [ filter valid [x <> y | y <- ys] | x <- xs])
+  flush (NoDom xs) = NoDom $ (map flush xs)
+  text s = NoDom (filter valid [text s])
+  render (NoDom xs) = render . minimum $ xs
+
+instance Doc NoDom  where
+  fail = NoDom []
+  NoDom xs <|> NoDom ys = NoDom (xs ++ ys)
+
 ($$) :: forall l. Layout l => l -> l -> l
 a $$ b = flush a <> b
 
