@@ -212,7 +212,7 @@ A pretty printer is a program that prints data structures in a way which
 makes them pleasant to read. (The data structures in question
 often represent programs, but not always.)
 Pretty printing has historically been used by members of the functional programming
-community to showcase proper style. Proeminent examples include, the pretty printer of @citet"hughes_design_1995",
+community to showcase proper style. Pro-eminent examples include, the pretty printer of @citet"hughes_design_1995",
 which remains an influential example of functional programming design, and that of
 @citet"wadler_prettier_2003" which was published as a chapter in a book dedicated to the @qu"fun of programming".
 
@@ -247,7 +247,7 @@ In the rest of the paper, we interpret the above three principles as an optimiza
 which solves it efficiently enough for practical purposes.
 
 Before diving into the details, a couple of methodological points. 
-First, Haskell is used throughout this paper in its quality the langua franca of functional programming pearls.
+First, Haskell is used throughout this paper in its quality the lingua franca of functional programming pearls.
 Yet, we make no essential use of laziness. Second, 
 the source code for the paper and benchmarks, as well as a fully fledged pretty printing library based on its principles is available
 online: @url«https://github.com/jyp/prettiest». A Haskell library based on the algorithm developed here
@@ -380,7 +380,7 @@ testData = SExpr [  SExpr [Atom "abcde", abcd4],
 »
 
 @fig_eighty<-figure_«
-Example expression printed on 80 columns. The first line is not part of the ouput, but it helps by showing column numbers.
+Example expression printed on 80 columns. The first line is not part of the output, but it helps by showing column numbers.
 »«
 @verbatim«
 12345678901234567890123456789012345678901234567890123456789012345678901234567890
@@ -398,7 +398,7 @@ with the smallest number of lines which still fits on the page among all the leg
 outputs described above.
 Thus on a 80-column-wide page, they demand the output
 displayed in @fig_eighty and
-on a 20-column-wide page, they demand the following output (the first line is not part of the ouput, but it helps by showing column numbers):
+on a 20-column-wide page, they demand the following output (the first line is not part of the output, but it helps by showing column numbers):
 Yet, neither Hughes' nor Wadler's library can deliver those results.
 
 @verbatim«
@@ -708,7 +708,7 @@ propFlush a b =  flush a <> flush b == flush (flush a <> b)
 »
 One might expect this law to hold instead:
 @spec«flush a <> flush b == flush (a <> b)»
-However, the inner @hask«flush» on @hask«b» goes back to the local indentation level, while the outer @hask«flush» goes back to the outer indentation level, which are equal only if @hask«a» ends with an empty line. In turn this condition is guaranteed only when @hask«a» is itself flushed on the rhs.
+However, the inner @hask«flush» on @hask«b» goes back to the local indentation level, while the outer @hask«flush» goes back to the outer indentation level, which are equal only if @hask«a» ends with an empty line. In turn this condition is guaranteed only when @hask«a» is itself flushed on the right-hand side.
 
 »]
 
@@ -775,7 +775,7 @@ propDistrFlush a b = flush (a <|> b) == flush a <|> flush b
 
 @subsection«Semantics»
 We can finally define formally what it means to render a document.
-We wrote above that prettiest layout is that the solution of the optimisation problem given
+We wrote above that prettiest layout is that the solution of the optimization problem given
 by combining all three principles. Namely, to pick a most frugal layout among the visible ones:
 @haskell«
   render =   render .  -- (for layouts)
@@ -831,7 +831,7 @@ Indeed, every possible combination of choices is first constructed, and only the
 picked. Thus, for an input with @ensureMath«n» choices, the running time is @tm«O(2^n)».
 
 
-@section«A More Efficient Implementation»
+@sec_optimization<-section«A More Efficient Implementation»
 The last chunk of work is to transform above, clearly correct but inefficient implementation
 to a functionally equivalent, but efficient one.
 We do so we need two insights.
@@ -1131,103 +1131,8 @@ instance Doc DM where
 »
 
 The above is the final, optimized version of the layout-computation algorithm.
-Its actual performance is evaluated in the next section.
 
-@sec_timings<-section«Performance tests»
-
-Precise timings were obtained by using O'Sullivan's @emph«criterion» benchmarking library,
-on an Intel Xeon E5-2640 v4 (running on a single core), using GHC 8.0.
-While @emph«criterion» provides confidence intervals, they are so thin that they
-are not visible at the scale of the plots, thus we have not attempted to render them.
-
-@subsection«Behaviour at scale»
-
-In order to benchmark our pretty printer on large outputs, we have used it to lay out
-full binary trees and random trees represented as S-Expressions.
-The set of layouts were given by using the pretty printer for S-Expressions
-shown above. The most efficient version of the pretty-printer which we described was used.
-Then we then measured the time to compute the length of the layout.
-The following plots use a double logarithmic scale and show the time taken against
-the @emph«number of lines of output». By using the number of lines rather than @hask«n»,
-we have a more reasonable measure of the amount of work to perform for each layout task.
-
-@paragraph«Full trees»
-
-S-expressions representing full binary trees of increasing depth were generated by the following function:
-
-@haskell«
-testExpr 0 = Atom "a"
-testExpr n = SExpr [testExpr (n-1),testExpr (n-1)]
-»
-
-(Computing the length is enough to force the computation of the best layout.)
-This benchmark heavily exercises the disjunction construct.  Indeed, let us compute the number of choices in
-printing @hask«testExpr n».
-For each SExpr with two
-sub-expressions, the printer introduces a choice, therefore the number of choices is equal to the number of nodes in a
-binary tree of depth @hask«n».
-Thus, for @hask«testExpr n» the pretty printer is offered @tm«2^n-1» choices,
-for a total of @tm«2^{2^n-1}» possible layouts to consider.
-
-We have run the layout algorithm for @hask«n» ranging from 1 to 16, and obtained the following results.
-
-@center«@performancePlotFull»
-As a preliminary we note that inputs for @hask«n»@tm«∈[0,1,2,3]» can all be printed on a single line,
-and thus these data points should be dismissed.
-
-Otherwise, the plot shows a behavior that tends to become linear when the output is large enough.
-
-For such large inputs approximately @(showFFloat (Just 2) regimeSpeed []) lines are laid out per second.
-(Data points exhibitting this speed lay on the straight line added to the plot.)
-
-We interpret this result as follows.
-Our pretty-printer essentially considers non-dominated layouts. If the input is sufficiently complex, this means to
-consider approximately one layout per possible width (@show(pageWidth) in our tests) --- when the width is given then the length and the width of last line are fixed.
-Therefore, the amount of work becomes independent of the number of disjunctions present in the input,
-and depends only on the amount of text to render.
-
-@paragraph«Random trees»
-
-One may wonder if the effect that we see is not specific to full trees.
-To control for this we can run the layout algorithm on random S-Expressions.
-Thus we run the same experiment on 50 random S-expressions of exponentially increasing length.
-These inputs were generated by picking random Dyck words of a certain length as follows:
-
-@haskell«
-randomDyck maxLen = go 0 0
-  where
-    go opened closed
-      | closed >= maxLen = return []
-      | opened >= maxLen = close
-      | closed >= opened = open
-      | otherwise = do
-          b <- randomIO
-          if b then open else close
-      where open  = (Open: ) <$> go (1+opened) closed
-            close = (Close:) <$> go opened (1+closed)
-»
-S-Expressions were obtained by interleaving parentheses with atoms.
-@center«@performancePlotRandom»
-The results corroborate those obtained for full trees:
-the observed running time is proportional to the length of the output.
-Furthermore the layout speed for random trees is roughly 10 times that of full trees.
-The straight line corresponding to this speed is shown for reference.
-
-@subsection«Tests for full outputs and typical inputs»
-
-Even though the asymptotic behaviour is satisfactory, one may wonder if the absolute running time
-on typical inputs is satisfactory. We do so by performing a complete pretty-printing, including
-not only the selection of the layout but its actual printing, using our complete
-library@footnote«@url«https://hackage.haskell.org/package/pretty-compact»». We performed the same
-tests using the Wadler-Leijen library and the Hughes-Peyton Jones library. The inputs were JSON
-files of 4k and 40k lines generated by the tool found at @url«http://www.json-generator.com/», which
-aims to generate typical JSON files. The results are displayed in @tbl_perf.
-@tbl_perf<-typicalPerfTable
-We observe that our library is capable of outputting roughly 70.000 lines of pretty-printed JSON
-per second, which is acceptable for many applications. This result makes our library
-roughly ten times as slow as that of Wadler-Leijen, and five times as slow as that of Hughes-Peyton Jones.
-
-@section«Discussion»
+@section«Additional features»
 To obtain a complete library from the above design,
 one should pay attention to a few more points that we discuss in this section.
 
@@ -1309,13 +1214,122 @@ valid' m = valid m && fitRibbon m
 
 This re-interpretation appears to fulfill the original goal as well.
 
+@sec_timings<-section«Performance tests»
+
+Having optimized our algorithm as best we could, we turn to empirical test to
+evaluate its performance.
+Our benchmarking tool is O'Sullivan's @emph«criterion» benchmarking library,
+which provides precise timings even for operations lasting less than a microsecond.
+All benchmarks we run on an Intel Xeon E5-2640 v4 (running on a single core), using GHC 8.0.
+
+@subsection«Behaviour at scale»
+
+In order to benchmark our pretty printer on large outputs, we have used it to lay out
+full binary trees and random trees, represented as S-Expressions.
+The set of layouts were computed using the pretty printer for S-Expressions
+shown above. The most efficient version of the pretty-printer (shown at the end of @sec_optimization) was used.
+Then we then measured the time to compute the length of the best layout.
+Indeed, computing the length is enough to force the computation of the best layout.
+The results are displayed in plots which uses a double logarithmic scale and show the time taken against
+the @emph«number of lines of output». By using the number of lines (rather than, say, the depth of the tree),
+we have a more reasonable measure of the amount of work to perform for each layout task.
+
+@paragraph«Full trees»
+
+S-expressions representing full binary trees of increasing depth were generated by the following function:
+
+@haskell«
+testExpr 0 = Atom "a"
+testExpr n = SExpr [testExpr (n-1),testExpr (n-1)]
+»
+
+Pretty-printing the generated S-expression heavily exercises the disjunction construct.
+Indeed, for each S-Expressions with two
+sub-expressions, the printer introduces a choice, therefore the number of choices is equal to the number of nodes in a
+binary tree of depth @hask«n».
+Thus, for @hask«testExpr n» the pretty printer is offered @tm«2^n-1» choices,
+for a total of @tm«2^{2^n-1}» possible layouts to consider.
+
+We have run the layout algorithm for @hask«n» ranging from 1 to 16, and obtained the following results.
+
+@center«@performancePlotFull»
+While @emph«criterion» provides confidence intervals, they are so thin that they
+are not visible at the scale of the plots, thus we have not attempted to render them.
+We observe that inputs for @hask«n»@tm«∈[0,1,2,3]» can all be printed on a single line,
+and thus these data points should be dismissed.
+
+Otherwise, the plot shows a behavior that tends to become linear when the output is large enough.
+
+For such large inputs approximately @(showFFloat (Just 2) regimeSpeed []) lines are laid out per second.
+(Data points exhibiting this speed lay on the straight line which we overlaid to the plot.)
+
+We interpret this result as follows.
+Our pretty-printer essentially considers non-dominated layouts. If the input is sufficiently complex, this means to
+consider approximately one layout per possible width (@show(pageWidth) in our tests) --- when the width is given then the length and the width of last line are fixed.
+Therefore, for sufficiently large outputs the amount of work becomes independent of the number of disjunctions present in the input,
+and depends only on the amount of text to render.
+
+@paragraph«Random trees»
+
+One may wonder if the effect that we observe is not specific to full trees.
+To control this hypothesis we ran the same experiment on 50 random S-expressions of exponentially increasing length.
+These S-expressions were generated by picking random Dyck words (using the @hask«» function shown below) of a certain length and then interleaving parentheses
+with atoms.
+@haskell«
+randomDyck maxLen = go 0 0 where
+    go opened closed
+      | closed >= maxLen = return []
+      | opened >= maxLen = close
+      | closed >= opened = open
+      | otherwise = do
+          b <- randomIO
+          if b then open else close
+      where  open  = (Open: ) <$> go (1+opened) closed
+             close = (Close:) <$> go opened (1+closed)
+»
+We obtained to following results:
+@center«@performancePlotRandom»
+The results corroborate those obtained for full trees:
+the observed running time is proportional to the length of the output.
+Furthermore the layout speed for random trees is roughly 10 times that of full trees;
+the straight line corresponding to this speed is shown for reference on the plot.
+
+A reviewer how the plots would look like if the elimination of dominated outputs was not activated.
+Unfortunately we could not produce more than four useful data points: the exponential behaviour of
+the algorithm meant that our test machine ran out of memory even for relatively simple outputs.
+Because an asymptotic behaviour can hardly be derived from so few points,
+we chose to omit the corresponding plot.
+@subsection«Tests for full outputs and typical inputs»
+
+Even though the asymptotic behaviour is linear, one may wonder if the constant factor is
+satisfactory for typical pretty-printing tasks. Thus we evaluated the performance of a
+complete pretty-printing task, including
+not only the selection of the layout but its actual printing. We did so using our complete
+library@footnote«@url«https://hackage.haskell.org/package/pretty-compact»». For reference, we performed the same
+tests using the Wadler-Leijen library and the Hughes-Peyton Jones library. The inputs were JSON
+files of 1k, 4k and 40k lines generated by the tool found at @url«http://www.json-generator.com/», which
+aims to generate typical JSON files. The results are displayed in @tbl_perf.
+@tbl_perf<-typicalPerfTable
+We observe that our library is capable of outputting roughly 70.000 lines of pretty-printed JSON
+per second, which is acceptable for many applications. This result makes our library
+roughly ten times as slow as that of Wadler-Leijen, and five times as slow as that of Hughes-Peyton Jones.
+
+
 @section«Conclusion»
-Using three informal principles, we have defined what a pretty printer is.
+
+As @citet"bird_algebra_1997", @citet"wadler_critique_1987", @citet"hughes_design_1995" and many
+others have argued, program calculation is a useful tool, and a strength of functional programming languages,
+with a large body of work showcasing it. Nevertheless, the problem of pretty-printing had not been
+contrived to fit the mold of program calculation, before becoming one of its paradigmatic applications.
+And thus, one could wonder if program calculation was only well-suited to derive greedy algorithm.
+We hope to have put such doubts to rest.
+
+Indeed, we have taken a critical look at the literature to re-define what pretty-printing means, as
+three informal principles.
 We have carefully refined this informal definition to a formal semantics (arguably simpler than that of the state of the art).
-We have avoided cutting corners, and thus could not obtain a greedy algorithm, but we still have
-derived a reasonably efficient implementation. Along the way,
-we have demonstrated how to use the standard functional programming methodology. The standard methodology worked well:
-we could use program calculation all the way.
+We avoided cutting any corner, and thus could not obtain a greedy algorithm, but we still have
+derived a reasonably efficient implementation.
+In the end, the standard methodology worked well: we could use program calculation all the way.
 
 @acknowledgements«Most of the work described in this paper was carried out while the author was employed by Chalmers University of Technology.
 Facundo Domingez, Atze van der Ploeg and Arnaud Spiwack as well as anonymous ICFP reviewers provided useful feedback on drafts of this paper.
@@ -1411,7 +1425,7 @@ all the elements in the frontier so far a re-examined, and thus @hask«pareto»
 has quadratic complexity.
 
 There is a better way, which involves keeping the lists sorted in lexicographical
-order. Then the pareto fronter has a more efficient implementation.
+order. Then the pareto frontier has a more efficient implementation.
 
 Because the input is lexicographically sorted, everything which is in
 the frontier can't be dominated by a new element. Indeed, the new
@@ -1440,7 +1454,7 @@ pareto' = loop [] where
                           else x:  loop (x:acc)  xs
 »
 
-In order to make use of the optimised Pareto frontier algorithm, we must then ensure that the operators preserve the lexicographically
+In order to make use of the optimized Pareto frontier algorithm, we must then ensure that the operators preserve the lexicographically
 sorted property. We need in particular the ability to merge sorted lists:
 
 @haskell«
@@ -1747,7 +1761,7 @@ footnote = cmd "footnote"
 --  LocalWords:  testOne testExpr SExpr dataFileName FilePath dat sz
 --  LocalWords:  pageWidth performanceData readFile estLowerBound dt
 --  LocalWords:  estPoint estUpperBound measTime regimeSpeed nlines
---  LocalWords:  fromIntegral putStrLn withConfig
+--  LocalWords:  fromIntegral putStrLn withConfig Wno newtype NoDom
 --  LocalWords:  defaultConfig liftIO Analysed reportAnalysis anMean
 --  LocalWords:  writeFile performanceTable rrr performancePoints sho
 --  LocalWords:  performanceBars scatterWithErrors PlotCanvas showDot
@@ -1762,15 +1776,24 @@ footnote = cmd "footnote"
 --  LocalWords:  Leijen ocaml notSoPretty emph pcp api Expr abcd hask
 --  LocalWords:  ing hsep vcat foldr sep testData abcde abcdefgh Daan
 --  LocalWords:  listElement Leijen's compositional xxxxxxxxxxxxx Ord
---  LocalWords:  yyyyyyyyyyyyyyyyyyyyy xxxxxxxxx xxxxxxxxxxxx yyyy
+--  LocalWords:  yyyyyyyyyyyyyyyyyyyyy xxxxxxxxx xxxxxxxxxxxx yyyy OC
 --  LocalWords:  yyyyyyyyyyyyyyyyyyyyyyyyyyyyy xxxxxx horizCat init
 --  LocalWords:  xxxxxxyyyyyyyyyyyyyyyyyyyyy Algorithmically enumList
---  LocalWords:  leftUnit rightUnit disj citep mcbride applicative
+--  LocalWords:  leftUnit rightUnit disj citep mcbride applicative PJ
 --  LocalWords:  fmap distrl distrr distrflush mostFrugal TODO commut
 --  LocalWords:  compositionally showSExpr singleLayoutDiag lastWidth
---  LocalWords:  maxWidth lem ctx concretize Poset acc
+--  LocalWords:  maxWidth lem ctx concretize Poset acc usepkg toprule
 --  LocalWords:  antisymmetric monotonicity inequation pareto concat
 --  LocalWords:  O'Sullivan's benchmarking disjunctions snd fst Atze
---  LocalWords:  sublayout fitRibbon ribbonLength acknowledgements
+--  LocalWords:  sublayout fitRibbon ribbonLength acknowledgements sc
 --  LocalWords:  Facundo Domingez der Ploeg Arnaud Spiwack QuickSpec
---  LocalWords:  Smallbone onecolumn
+--  LocalWords:  Smallbone onecolumn booktabs mkcols midrule mkrows
+--  LocalWords:  SortedLabel typicalPerfTable JSON lrrr fname xform
+--  LocalWords:  typicalPerfData outerBox scatterPlot xaxisLab xpart
+--  LocalWords:  yaxisLab ypart hdist topOf performancePlotFull url
+--  LocalWords:  performancePlotRandom natbib foldDoc propLeftUnit
+--  LocalWords:  vspace propRightUnit propAssoc propTextAppend Xeon
+--  LocalWords:  propTextEmpty propFlush propDisjAssoc propDistrL tbl
+--  LocalWords:  combinatorially propDistrR propDistrFlush mathnormal
+--  LocalWords:  propDisjCommut Dyck dyck randomDyck maxLen randomIO
+--  LocalWords:  perf ICFP runtimes lexicographically mergeAll
