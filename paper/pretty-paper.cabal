@@ -29,6 +29,7 @@ Library
   hs-source-dirs: lib
 
 executable paper
+        ghc-options: -O0
         build-depends:
                      pretty-paper,
                      base,

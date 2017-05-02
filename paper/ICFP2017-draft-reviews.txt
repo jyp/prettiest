@@ -519,12 +519,12 @@ Added
 > to have been written in rather a hurry at the last minute.  This
 > needs to be expanded to a proper conclusion.
 
-TODO
+Expanded to frame the paper in a more general background.
 
 > p18, The appendix should be omitted in the published version, as it
 > doesn't add much that most readers would be interested in.
 
-TODO
+To be discussed with the editors.
 
 > ===========================================================================
 >                            ICFP 2017 Review #1C
