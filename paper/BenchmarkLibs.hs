@@ -111,5 +111,6 @@ testLibs = do
 
 -- Local Variables:
 -- dante-project-root: "~/repo/prettiest/paper"
+-- dante-target: "bench"
 -- dante-repl-command-line: ("nix-shell" "../.styx/shell.nix" "--run" "cabal --sandbox-config-file=../cabal.sandbox.config repl --only bench")
 -- End:

@@ -103,18 +103,20 @@ performanceAnalysis testLayout = do
       return (size,fromJust (testLayout $ testExpr size), dt)
   writeFile dataFileName $ show an
 
-performanceAnalysisRW :: String -> IO ()
-performanceAnalysisRW fname = do
+performanceAnalysisJSON = performanceAnalysisRW [(pcTest,"PC"), (wlTest,"WL"), (hpjTest,"HPJ")] ["1k.json","4k.json","10k.json"]
+
+performanceAnalysisRW tests fnames = do
   putStrLn "performanceAnalysisRW..."
   putStrLn "If the program gets stuck now it is due to a bug in criterion. (It does not work on MacOS)"
   an <- C.withConfig C.defaultConfig $ do
-    forM [(pcTest,"PC"), (wlTest,"WL"), (hpjTest,"HPJ")] $ \(f,name) -> do
-      liftIO $ putStrLn $ "running for " ++ name
-      j <- liftIO $ readJSONValue fname
-      (Analysed (Report { reportAnalysis = SampleAnalysis {anMean = dt}})) <-
-         runAndAnalyseOne 7 ("bench " ++ fname ++ name) ((\x -> nf f x) j)
-      return (name, dt)
-  writeFile "rw-4kjson.dat" $ show an
+    forM fnames $ \fname -> do
+      forM tests $ \(f,name) -> do
+        liftIO $ putStrLn $ "running for " ++ name
+        j <- liftIO $ readJSONValue fname
+        (Analysed (Report { reportAnalysis = SampleAnalysis {anMean = dt}})) <-
+           runAndAnalyseOne 7 ("bench-" ++ fname ++ name) ((\x -> nf f x) j)
+        return (name, dt)
+  writeFile "perf.dat" $ show an
 
 
 main :: IO ()
@@ -124,12 +126,12 @@ main = do
     ["all"] -> do
       performanceAnalysis testLayout
       performanceAnalysisRandom
-      performanceAnalysisRW "1k.json"
-      performanceAnalysisRW "10k.json"
+      performanceAnalysisJSON
     ["full"] -> performanceAnalysis testLayout
     ["nodom"] -> performanceAnalysis testLayoutNoDom
     ["random"] -> performanceAnalysisRandom
-    ["json", f] -> performanceAnalysisRW f
+    ["json", f] -> performanceAnalysisJSON 
+    -- ["xml", f] -> performanceAnalysisXML f
 
 -- Local Variables:
 -- dante-project-root: "~/repo/prettiest/paper"
