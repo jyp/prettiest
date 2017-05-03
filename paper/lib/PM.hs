@@ -64,7 +64,7 @@ table caption body = env "table" $ do
 
 
 typicalPerfTable :: Tex SortedLabel
-typicalPerfTable = table "Performance on typical JSON data" (tabular' [] "lrrr" typicalPerfData)
+typicalPerfTable = table "Pretty-printing times (in milliseconds) for typical JSON data, using various libraries" (tabular' [] "lrrr" typicalPerfData)
 
 typicalPerfData :: [[TeX]]
 typicalPerfData = [["Input", "Ours", "Wadler-Leijen", "Hughes-PJ"]
