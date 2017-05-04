@@ -4,21 +4,7 @@
 
 module BenchmarkXML where
 
-import Control.Monad (ap, forM, forM_)
-import Control.Monad.IO.Class
-import Criterion (nf)
-import Criterion.Internal (runAndAnalyseOne)
-import Criterion.Types (DataRecord(..), Report(..), SampleAnalysis(..), Benchmarkable)
-import Statistics.Resampling.Bootstrap (Estimate(..))
-import System.Random
-import qualified Criterion.Main.Options as C
-import qualified Criterion.Monad as C
-import Data.Maybe
-
 import qualified Text.PrettyPrint.Compact as PC
-import qualified Data.HashMap.Lazy as H
-import qualified Data.Text as T
-import Data.Foldable (toList)
 import qualified Text.PrettyPrint.Leijen as WL
 import qualified Text.PrettyPrint.HughesPJ as HPJ
 import Data.Monoid
@@ -42,56 +28,61 @@ pcContent (Elem e) = pcXML e
 pcContent (Text CData{..}) = PC.text cdData
 pcContent (CRef r) = PC.text r
 
--- prettiestXML :: Value -> PC.Doc
--- prettiestXML (Bool True) = PC.text "true"
--- prettiestXML (Bool False) = PC.text "false"
--- prettiestXML (Object o) = PC.encloseSep (PC.text "{") (PC.text "}") (PC.text ",") (map prettyKV $ H.toList o)
---   where prettyKV (k,v) = PC.text (show k) PC.<> PC.text ":" PC.<+> prettiestXML v
--- prettiestXML (String s) = PC.string (show s)
--- prettiestXML (Array a) =  PC.encloseSep (PC.text "[") (PC.text "]") (PC.text ",") (map prettiestXML $ toList a)
--- prettiestXML Null = PC.mempty
--- prettiestXML (Number n) = PC.text (show n)
+wlXML :: Element -> WL.Doc
+wlXML Element{..} =
+  WL.encloseSep
+    (WL.encloseSep (WL.text "<" WL.<> WL.text (qName elName)) (WL.text ">")
+      (WL.text " ") (map wlAttrib (elAttribs)))
+    WL.empty
+    (WL.text "</" WL.<> WL.text (qName elName) WL.<> WL.text ">")
+    (map wlContent elContent)
 
--- wlXML :: Value -> WL.Doc
--- wlXML (Bool True) = WL.text "true"
--- wlXML (Bool False) = WL.text "false"
--- wlXML (Object o) = WL.encloseSep (WL.text "{") (WL.text "}") (WL.text ",") (map prettyKV $ H.toList o)
---   where prettyKV (k,v) = WL.text (show k) WL.<> WL.text ":" WL.<+> wlXML v
--- wlXML (String s) = WL.string (show s)
--- wlXML (Array a) =  WL.encloseSep (WL.text "[") (WL.text "]") (WL.text ",") (map wlXML $ toList a)
--- wlXML Null = WL.empty
--- wlXML (Number n) = WL.text (show n)
+wlAttrib :: Attr -> WL.Doc
+wlAttrib Attr{..} = WL.text (qName attrKey) WL.<> WL.text "=" WL.<> WL.text (show attrVal)
 
--- hpjEncloseSep :: HPJ.Doc -> HPJ.Doc -> HPJ.Doc -> [HPJ.Doc] -> HPJ.Doc
--- hpjEncloseSep open close sep list = open HPJ.<> HPJ.sep (HPJ.punctuate sep list) HPJ.<> close
+wlContent :: Content -> WL.Doc
+wlContent (Elem e) = wlXML e
+wlContent (Text CData{..}) = WL.text cdData
+wlContent (CRef r) = WL.text r
 
--- hpjXML :: Value -> HPJ.Doc
--- hpjXML (Bool True) = HPJ.text "true"
--- hpjXML (Bool False) = HPJ.text "false"
--- hpjXML (Object o) = hpjEncloseSep (HPJ.text "{") (HPJ.text "}") (HPJ.text ",") (map prettyKV $ H.toList o)
---   where prettyKV (k,v) = HPJ.text (show k) HPJ.<> HPJ.text ":" HPJ.<+> hpjXML v
--- hpjXML (String s) = HPJ.text (show s)
--- hpjXML (Array a) =  hpjEncloseSep (HPJ.text "[") (HPJ.text "]") (HPJ.text ",") (map hpjXML $ toList a)
--- hpjXML Null = HPJ.empty
--- hpjXML (Number n) = HPJ.text (show n)
+hpjEncloseSep :: HPJ.Doc -> HPJ.Doc -> HPJ.Doc -> [HPJ.Doc] -> HPJ.Doc
+hpjEncloseSep open close sep list = open HPJ.<> HPJ.sep (HPJ.punctuate sep list) HPJ.<> close
 
-pcTest{-, wlTest, hpjTest-} :: Element -> String
+hpjXML :: Element -> HPJ.Doc
+hpjXML Element{..} =
+  hpjEncloseSep
+    (hpjEncloseSep (HPJ.text "<" HPJ.<> HPJ.text (qName elName)) (HPJ.text ">")
+      (HPJ.text " ") (map hpjAttrib (elAttribs)))
+    HPJ.empty
+    (HPJ.text "</" HPJ.<> HPJ.text (qName elName) HPJ.<> HPJ.text ">")
+    (map hpjContent elContent)
+
+hpjAttrib :: Attr -> HPJ.Doc
+hpjAttrib Attr{..} = HPJ.text (qName attrKey) HPJ.<> HPJ.text "=" HPJ.<> HPJ.text (show attrVal)
+
+hpjContent :: Content -> HPJ.Doc
+hpjContent (Elem e) = hpjXML e
+hpjContent (Text CData{..}) = HPJ.text cdData
+hpjContent (CRef r) = HPJ.text r
+
+pcTest, wlTest, hpjTest :: Element -> String
 pcTest = PC.render . pcXML
--- wlTest inpXml = WL.displayS (WL.renderPretty 1 80 (wlXML inpXml)) ""
--- hpjTest = HPJ.render . hpjXML
+wlTest inpXml = WL.displayS (WL.renderPretty 1 80 (wlXML inpXml)) ""
+hpjTest = HPJ.render . hpjXML
 
+readXMLValue :: String -> IO Element
 readXMLValue fname = do
   inptxt <- readFile fname
-  return $ case parseXMLDoc inptxt of
+  case parseXMLDoc inptxt of
     Just x -> return x
     Nothing -> error "XML Parse error"
 
 testLibs :: IO ()
 testLibs = do
-  Right inpXml <- readXMLValue "benchdata/cds.xml"
+  inpXml <- readXMLValue "benchdata/cds.xml"
   putStrLn $ pcTest inpXml
-  -- putStrLn $ WL.displayS (WL.renderPretty 1 80 (wlXML inpXml)) ""
-  -- putStrLn $ HPJ.render $ hpjXML $ inpXml
+  putStrLn $ WL.displayS (WL.renderPretty 1 80 (wlXML inpXml)) ""
+  putStrLn $ HPJ.render $ hpjXML $ inpXml
 
 {-> testLibs
 
