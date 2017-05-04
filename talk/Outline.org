@@ -15,32 +15,199 @@
   - lack of "hang" feature
 
 
-* What do you want really?
+(a b c d)
 
-* Asimov Laws of Robotics
+or
+
+(a
+ b
+ c
+ d)
+
+* Hughes
+
+12345678901234567890
+
+((abcde ((a b c d)
+         (a b c d)
+         (a b c d)
+         (a b c d)
+         (a b c d)))
+ (abcdefgh ((a
+             b
+             c
+             d)
+            (a
+             b
+             c
+             d)
+            (a
+             b
+             c
+             d)
+            (a
+             b
+             c
+             d)
+            (a
+             b
+             c
+             d))))
+
+* Wadler
+
+12345678901234567890
+
+((abcde
+  ((a b c d)
+   (a b c d)
+   (a b c d)
+   (a b c d)
+   (a b c d)))
+ (abcdefgh
+  ((a b c d)
+   (a b c d)
+   (a b c d)
+   (a b c d)
+   (a b c d))))
 
 
-* My laws of pretty-printing
-  1.
-  2.
-  3.
+* Not happy
+
+- I am not happy with any of the above
+- What do I really want?
+
+((abcde ((a b c d)
+         (a b c d)
+         (a b c d)
+         (a b c d)
+         (a b c d)))
+ (abcdefgh
+  ((a b c d)
+   (a b c d)
+   (a b c d)
+   (a b c d)
+   (a b c d))))
+
+
+* Asimov Laws of Robotics (paraphrased)
+1. A robot shall not harm humans
+2. A robot shall follow human orders
+3. A robot shall not destroy itself
+
+* My laws of pretty-printing (paraphrased)
+1. A pretty-printer shall not print beyond the right margin
+2. A pretty-printer shall reveal the structure of the input
+3. A pretty-printer shall use as few lines as possible
 
 1 and 3 are ok; but what about 2?
 
 * Describing legible layouts
 
-API
+class Layout l where
+  (<>)    :: l -> l -> l
+  text    :: String -> l
+  flush   :: l -> l
+  render  :: l -> String
+
+class Layout d => Doc d where
+  (<|>) :: d -> d -> d
+  fail :: d
+
+* Example:
+
+#+BEGIN_SRC haskell
+data SExpr = SExpr [SExpr] | Atom String
+  deriving Show
+#+END_SRC
+
+#+BEGIN_SRC haskell
+pretty :: Doc d => SExpr -> d
+pretty  (Atom s)    = text s
+pretty  (SExpr xs)  =   text "(" <>
+                        (sep $ map pretty xs) <>
+                        text ")"
+
+sep :: Doc d => [d] -> d
+sep []  = empty
+sep xs  = hsep xs <|> vcat xs
+
+hsep,vcat :: Doc d => [d] -> d
+vcat  = foldDoc ($$)
+hsep  = foldDoc (<+>)
+
+foldDoc :: Doc d => (d -> d -> d) -> [d] -> d
+foldDoc _ []      = empty
+foldDoc _ [x]     = x
+foldDoc f (x:xs)  = f x (foldDoc f xs)
+#+END_SRC
 
 * Semantics
 
-* FAST!
+#+BEGIN_SRC haskell
+type L = [String] -- non empty.
+
+instance Layout L where
+  render :: L -> String
+  render = intercalate "\n"
+  text :: String -> L
+  text s = [s]
+  (<>) :: L -> L -> L
+  xs <> (y:ys) = xs0 ++ [x ++ y] ++ map (indent ++) ys
+     where  xs0 = init xs
+            x :: String
+            x = last xs
+            n = length x
+            indent = replicate n ' '
+  flush :: L -> L
+  flush xs = xs ++ [""]
+
+xs $$ ys = flush xs <> ys
+#+END_SRC
+
+#+BEGIN_SRC haskell
+instance Layout [L] where
+  text = pure . text
+  flush = fmap flush
+  xs <> ys = (<>) <$> xs <*> ys
+
+instance Doc [L] where
+  xs <|> ys = (xs ++ ys)
+  fail = []
+#+END_SRC
+
+* Performance
+
+Abyssal performance: every choice induces two layouts. No hope to
+print any document with any reasonable amount of disjunction
 
 * The useful parts
+The choice of layout depends only on 3 parameters: width, height and lastWidth
+
+-- diagram
 
 * Domination
 
-* Results
+a dominates b iff. a is smaller in all three dimensions
+
+If a dominates b, then for any context ctx, ctx a dominates ctx b
+
+So, we can at any point discard all dominated layouts from the set of
+possible layouts.
+
+* Experimental Results (asymptotic)
+
+two curves
+
+* Experimental Results (absolute)
+
+one table
 
 * Conclusion
 
-
+- Pretty-printing is not suited to greedy approach
+- Yet, Hughes, Wadler went for a greedy algorithm.
+- I suspect that they had a solution in mind *before* they start their
+  program derivation.
+- Attempt to do a more realistic FP pearl: bridge the gap between what
+  actually goes on in programming (graphical models) and program calculation
