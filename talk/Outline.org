@@ -1,0 +1,46 @@
+* Intro
+
+- Typesetting is non-local (if you change something towards the
+  beginning it may have effects way down the document)
+- Typesetting is critically sensitive to small changes: every saved line counts
+
+--> greedy typesetting algorithms are (as best) difficult to realise
+
+* Pretty-printing pearls: "state of the art"
+
+- Hughes: can waste tremendous amount of space by making a wrong early choice
+
+- Wadler:
+  - will consistently waste space
+  - lack of "hang" feature
+
+
+* What do you want really?
+
+* Asimov Laws of Robotics
+
+
+* My laws of pretty-printing
+  1.
+  2.
+  3.
+
+1 and 3 are ok; but what about 2?
+
+* Describing legible layouts
+
+API
+
+* Semantics
+
+* FAST!
+
+* The useful parts
+
+* Domination
+
+* Results
+
+* Conclusion
+
+
