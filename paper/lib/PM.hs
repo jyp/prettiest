@@ -254,7 +254,7 @@ In the rest of the paper, we interpret the above three principles as an optimiza
 which solves it efficiently enough for practical purposes.
 
 Before diving into the details, a couple of methodological points. 
-First, Haskell is used throughout this paper in its quality the lingua franca of functional programming pearls.
+First, Haskell is used throughout this paper in its quality of @emph«lingua franca» of functional programming pearls.
 Yet, we make no essential use of laziness. Second, 
 the source code for the paper and benchmarks, as well as a fully fledged pretty printing library based on its principles is available
 online: @url«https://github.com/jyp/prettiest». A Haskell library based on the algorithm developed here
@@ -1300,15 +1300,15 @@ the observed running time is proportional to the length of the output.
 Furthermore the layout speed for random trees is roughly 10 times that of full trees;
 the straight line corresponding to this speed is shown for reference on the plot.
 
-A reviewer how the plots would look like if the elimination of dominated outputs was not activated.
-Unfortunately we could not produce more than four useful data points: the exponential behaviour of
-the algorithm meant that our test machine ran out of memory even for relatively simple outputs.
-Because an asymptotic behaviour can hardly be derived from so few points,
-we chose to omit the corresponding plot.
+One may wonder how the elimination of dominated outputs impacts the performance.
+Unfortunately we could not produce more than four useful data points when keeping
+dominated outputs. Indeed
+the algorithm remains exponential, and thus our test machine ran out of memory even for relatively simple outputs.
+Because a plot with so so few points make little sense, we omit it.
 @subsection«Tests for full outputs and typical inputs»
 
-Even though the asymptotic behaviour is linear, one may wonder if the constant factor is
-satisfactory for typical pretty-printing tasks. Thus we evaluated the performance of a
+Even though the asymptotic behaviour of the optimized algorithm is linear, one may wonder if its absolute performance is
+satisfactory for typical pretty-printing tasks. Thus we evaluated a
 complete pretty-printing task, including
 not only the selection of the layout but its actual printing. We did so using our complete
 library@footnote«@url«https://hackage.haskell.org/package/pretty-compact»». For reference, we performed the same
@@ -1519,7 +1519,7 @@ then we must have:
 
 @hask«M (h1+h2) (lw1+lw2) (max mw1 (mw2 + lw1)) <= M (h1+h2') (lw1+lw2') (max mw1 (mw2' + lw1))»
 
-This last condition is satisfied iff.:
+This last condition is satisfied if and only if
 
 @spec«
 h1+h2 <  h1+h2'                               or
@@ -1527,7 +1527,7 @@ h1+h2 == h1+h2'  and  lw1+lw2 <  lw1+lw2'     or
 h1+h2 == h1+h2'  and  lw1+lw2 == lw1+lw2'
                  and max mw1 (lw1+mw2) <=  max mw1 (lw1+mw2')»
 
-All but the last sub-condition follows the struture of the hypothesis, and thus is satisfied.
+All but the last sub-condition follows the structure of the hypothesis, and thus is satisfied.
 To deal with the that last bit (@hask«max mw1 (lw1+mw2) <=  max mw1 (lw1+mw2')»), we do a case analysis.
 
 
@@ -1800,9 +1800,17 @@ footnote = cmd "footnote"
 --  LocalWords:  SortedLabel typicalPerfTable JSON lrrr fname xform
 --  LocalWords:  typicalPerfData outerBox scatterPlot xaxisLab xpart
 --  LocalWords:  yaxisLab ypart hdist topOf performancePlotFull url
---  LocalWords:  performancePlotRandom natbib foldDoc propLeftUnit
+--  LocalWords:  performancePlotRandom natbib foldDoc propLeftUnit de
 --  LocalWords:  vspace propRightUnit propAssoc propTextAppend Xeon
 --  LocalWords:  propTextEmpty propFlush propDisjAssoc propDistrL tbl
 --  LocalWords:  combinatorially propDistrR propDistrFlush mathnormal
 --  LocalWords:  propDisjCommut Dyck dyck randomDyck maxLen randomIO
---  LocalWords:  perf ICFP runtimes lexicographically mergeAll
+--  LocalWords:  perf ICFP runtimes lexicographically mergeAll lingua
+--  LocalWords:  setcitestyle authoryear franca monomorphized ity lw
+--  LocalWords:  umulated mw groupBy lineHeight abstrLayout noDraw xp
+--  LocalWords:  abstractLayoutJoin boundingBox asse dblarrow OVector
+--  LocalWords:  endTip ToTip startTip autoLabelObj rectangleShape yp
+--  LocalWords:  hruler gruler vruler rulersOfLayout heightRule eq
+--  LocalWords:  leftOf mwRule lwRule twoLayouts lightgray showRulers
+--  LocalWords:  lhsObjs abSep uncurry lhsObjsExtra rhsObjsExtra hTot
+--  LocalWords:  mwTot
