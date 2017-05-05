@@ -69,8 +69,10 @@ typicalPerfTable = table "Pretty-printing times (in milliseconds) for typical JS
 typicalPerfData :: [[TeX]]
 typicalPerfData = [["Input", "Ours", "Wadler-Leijen", "Hughes-PJ"]
                    ,["JSON 1k", "9.7", "1.5", "3.0"]
-                   ,["JSON 4k", "48.6", "6.3", "12.4"]
-                   ,["JSON 10k", "145.5", "14.8", "30.0"]]
+                   ,["JSON 10k", "145.5", "14.8", "30.0"],
+                   ,["XML 1k", "20.0", "3.2", "11.9"]
+                   ,["XML 10k", "245.0", "36.1", "192.0"],
+                   ]
 
 
 testExpr :: Int -> SExpr
