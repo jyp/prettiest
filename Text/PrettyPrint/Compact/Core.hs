@@ -3,7 +3,7 @@ module Text.PrettyPrint.Compact.Core(Layout(..),Document(..),Doc) where
 
 import Data.List (sort,groupBy,intercalate,minimumBy)
 import Data.Function (on)
-import Data.Monoid
+import Data.Semigroup
 import Data.Sequence (singleton, Seq, viewl, viewr, ViewL(..), ViewR(..), (|>))
 import Data.String
 import Data.Foldable (toList)
@@ -11,11 +11,14 @@ import Data.Foldable (toList)
 newtype L = L (Seq String) -- non-empty sequence
   deriving (Eq,Ord,Show)
 
-instance Monoid L where
-   mempty = L (singleton "")
-   L (viewr -> xs :> x) `mappend` L (viewl -> y :< ys) = L (xs <> singleton (x ++ y) <> fmap (indent ++) ys)
+instance Semigroup L where
+   L (viewr -> xs :> x) <> L (viewl -> y :< ys) = L (xs <> singleton (x ++ y) <> fmap (indent ++) ys)
       where n = length x
             indent = Prelude.replicate n ' '
+
+instance Monoid L where
+   mempty = L (singleton "")
+   mappend = (<>)
 
 instance Layout L where
    render (L xs) = intercalate "\n" $ toList xs
@@ -37,12 +40,15 @@ data M = M {height    :: Int,
             }
   deriving (Show,Eq,Ord)
 
-instance Monoid M where
-  mempty = text ""
-  a `mappend` b =
+instance Semigroup M where
+  a <> b =
     M {maxWidth = max (maxWidth a) (maxWidth b + lastWidth a),
        height = height a + height b,
        lastWidth = lastWidth a + lastWidth b}
+  
+instance Monoid M where
+  mempty = text ""
+  mappend = (<>)
 
 instance Layout M where
   text s = M {height = 0, maxWidth = length s, lastWidth = length s}
@@ -86,13 +92,16 @@ pareto' acc (x:xs) = if any (≺ x) acc
 newtype Doc = MkDoc [(M,L)] -- list sorted by lexicographic order for the first component
   deriving Show
 
-instance Monoid Doc where
-  mempty = text ""
-  MkDoc xs `mappend` MkDoc ys = MkDoc $ bests [ quasifilter (fits . fst) [x <> y | y <- ys] | x <- xs]
+instance Semigroup Doc where
+  MkDoc xs <> MkDoc ys = MkDoc $ bests [ quasifilter (fits . fst) [x <> y | y <- ys] | x <- xs]
     where quasifilter p xs = let fxs = filter p xs
                              in if null fxs
                                 then [minimumBy (compare `on` (maxWidth . fst)) xs]
                                 else fxs
+
+instance Monoid Doc where
+  mempty = text ""
+  mappend = (<>)
 
 fits :: M -> Bool
 fits x = maxWidth x <= 80
