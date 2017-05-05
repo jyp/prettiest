@@ -679,7 +679,7 @@ class Layout l where
   render  :: l -> String
 »
 Additionally, as mentioned above, layouts follow a number of algebraic
-laws, (written here as QuickCheck properties@footnote«These properties can (and were) checked when properly monomorphized using
+laws, (written here as QuickCheck properties@footnote«These properties can be (and were) checked when properly monomorphized using
 either of the concrete implementations provided later. The same applies for all properties stated in the paper.»):
 
 @enumList[
@@ -781,14 +781,14 @@ propDistrFlush a b = flush (a <|> b) == flush a <|> flush b
 
 @subsection«Semantics»
 We can finally define formally what it means to render a document.
-We wrote above that prettiest layout is that the solution of the optimization problem given
+We wrote above that the prettiest layout is the solution of the optimization problem given
 by combining all three principles. Namely, to pick a most frugal layout among the visible ones:
 @haskell«
   render =   render .  -- (for layouts)
              mostFrugal .
              filter visible
 »
-Note that the call to @hask«render» in the above is for the @hask«L» instance.
+Note that the call to @hask«render» in the above that of the @hask«L» instance.
 The rest of the above definition breaks down as follows.
 @pcp_visibility is formalized by the @hask«visible» function, which states that all lines must fit on the page:
 @haskell«
@@ -838,7 +838,7 @@ picked. Thus, for an input with @ensureMath«n» choices, the running time is @t
 
 
 @sec_optimization<-section«A More Efficient Implementation»
-The last chunk of work is to transform above, clearly correct but inefficient implementation
+The last chunk of work is to transform the above, clearly correct but inefficient implementation
 to a functionally equivalent, but efficient one.
 We do so we need two insights.
 
@@ -890,7 +890,7 @@ The other layout combinators are easy to implement:
 »
 
 We can even give a rendering for these abstract layouts, by printing an @teletype«x» at each
-occupied position, completing the class instance:
+occupied position, thereby completing the class instance:
 @haskell«
   render m = intercalate "\n"
       (replicate (height m) (replicate (maxWidth m) 'x') ++
@@ -1098,7 +1098,9 @@ a <= b ∧ c <= d   =>  max a c <= max b d
 
 
 @subsection«Pareto frontier»
-The subset of non-dominated elements is known as the Pareto frontier @citep"deb_multi_2016".
+We know by now that in any set of possible layouts, it is sufficent to consider the subset of non-dominated
+layouts.
+This subset is known as the Pareto frontier @citep"deb_multi_2016" and has the following definition.
 @definition«Pareto frontier»«
 @tm«\mathnormal{Pareto}(X) = \{ x∈X | ¬∃y∈X. x ≠ y ∧ y ≺ x\}»
 »
@@ -1107,10 +1109,9 @@ When sets are represented as lists without duplicates, the Pareto frontier can b
 pareto :: Poset a => [a]  -> [a]
 pareto = loop []
   where  loop acc  []      = acc
-         loop acc  (x:xs)  =
-            if any (≺ x) acc
-               then  loop acc xs
-               else  loop (x:filter (not . (x ≺)) acc) xs
+         loop acc  (x:xs)  = if  any (≺ x) acc
+                                 then  loop acc xs
+                                 else  loop (x:filter (not . (x ≺)) acc) xs
 »
 
 The above @hask«loop» function examines elements sequentially, and keeps a Pareto frontier
@@ -1125,9 +1126,8 @@ The implementation of the pretty-printing combinators then becomes:
 type DM = [M]
 
 instance Layout DM where
-  xs <> ys =  pareto $ concat
-              [ filter valid [x <> y | y <- ys] | x <- xs]
-  flush xs = pareto $ (map flush xs)
+  xs <> ys =  pareto (concat [ filter valid [x <> y | y <- ys] | x <- xs])
+  flush xs = pareto (map flush xs)
   text s = filter valid [text s]
   render = render . minimum
 
@@ -1161,8 +1161,7 @@ instance Layout (M,L) where
   render = render . snd
 
 instance Layout [(M,L)] where
-  xs <> ys =  pareto $ concat
-              [ filter (valid . fst) [x <> y | y <- ys] | x <- xs]
+  xs <> ys =  pareto $ concat [ filter (valid . fst) [x <> y | y <- ys] | x <- xs]
   flush xs = pareto $ (map flush xs)
   text s = filter (valid . fst) [text s]
   render = render . minimumBy (compare `on` fst)
@@ -1184,7 +1183,7 @@ hang :: Doc d => Int -> d -> d -> d
 hang n x y = (x <> y) <|> (x $$ nest n y)
 »
 
-In this context, nesting occurs on the right-hand-side of vertical concatenation, and thus its semantics is much simpler. In fact,
+In this context, nesting occurs on the right-hand-side of vertical concatenation, and thus its semantics can be simplified. In fact,
 in the context of @hask«hang»,
 it can be implemented easily in terms of the combinators provided so far:
 
@@ -1226,7 +1225,7 @@ Having optimized our algorithm as best we could, we turn to empirical test to
 evaluate its performance.
 Our benchmarking tool is O'Sullivan's @emph«criterion» benchmarking library,
 which provides precise timings even for operations lasting less than a microsecond.
-All benchmarks we run on an Intel Xeon E5-2640 v4 (running on a single core), using GHC 8.0.
+All benchmarks ran on a single core of an Intel Xeon E5-2640 v4, using GHC 8.0.
 
 @subsection«Behaviour at scale»
 
@@ -1301,10 +1300,9 @@ Furthermore the layout speed for random trees is roughly 10 times that of full t
 the straight line corresponding to this speed is shown for reference on the plot.
 
 One may wonder how the elimination of dominated outputs impacts the performance.
-Unfortunately we could not produce more than four useful data points when keeping
-dominated outputs. Indeed
-the algorithm remains exponential, and thus our test machine ran out of memory even for relatively simple outputs.
-Because a plot with so so few points make little sense, we omit it.
+In fact, in this configuration
+the algorithm has an exponential behaviour, and thus our test machine ran out of memory even for relatively simple outputs.
+Thus we could not produce more than four useful data points, and thus omitted the corresponding plot.
 @subsection«Tests for full outputs and typical inputs»
 
 Even though the asymptotic behaviour of the optimized algorithm is linear, one may wonder if its absolute performance is
@@ -1320,24 +1318,25 @@ The results are displayed in @tbl_perf.
 We observe that our library is capable of outputting roughly 70.000 lines of pretty-printed JSON
 per second. Its speed is roughly 40.000 lines per second for XML outputs. This performance
 is acceptable for many applications, and makes our library
-about ten times as slow as that of Wadler-Leijen. That Hughes-Peyton Jones library stands in between.
+about ten times as slow as that of Wadler-Leijen. The Hughes-Peyton Jones library stands in between.
 
 
 @section«Conclusion»
 
 As @citet"bird_algebra_1997", @citet"wadler_critique_1987", @citet"hughes_design_1995" and many
 others have argued, program calculation is a useful tool, and a strength of functional programming languages,
-with a large body of work showcasing it. Nevertheless, the problem of pretty-printing had not been
+with a large body of work showcasing it.
+Nevertheless, I had often wondered if the problem of pretty-printing had not been
 contrived to fit the mold of program calculation, before becoming one of its paradigmatic applications.
-And thus, one could wonder if program calculation was only well-suited to derive greedy algorithm.
-We hope to have put such doubts to rest.
+In general, one could wonder if program calculation was only well-suited to derive greedy algorithms.
 
-Indeed, we have taken a critical look at the literature to re-define what pretty-printing means, as
+Thus I have taken the necessary steps to put my doubts to rest.
+I have taken a critical look at the literature to re-define what pretty-printing means, as
 three informal principles.
-We have carefully refined this informal definition to a formal semantics (arguably simpler than that of the state of the art).
-We avoided cutting any corner, and thus could not obtain a greedy algorithm, but we still have
-derived a reasonably efficient implementation.
-In the end, the standard methodology worked well: we could use program calculation all the way.
+I have carefully refined this informal definition to a formal semantics (arguably simpler than that of the state of the art).
+I avoided cutting any corner and went for the absolute prettiest layout. Doing so I could not obtain a greedy algorithm,
+but still have derived a reasonably efficient implementation.
+In the end, the standard methodology worked well I could use it from start to finish.
 
 @acknowledgements«Most of the work described in this paper was carried out while the author was employed by Chalmers University of Technology.
 Facundo Domingez, Atze van der Ploeg and Arnaud Spiwack as well as anonymous ICFP reviewers provided useful feedback on drafts of this paper.
