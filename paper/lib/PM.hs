@@ -536,7 +536,7 @@ Pattern = expression
 Aligning the argument of the expression below to the left of the equal sign is bad, because
 it needlessly obscures the structure of the program; @pcp_layout is not
 respected. In summary, the lack of a combinator for relative indentation
-is a serious drawback. In fact, Leijen's
+is a serious drawback@footnote«which is also present in the work of @citet"swierstra_linear_2009"». In fact, Leijen's
 implementation of Wadler's design (@sans«wl-print»), @emph«does» feature
 an alignment combinator. However, as Hughes' does, Leijen's uses a greedy algorithm, and thus
 suffers from the same issue as Hughes' library.
@@ -661,7 +661,7 @@ Vertical concatenation is then:
 »
 
 One might argue that replacing @hask«($$)» by @hask«flush» does not
-make the API shorter nor simpler. Yet, I stick
+make the API shorter nor simpler. Yet, we stick
 this choice, for two reasons:
 
 @enumList[«The new API clearly separates the concerns of concatenation and
