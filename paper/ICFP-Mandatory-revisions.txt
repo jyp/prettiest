@@ -1,0 +1,19 @@
+I have adressed the mandatory revisions as follows:
+
+1. I have changed the citation style as requested.
+
+2. I have extended the systematic testing to random s-expressions
+   (sec. 7.1) and added a plot with the results.
+
+3. I have tested the pretty printing algorithm without domination
+   pruning. In this situation it behaves exponentially, preventing to
+   test on any non-trivial input. This is reported at the end of
+   sec. 7.1.
+
+4. I have performed a new series of tests which exercises the pretty
+   printer in typical conditions (sec 7.2). To do so I've pretty
+   printed several typical XML and JSON inputs. In this series of
+   tests I've measured the rendering time (not just layout). I have
+   also run the test with Wadler-Leijen and Hughes-Peyton Jones
+   libraries.
+
