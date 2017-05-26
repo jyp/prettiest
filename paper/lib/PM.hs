@@ -167,7 +167,7 @@ comment _ = mempty
 
 preamble :: forall b. Tex b -> Tex b
 preamble body = do
-  documentClass "acmart" ["acmlarge"]
+  documentClass "acmart" ["acmsmall"]
   cmd "setcitestyle" «authoryear»
   stdPreamble
   mathpreamble
