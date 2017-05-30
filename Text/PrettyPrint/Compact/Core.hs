@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, ViewPatterns, DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
 module Text.PrettyPrint.Compact.Core(Layout(..),Render(..),Document(..),Doc,annotate) where
 
-import Data.List (sort,groupBy,intercalate,minimumBy)
+import Data.List (sort,groupBy,minimumBy)
 import Data.Function (on)
 import Data.Semigroup
 import Data.Sequence (singleton, Seq, viewl, viewr, ViewL(..), ViewR(..), (|>))
@@ -45,15 +45,19 @@ instance Semigroup a => Layout (L a) where
    flush (L xs) = L (xs |> mkAS "")
 
 instance Render L where
-  render f (L xs) = intercalate "\n" $ map f' $ toList xs
+  annotatedRender f (L xs) = intercalate (toList xs)
     where
-      f' (AS Nothing s)  = s
-      f' (AS (Just a) s) = f a s
+      f' (AS a s) = f a s
+      sep = f Nothing "\n"
+
+      intercalate []     = mempty
+      intercalate (y:ys) = f' y `mappend` foldMap (mappend sep . f') ys
 
 class Render d where
-  render :: (a -> String -> String) -- ^ how to annotate the string. /Note:/ the annotation should preserve the visible length of the string.
-         -> d a                     -- ^ renderable
-         -> String
+  annotatedRender :: Monoid r
+                  => (Maybe a -> String -> r) -- ^ how to annotate the string. /Note:/ the annotation should preserve the visible length of the string.
+                  -> d a                      -- ^ renderable
+                  -> r
 
 class Monoid d => Layout d where
   text :: String -> d
@@ -141,9 +145,9 @@ instance (Ord a, Semigroup a) => Layout (Doc a) where
   text s = MkDoc [text s]
 
 instance Render Doc where
-  render f (MkDoc []) = error "No suitable layout found."
-  render f (MkDoc xs@(x:_)) | maxWidth (fst x) <= 80 = render f (snd x)
-                            | otherwise = render f $ snd (minimumBy (compare `on` (maxWidth . fst)) xs)
+  annotatedRender f (MkDoc []) = error "No suitable layout found."
+  annotatedRender f (MkDoc xs@(x:_)) | maxWidth (fst x) <= 80 = annotatedRender f (snd x)
+                            | otherwise = annotatedRender f $ snd (minimumBy (compare `on` (maxWidth . fst)) xs)
 
 instance (Ord a, Semigroup a) => Document (Doc a) where
   MkDoc m1 <|> MkDoc m2 = MkDoc (bests [m1,m2])
@@ -166,7 +170,7 @@ instance (Ord a, Semigroup a) =>  IsString (Doc a) where
 --
 -- Example: 'Any True' annotation will transform the rendered 'Doc' into uppercase:
 --
--- >>> let r = putStrLn . render (\(Any b) x -> if b then map toUpper x else x)
+-- >>> let r = putStrLn . annotatedRender (\a x -> if a == Just (Any True) then map toUpper x else x)
 -- >>> r $ text "hello" <$$> annotate (Any True) (text "world")
 -- hello
 -- WORLD

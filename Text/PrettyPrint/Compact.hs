@@ -40,6 +40,7 @@ module Text.PrettyPrint.Compact (
    bool,
 
    -- * Rendering
+   annotatedRender,
    render,
 
    -- * Undocumented
@@ -51,6 +52,10 @@ import Data.Semigroup (Semigroup)
 import Data.List (intersperse)
 
 import Text.PrettyPrint.Compact.Core as Text.PrettyPrint.Compact
+
+-- | Render the 'Doc' into 'String' omitting all annotations.
+render :: Doc a -> String
+render = annotatedRender (\_ s -> s)
 
 -- | The document @(list xs)@ comma separates the documents @xs@ and
 -- encloses them in square brackets. The documents are rendered
