@@ -1,5 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+-- |
+--
+-- == __Examples__
+--
+-- >>> data SExpr = SExpr [SExpr] | Atom String deriving Show
+-- >>> let abcd = SExpr [Atom "a",Atom "b",Atom "c",Atom "d"]
+-- >>> let abcd4 = SExpr [abcd,abcd,abcd,abcd]
+-- >>> let testData = SExpr [  SExpr [Atom "abcde", abcd4], SExpr [Atom "abcdefgh", abcd4]]
+-- >>> let pretty :: SExpr -> Doc (); pretty  (Atom s) = text s; pretty  (SExpr xs)  = text "(" <> (sep $ map pretty xs) <> text ")"
+-- >>> putStrLn $ render $ pretty testData
+-- ((abcde ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d)))
+--  (abcdefgh ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d))))
+--
 module Text.PrettyPrint.Compact (
    -- * Documents
    Doc,
