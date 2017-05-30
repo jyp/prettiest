@@ -25,9 +25,10 @@ data AS a = AS !Int [(Maybe a, String)]
 
 -- | Tests the invariants of 'AS'
 _validAs :: AS a -> Bool
-_validAs (AS i s) = lengthInvariant
+_validAs (AS i s) = lengthInvariant && noNewlineInvariant
   where
     lengthInvariant = i == sum (map (length . snd) s)
+    noNewlineInvariant = all (notElem '\n' . snd) s
 
 asLength :: AS a -> Int
 asLength (AS l _) = l
