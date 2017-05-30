@@ -1,53 +1,51 @@
 {-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, ViewPatterns, DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
 module Text.PrettyPrint.Compact.Core(Layout(..),Render(..),Document(..),Doc,annotate) where
 
-import Data.List (sort,groupBy,minimumBy)
+import Data.List (sortOn,groupBy,minimumBy)
 import Data.Function (on)
 import Data.Semigroup
 import Data.Sequence (singleton, Seq, viewl, viewr, ViewL(..), ViewR(..), (|>))
 import Data.String
 import Data.Foldable (toList)
 
--- | Annotated string
-data AS a = AS (Maybe a) String
+-- | Annotated string. We keep annotated segments in a separate list.
+--
+-- First argument is length.
+--
+data AS a = AS !Int [(Maybe a, String)]
   deriving (Eq,Ord,Show,Functor,Foldable,Traversable)
 
-getASString :: AS a -> String
-getASString (AS _ s) = s
-
-
+asLength :: AS a -> Int
+asLength (AS l _) = l
 
 -- | Make non-annotated 'AS'
 mkAS :: String -> AS a
-mkAS = AS Nothing
+mkAS s = AS (length s) [(Nothing, s)]
 
-instance Semigroup a => Semigroup (AS a) where
-  AS a s <> AS b t = AS (f a b) (s <> t)
-    where
-      f (Just x) (Just y) = Just (x <> y)
-      f x        Nothing  = x
-      f Nothing  y        = y
+instance Semigroup (AS a) where
+  AS i xs <> AS j ys = AS (i + j) (xs <> ys)
 
 newtype L a = L (Seq (AS a)) -- non-empty sequence
   deriving (Eq,Ord,Show,Functor,Foldable,Traversable)
 
-instance Semigroup a => Semigroup (L a) where
-   L (viewr -> xs :> x) <> L (viewl -> y :< ys) = L (xs <> singleton (x <> y) <> fmap (indent <>) ys)
-      where n = length (getASString x)
+instance Semigroup (L a) where
+  L (viewr -> xs :> x) <> L (viewl -> y :< ys) = L (xs <> singleton (x <> y) <> fmap (indent <>) ys)
+      where n = asLength x
             indent = mkAS (Prelude.replicate n ' ')
+  L _ <> L _ = error "<> @L: invariant violated, Seq is empty" 
 
-instance Semigroup a =>  Monoid (L a) where
+instance Monoid (L a) where
    mempty = L (singleton (mkAS ""))
    mappend = (<>)
 
-instance Semigroup a => Layout (L a) where
+instance Layout (L a) where
    text = L . singleton . mkAS
    flush (L xs) = L (xs |> mkAS "")
 
 instance Render L where
   annotatedRender f (L xs) = intercalate (toList xs)
     where
-      f' (AS a s) = f a s
+      f' (AS _ s) = foldMap (uncurry f) s
       sep = f Nothing "\n"
 
       intercalate []     = mempty
@@ -97,20 +95,23 @@ class Poset a where
 instance Poset (M a) where
   M c1 l1 s1 ≺ M c2 l2 s2 = c1 <= c2 && l1 <= l2 && s1 <= s2
 
-merge :: Ord a => [a] -> [a] -> [a]
-merge [] xs = xs
-merge xs [] = xs
-merge (x:xs) (y:ys)
-  | x <= y = x:merge xs (y:ys)
-  | otherwise = y:merge (x:xs) ys
+mergeBy :: (a -> a -> Bool) -> [a] -> [a] -> [a]
+mergeBy le = go
+  where
+    go [] xs = xs
+    go xs [] = xs
+    go (x:xs) (y:ys)
+      | x `le` y  = x:go xs (y:ys)
+      | otherwise = y:go (x:xs) ys
 
+mergeAllBy :: (a -> a -> Bool) -> [[a]] -> [a]
+mergeAllBy _ [] = []
+mergeAllBy le (x:xs) = mergeBy le x (mergeAllBy le xs)
 
-mergeAll :: Ord a => [[a]] -> [a]
-mergeAll [] = []
-mergeAll (x:xs) = merge x (mergeAll xs)
-
-bests :: forall a. (Ord a, Poset a) => [[a]] -> [a]
-bests = pareto' [] . mergeAll
+bests :: forall a. (Poset a)
+      => (a -> a -> Bool)  -- total order: '<='
+      -> [[a]] -> [a]
+bests le = pareto' [] . mergeAllBy le
 
 pareto' :: Poset a => [a] -> [a] -> [a]
 pareto' acc [] = Prelude.reverse acc
@@ -121,36 +122,39 @@ pareto' acc (x:xs) = if any (≺ x) acc
                             -- for all y ∈ acc, y <= x, and thus x ≺ y
                             -- is false. No need to refilter acc.
 
+leFst :: Ord a => (a, b) -> (a, b) -> Bool
+leFst = (<=) `on` fst
 
 newtype Doc a = MkDoc [(M a,L a)] -- list sorted by lexicographic order for the first component
   deriving Show
 
-instance (Ord a, Semigroup a) => Semigroup (Doc a) where
-  MkDoc xs <> MkDoc ys = MkDoc $ bests [ quasifilter (fits . fst) [x <> y | y <- ys] | x <- xs]
-    where quasifilter p xs = let fxs = filter p xs
-                             in if null fxs
-                                then [minimumBy (compare `on` (maxWidth . fst)) xs]
-                                else fxs
+instance Semigroup (Doc a) where
+  MkDoc xs <> MkDoc ys = MkDoc $ bests leFst [ quasifilter (fits . fst) [x <> y | y <- ys] | x <- xs]
+    where quasifilter p zs = let fzs = filter p zs
+                             in if null fzs
+                                then [minimumBy (compare `on` (maxWidth . fst)) zs]
+                                else fzs
 
-instance (Ord a, Semigroup a) => Monoid (Doc a) where
+instance Monoid (Doc a) where
   mempty = text ""
   mappend = (<>)
 
+-- TODO: make columns configurable
 fits :: M a -> Bool
 fits x = maxWidth x <= 80
 
-instance (Ord a, Semigroup a) => Layout (Doc a) where
-  flush (MkDoc xs) = MkDoc $ bests $ map sort $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
+instance Layout (Doc a) where
+  flush (MkDoc xs) = MkDoc $ bests leFst $ map (sortOn fst) $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
   -- flush xs = pareto' [] $ sort $ (map flush xs)
   text s = MkDoc [text s]
 
 instance Render Doc where
-  annotatedRender f (MkDoc []) = error "No suitable layout found."
+  annotatedRender _ (MkDoc []) = error "No suitable layout found."
   annotatedRender f (MkDoc xs@(x:_)) | maxWidth (fst x) <= 80 = annotatedRender f (snd x)
                             | otherwise = annotatedRender f $ snd (minimumBy (compare `on` (maxWidth . fst)) xs)
 
-instance (Ord a, Semigroup a) => Document (Doc a) where
-  MkDoc m1 <|> MkDoc m2 = MkDoc (bests [m1,m2])
+instance Document (Doc a) where
+  MkDoc m1 <|> MkDoc m2 = MkDoc (bests leFst [m1,m2])
 
 
 instance (Layout a, Layout b) => Layout (a,b) where
@@ -163,7 +167,7 @@ instance (Document a, Document b) => Document (a,b) where
 instance (Poset a) => Poset (a,b) where
   (a,_) ≺ (b,_) = a ≺ b
 
-instance (Ord a, Semigroup a) =>  IsString (Doc a) where
+instance IsString (Doc a) where
   fromString = text
 
 -- | `<>` new annotation to the 'Doc'.
@@ -182,8 +186,10 @@ annotate a (MkDoc xs) = MkDoc (fmap (fmap annotateL) xs)
     annotateL (L s) = L (fmap annotateAS s)
 
     annotateAS :: AS a -> AS a
-    annotateAS (AS Nothing s)  = AS ma s
-    annotateAS (AS (Just b) s) = AS (Just (b <> a)) s
+    annotateAS (AS i s) = AS i (fmap annotatePart s)
+
+    annotatePart (Nothing, s) = (ma, s)
+    annotatePart (Just b,  s) = (Just (b <> a), s)
 
     ma = Just a
 

@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-
 -- |
 --
 -- == __Examples__
@@ -10,8 +9,21 @@
 -- >>> let testData = SExpr [  SExpr [Atom "abcde", abcd4], SExpr [Atom "abcdefgh", abcd4]]
 -- >>> let pretty :: SExpr -> Doc (); pretty  (Atom s) = text s; pretty  (SExpr xs)  = text "(" <> (sep $ map pretty xs) <> text ")"
 -- >>> putStrLn $ render $ pretty testData
--- ((abcde ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d)))
---  (abcdefgh ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d))))
+-- ((abcde ((a b c d) (a b c d) (a b c d) (a b c d)))
+--  (abcdefgh ((a b c d) (a b c d) (a b c d) (a b c d))))
+--
+-- /TODO:/ example with 20 columns.
+-- @
+-- ((abcde ((a b c d)
+--          (a b c d)
+--          (a b c d)
+--          (a b c d)))
+--  (abcdefgh
+--   ((a b c d)
+--    (a b c d)
+--    (a b c d)
+--    (a b c d))))
+-- @
 --
 module Text.PrettyPrint.Compact (
    -- * Documents
@@ -27,6 +39,9 @@ module Text.PrettyPrint.Compact (
 
    -- * List combinators
    hsep, sep, hcat, vcat, cat, punctuate,
+
+   -- * Fill combiantors
+   fillSep, fillCat,
 
    -- * Bracketing combinators
    enclose, squotes, dquotes, parens, angles, braces, brackets,
@@ -48,7 +63,6 @@ module Text.PrettyPrint.Compact (
    ) where
 
 import Data.Monoid
-import Data.Semigroup (Semigroup)
 import Data.List (intersperse)
 
 import Text.PrettyPrint.Compact.Core as Text.PrettyPrint.Compact
@@ -61,14 +75,14 @@ render = annotatedRender (\_ s -> s)
 -- encloses them in square brackets. The documents are rendered
 -- horizontally if that fits the page. Otherwise they are aligned
 -- vertically. All comma separators are put in front of the elements.
-list :: (Ord a, Semigroup a) => [Doc a] -> Doc a
+list :: [Doc a] -> Doc a
 list            = encloseSep lbracket rbracket comma
 
 -- | The document @(tupled xs)@ comma separates the documents @xs@ and
 -- encloses them in parenthesis. The documents are rendered
 -- horizontally if that fits the page. Otherwise they are aligned
 -- vertically. All comma separators are put in front of the elements.
-tupled :: (Ord a, Semigroup a) => [Doc a] -> Doc a
+tupled :: [Doc a] -> Doc a
 tupled          = encloseSep lparen   rparen  comma
 
 
@@ -76,7 +90,7 @@ tupled          = encloseSep lparen   rparen  comma
 -- semi colons and encloses them in braces. The documents are rendered
 -- horizontally if that fits the page. Otherwise they are aligned
 -- vertically. All semi colons are put in front of the elements.
-semiBraces :: (Ord a, Semigroup a) => [Doc a] -> Doc a
+semiBraces :: [Doc a] -> Doc a
 semiBraces      = encloseSep lbrace   rbrace  semi
 
 -- | The document @(enclosure l r sep xs)@ concatenates the documents
@@ -102,7 +116,7 @@ semiBraces      = encloseSep lbrace   rbrace  semi
 --      ,200
 --      ,3000]
 -- @
-encloseSep :: (Ord a, Semigroup a) => Doc a -> Doc a -> Doc a -> [Doc a] -> Doc a
+encloseSep :: Doc a -> Doc a -> Doc a -> [Doc a] -> Doc a
 encloseSep left right sep ds
     = (\mid -> mid <> right) $ case ds of
         []  -> left <> mempty
@@ -137,7 +151,7 @@ encloseSep left right sep ds
 --
 -- (If you want put the commas in front of their elements instead of
 -- at the end, you should use 'tupled' or, in general, 'encloseSep'.)
-punctuate :: (Ord a, Semigroup a) => Doc a -> [Doc a] -> [Doc a]
+punctuate :: Doc a -> [Doc a] -> [Doc a]
 punctuate p []      = []
 punctuate p [d]     = [d]
 punctuate p (d:ds)  = (d <> p) : punctuate p ds
@@ -152,7 +166,7 @@ punctuate p (d:ds)  = (d <> p) : punctuate p ds
 -- horizontally with @(\<+\>)@, if it fits the page, or vertically with
 -- @(\<$\>)@.
 --
-sep :: (Ord a, Semigroup a) => [Doc a] -> Doc a
+sep :: [Doc a] -> Doc a
 sep [] = mempty
 sep [x] = x
 sep xs = hsep xs <|> vcat xs
@@ -164,12 +178,12 @@ sep xs = hsep xs <|> vcat xs
 -- @xs@.
 --
 -- > fillSep xs  = foldr (\<\/\>) empty xs
-fillSep :: (Ord a, Semigroup a) => [Doc a] -> Doc a
+fillSep :: [Doc a] -> Doc a
 fillSep         = foldDoc (</>)
 
 -- | The document @(hsep xs)@ concatenates all documents @xs@
 -- horizontally with @(\<+\>)@.
-hsep :: (Ord a, Semigroup a) => [Doc a] -> Doc a
+hsep :: [Doc a] -> Doc a
 hsep            = foldDoc (<+>)
 
 -- | The document @(cat xs)@ concatenates all documents @xs@ either
@@ -177,7 +191,7 @@ hsep            = foldDoc (<+>)
 -- @(\<$$\>)@.
 --
 -- > cat xs  = group (vcat xs)
-cat :: (Ord a, Semigroup a) => [Doc a] -> Doc a
+cat :: [Doc a] -> Doc a
 cat [] =  mempty
 cat [x] = x
 cat xs = hcat xs <|> vcat xs
@@ -187,133 +201,133 @@ cat xs = hcat xs <|> vcat xs
 -- a @linebreak@ and continues doing that for all documents in @xs@.
 --
 -- > fillCat xs  = foldr (\<\/\/\>) empty xs
-fillCat :: (Ord a, Semigroup a) => (Ord a, Semigroup a) => [Doc a] -> Doc a
+fillCat :: [Doc a] -> Doc a
 fillCat         = foldDoc (<//>)
 
 -- | The document @(hcat xs)@ concatenates all documents @xs@
 -- horizontally with @(\<\>)@.
-hcat :: (Ord a, Semigroup a) => [Doc a] -> Doc a
+hcat :: [Doc a] -> Doc a
 hcat            = foldDoc (<>)
 
 -- | The document @(vcat xs)@ concatenates all documents @xs@
 -- vertically with @($$)@.
-vcat :: (Ord a, Semigroup a) => [Doc a] -> Doc a
+vcat :: [Doc a] -> Doc a
 vcat            = foldDoc ($$)
 
-foldDoc :: (Ord a, Semigroup a) => (Doc a -> Doc a -> Doc a) -> [Doc a] -> Doc a
+foldDoc :: (Doc a -> Doc a -> Doc a) -> [Doc a] -> Doc a
 foldDoc _ []       = mempty
 foldDoc f ds       = foldr1 f ds
 
 -- | The document @(x \<+\> y)@ concatenates document @x@ and @y@ with a
 -- @space@ in between.  (infixr 6)
-(<+>) :: (Ord a, Semigroup a) => Doc a -> Doc a -> Doc a
+(<+>) :: Doc a -> Doc a -> Doc a
 x <+> y         = x <> space <> y
 
 -- | The document @(x \<\/\> y)@ puts @x@ and @y@ either next to each other
 -- (with a @space@ in between) or underneath each other. (infixr 5)
-(</>) :: (Ord a, Semigroup a) => Doc a -> Doc a -> Doc a
+(</>) :: Doc a -> Doc a -> Doc a
 x </> y         = ((x <> space) <|> flush x) <> y
 
 -- | The document @(x \<\/\/\> y)@ puts @x@ and @y@ either right next to each
 -- other or underneath each other. (infixr 5)
-(<//>) :: (Ord a, Semigroup a) => Doc a -> Doc a -> Doc a
+(<//>) :: Doc a -> Doc a -> Doc a
 x <//> y        = (x <|> flush x) <> y
 
 
 -- | The document @(x \<$$\> y)@ concatenates document @x@ and @y@ with
 -- a linebreak in between. (infixr 5)
-(<$$>) :: (Ord a, Semigroup a) => Doc a -> Doc a -> Doc a
+(<$$>) :: Doc a -> Doc a -> Doc a
 x <$$> y = flush x <> y
 
 
 -- | Doc aument @(squotes x)@ encloses document @x@ with single quotes
 -- \"'\".
-squotes :: (Ord a, Semigroup a) => Doc a -> Doc a
+squotes :: Doc a -> Doc a
 squotes         = enclose squote squote
 
 -- | Doc aument @(dquotes x)@ encloses document @x@ with double quotes
 -- '\"'.
-dquotes :: (Ord a, Semigroup a) => Doc a -> Doc a
+dquotes :: Doc a -> Doc a
 dquotes         = enclose dquote dquote
 
 -- | Doc aument @(braces x)@ encloses document @x@ in braces, \"{\" and
 -- \"}\".
-braces :: (Ord a, Semigroup a) => Doc a -> Doc a
+braces :: Doc a -> Doc a
 braces          = enclose lbrace rbrace
 
 -- | Doc aument @(parens x)@ encloses document @x@ in parenthesis, \"(\"
 -- and \")\".
-parens :: (Ord a, Semigroup a) => Doc a -> Doc a
+parens :: Doc a -> Doc a
 parens          = enclose lparen rparen
 
 -- | Doc aument @(angles x)@ encloses document @x@ in angles, \"\<\" and
 -- \"\>\".
-angles :: (Ord a, Semigroup a) => Doc a -> Doc a
+angles :: Doc a -> Doc a
 angles          = enclose langle rangle
 
 -- | Doc aument @(brackets x)@ encloses document @x@ in square brackets,
 -- \"[\" and \"]\".
-brackets :: (Ord a, Semigroup a) => Doc a -> Doc a
+brackets :: Doc a -> Doc a
 brackets        = enclose lbracket rbracket
 
 -- | The document @(enclose l r x)@ encloses document @x@ between
 -- documents @l@ and @r@ using @(\<\>)@.
-enclose :: (Ord a, Semigroup a) => Doc a -> Doc a -> Doc a -> Doc a
+enclose :: Doc a -> Doc a -> Doc a -> Doc a
 enclose l r x   = l <> x <> r
 
-char :: (Ord a, Semigroup a) => Char -> Doc a
+char :: Char -> Doc a
 char x = text [x]
 
 -- | The document @lparen@ contains a left parenthesis, \"(\".
-lparen :: (Ord a, Semigroup a) => Doc a
+lparen :: Doc a
 lparen          = char '('
 -- | The document @rparen@ contains a right parenthesis, \")\".
-rparen :: (Ord a, Semigroup a) => Doc a
+rparen :: Doc a
 rparen          = char ')'
 -- | The document @langle@ contains a left angle, \"\<\".
-langle :: (Ord a, Semigroup a) => Doc a
+langle :: Doc a
 langle          = char '<'
 -- | The document @rangle@ contains a right angle, \">\".
-rangle :: (Ord a, Semigroup a) => Doc a
+rangle :: Doc a
 rangle          = char '>'
 -- | The document @lbrace@ contains a left brace, \"{\".
-lbrace :: (Ord a, Semigroup a) => Doc a
+lbrace :: Doc a
 lbrace          = char '{'
 -- | The document @rbrace@ contains a right brace, \"}\".
-rbrace :: (Ord a, Semigroup a) => Doc a
+rbrace :: Doc a
 rbrace          = char '}'
 -- | The document @lbracket@ contains a left square bracket, \"[\".
-lbracket :: (Ord a, Semigroup a) => Doc a
+lbracket :: Doc a
 lbracket        = char '['
 -- | The document @rbracket@ contains a right square bracket, \"]\".
-rbracket :: (Ord a, Semigroup a) => Doc a
+rbracket :: Doc a
 rbracket        = char ']'
 
 
 -- | The document @squote@ contains a single quote, \"'\".
-squote :: (Ord a, Semigroup a) => Doc a
+squote :: Doc a
 squote          = char '\''
 -- | The document @dquote@ contains a double quote, '\"'.
-dquote :: (Ord a, Semigroup a) => Doc a
+dquote :: Doc a
 dquote          = char '"'
 -- | The document @semi@ contains a semi colon, \";\".
-semi :: (Ord a, Semigroup a) => Doc a
+semi :: Doc a
 semi            = char ';'
 -- | The document @colon@ contains a colon, \":\".
-colon :: (Ord a, Semigroup a) => Doc a
+colon :: Doc a
 colon           = char ':'
 -- | The document @comma@ contains a comma, \",\".
-comma :: (Ord a, Semigroup a) => Doc a
+comma :: Doc a
 comma           = char ','
 
 -- | The document @dot@ contains a single dot, \".\".
-dot :: (Ord a, Semigroup a) => Doc a
+dot :: Doc a
 dot             = char '.'
 -- | The document @backslash@ contains a back slash, \"\\\".
-backslash :: (Ord a, Semigroup a) => Doc a
+backslash :: Doc a
 backslash       = char '\\'
 -- | The document @equals@ contains an equal sign, \"=\".
-equals :: (Ord a, Semigroup a) => Doc a
+equals :: Doc a
 equals          = char '='
 
 -----------------------------------------------------------
@@ -326,35 +340,35 @@ equals          = char '='
 -- using @line@ for newline characters and @char@ for all other
 -- characters. It is used instead of 'text' whenever the text contains
 -- newline characters.
-string :: (Ord a, Semigroup a) => String -> Doc a
+string :: String -> Doc a
 string = vcat . map text . lines
 
-bool :: (Ord a, Semigroup a) => Bool -> Doc a
+bool :: Bool -> Doc a
 bool b          = text (show b)
 
 -- | The document @(int i)@ shows the literal integer @i@ using
 -- 'text'.
-int :: (Ord a, Semigroup a) => Int -> Doc a
+int :: Int -> Doc a
 int i           = text (show i)
 
 -- | The document @(integer i)@ shows the literal integer @i@ using
 -- 'text'.
-integer :: (Ord a, Semigroup a) => Integer -> Doc a
+integer :: Integer -> Doc a
 integer i       = text (show i)
 
 -- | The document @(float f)@ shows the literal float @f@ using
 -- 'text'.
-float :: (Ord a, Semigroup a) => Float -> Doc a
+float :: Float -> Doc a
 float f         = text (show f)
 
 -- | The document @(double d)@ shows the literal double @d@ using
 -- 'text'.
-double :: (Ord a, Semigroup a) => Double -> Doc a
+double :: Double -> Doc a
 double d        = text (show d)
 
 -- | The document @(rational r)@ shows the literal rational @r@ using
 -- 'text'.
-rational :: (Ord a, Semigroup a) => Rational -> Doc a
+rational :: Rational -> Doc a
 rational r      = text (show r)
 
 
@@ -378,7 +392,7 @@ rational r      = text (show r)
 -- The @hang@ combinator is implemented as:
 --
 -- > hang i x  = align (nest i x)
-hang :: (Ord a, Semigroup a) => Int -> Doc a -> Doc a -> Doc a
+hang :: Int -> Doc a -> Doc a -> Doc a
 hang n x y = (x <+> y) <|> (x $$ nest' n y)
 
 -- | The document @(nest i x)@ renders document @x@ with the current
@@ -396,17 +410,17 @@ hang n x y = (x <+> y) <|> (x $$ nest' n y)
 -- @
 
 
-space :: (Ord a, Semigroup a) => Doc a
+space :: Doc a
 space = text " "
 
 
-nest' :: (Ord a, Semigroup a) => Int -> Doc a -> Doc a
+nest' :: Int -> Doc a -> Doc a
 nest' n x = spaces n <> x
 
-spaces :: (Ord a, Semigroup a) => Int -> Doc a
+spaces :: Int -> Doc a
 spaces n = text $ replicate n ' '
 
 -- | The document @(x \<$$\> y)@ concatenates document @x@ and @y@ with
 -- a linebreak in between. (infixr 5)
-($$) :: (Ord a, Semigroup a) => Doc a -> Doc a -> Doc a
+($$) :: Doc a -> Doc a -> Doc a
 ($$)  = (<$$>)
