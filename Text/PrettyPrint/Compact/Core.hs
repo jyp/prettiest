@@ -8,17 +8,31 @@ import Data.Sequence (singleton, Seq, viewl, viewr, ViewL(..), ViewR(..), (|>))
 import Data.String
 import Data.Foldable (toList)
 
--- | Annotated string. We keep annotated segments in a separate list.
+-- | Annotated string, which consists of segments with separate (or no) annotations.
 --
--- First argument is length.
+-- We keep annotated segments in a container (list).
+-- The annotation is @Maybe a@, because the no-annotation case is common.
+--
+-- /Note:/ with @Last x@ annotation, the 'annotate' will overwrite all annotations.
+--
+-- /Note:/ if the list is changed into `Seq` or similar structure
+-- allowing fast viewr and viewl, then we can impose an additional
+-- invariant that there aren't two consequtive non-annotated segments;
+-- yet there is no performance reason to do so.
 --
 data AS a = AS !Int [(Maybe a, String)]
   deriving (Eq,Ord,Show,Functor,Foldable,Traversable)
 
+-- | Tests the invariants of 'AS'
+_validAs :: AS a -> Bool
+_validAs (AS i s) = lengthInvariant
+  where
+    lengthInvariant = i == sum (map (length . snd) s)
+
 asLength :: AS a -> Int
 asLength (AS l _) = l
 
--- | Make non-annotated 'AS'
+-- | Make a non-annotated 'AS'.
 mkAS :: String -> AS a
 mkAS s = AS (length s) [(Nothing, s)]
 
@@ -32,7 +46,7 @@ instance Semigroup (L a) where
   L (viewr -> xs :> x) <> L (viewl -> y :< ys) = L (xs <> singleton (x <> y) <> fmap (indent <>) ys)
       where n = asLength x
             indent = mkAS (Prelude.replicate n ' ')
-  L _ <> L _ = error "<> @L: invariant violated, Seq is empty" 
+  L _ <> L _ = error "<> @L: invariant violated, Seq is empty"
 
 instance Monoid (L a) where
    mempty = L (singleton (mkAS ""))
@@ -51,6 +65,8 @@ instance Render L where
       intercalate []     = mempty
       intercalate (y:ys) = f' y `mappend` foldMap (mappend sep . f') ys
 
+-- | This class is split from 'Layout', because of different
+-- kinds: @Render :: (* -> *) -> Constraint@ and @Layout :: * -> Constraint@.
 class Render d where
   annotatedRender :: Monoid r
                   => (Maybe a -> String -> r) -- ^ how to annotate the string. /Note:/ the annotation should preserve the visible length of the string.
@@ -95,41 +111,39 @@ class Poset a where
 instance Poset (M a) where
   M c1 l1 s1 ≺ M c2 l2 s2 = c1 <= c2 && l1 <= l2 && s1 <= s2
 
-mergeBy :: (a -> a -> Bool) -> [a] -> [a] -> [a]
-mergeBy le = go
+mergeOn :: Ord b => (a -> b) -> [a] -> [a] -> [a]
+mergeOn m = go
   where
     go [] xs = xs
     go xs [] = xs
     go (x:xs) (y:ys)
-      | x `le` y  = x:go xs (y:ys)
-      | otherwise = y:go (x:xs) ys
+      | m x <= m y  = x:go xs (y:ys)
+      | otherwise    = y:go (x:xs) ys
 
-mergeAllBy :: (a -> a -> Bool) -> [[a]] -> [a]
-mergeAllBy _ [] = []
-mergeAllBy le (x:xs) = mergeBy le x (mergeAllBy le xs)
+mergeAllOn :: Ord b => (a -> b) -> [[a]] -> [a]
+mergeAllOn _ [] = []
+mergeAllOn m (x:xs) = mergeOn m x (mergeAllOn m xs)
 
-bests :: forall a. (Poset a)
-      => (a -> a -> Bool)  -- total order: '<='
+bestsOn :: forall a b. (Poset b, Ord b)
+      => (a -> b) -- ^ measure
       -> [[a]] -> [a]
-bests le = pareto' [] . mergeAllBy le
+bestsOn m = paretoOn' m [] . mergeAllOn m
 
-pareto' :: Poset a => [a] -> [a] -> [a]
-pareto' acc [] = Prelude.reverse acc
-pareto' acc (x:xs) = if any (≺ x) acc
-                       then pareto' acc xs
-                       else pareto' (x:acc) xs
+-- | @paretoOn m = paretoOn' m []@
+paretoOn' :: Poset b => (a -> b) -> [a] -> [a] -> [a]
+paretoOn' m acc [] = Prelude.reverse acc
+paretoOn' m acc (x:xs) = if any ((≺ m x) . m) acc
+                            then paretoOn' m acc xs
+                            else paretoOn' m (x:acc) xs
                             -- because of the ordering, we have that
                             -- for all y ∈ acc, y <= x, and thus x ≺ y
                             -- is false. No need to refilter acc.
-
-leFst :: Ord a => (a, b) -> (a, b) -> Bool
-leFst = (<=) `on` fst
 
 newtype Doc a = MkDoc [(M a,L a)] -- list sorted by lexicographic order for the first component
   deriving Show
 
 instance Semigroup (Doc a) where
-  MkDoc xs <> MkDoc ys = MkDoc $ bests leFst [ quasifilter (fits . fst) [x <> y | y <- ys] | x <- xs]
+  MkDoc xs <> MkDoc ys = MkDoc $ bestsOn fst [ quasifilter (fits . fst) [x <> y | y <- ys] | x <- xs]
     where quasifilter p zs = let fzs = filter p zs
                              in if null fzs
                                 then [minimumBy (compare `on` (maxWidth . fst)) zs]
@@ -144,8 +158,8 @@ fits :: M a -> Bool
 fits x = maxWidth x <= 80
 
 instance Layout (Doc a) where
-  flush (MkDoc xs) = MkDoc $ bests leFst $ map (sortOn fst) $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
-  -- flush xs = pareto' [] $ sort $ (map flush xs)
+  flush (MkDoc xs) = MkDoc $ bestsOn fst $ map (sortOn fst) $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
+  -- flush xs = paretoOn' fst [] $ sort $ (map flush xs)
   text s = MkDoc [text s]
 
 instance Render Doc where
@@ -154,7 +168,7 @@ instance Render Doc where
                             | otherwise = annotatedRender f $ snd (minimumBy (compare `on` (maxWidth . fst)) xs)
 
 instance Document (Doc a) where
-  MkDoc m1 <|> MkDoc m2 = MkDoc (bests leFst [m1,m2])
+  MkDoc m1 <|> MkDoc m2 = MkDoc (bestsOn fst [m1,m2])
 
 
 instance (Layout a, Layout b) => Layout (a,b) where
@@ -163,9 +177,6 @@ instance (Layout a, Layout b) => Layout (a,b) where
 
 instance (Document a, Document b) => Document (a,b) where
   (a,b) <|> (c,d) = (a<|>c,b<|>d)
-
-instance (Poset a) => Poset (a,b) where
-  (a,_) ≺ (b,_) = a ≺ b
 
 instance IsString (Doc a) where
   fromString = text
