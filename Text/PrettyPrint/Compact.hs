@@ -1,18 +1,42 @@
 {-# LANGUAGE OverloadedStrings #-}
--- |
+-- | Compact pretty-printer.
 --
--- == __Examples__
+-- == Examples
+--
+-- Assume that we want to pretty print S-Expressions, which can either be atom or a list of S-Expressions.
 --
 -- >>> data SExpr = SExpr [SExpr] | Atom String deriving Show
+-- >>> let pretty :: SExpr -> Doc (); pretty (Atom s) = text s; pretty (SExpr xs) = text "(" <> (sep $ map pretty xs) <> text ")"
+--
+-- Using the above representation, the S-Expression @(a b c d)@ has the following encoding:
+--
 -- >>> let abcd = SExpr [Atom "a",Atom "b",Atom "c",Atom "d"]
+--
+-- The legible layouts of the @abcd@ S-Expression defined above would be either
+--
+-- >>> putStrLn $ render $ pretty abcd
+-- (a b c d)
+--
+-- or /TODO/
+--
+-- @
+-- (a
+--  b
+--  c
+--  d)
+-- @
+--
+-- The @testData@ S-Expression is specially crafted to
+-- demonstrate general shortcomings of both Hughes and Wadler libraries.
+--
 -- >>> let abcd4 = SExpr [abcd,abcd,abcd,abcd]
--- >>> let testData = SExpr [  SExpr [Atom "abcde", abcd4], SExpr [Atom "abcdefgh", abcd4]]
--- >>> let pretty :: SExpr -> Doc (); pretty  (Atom s) = text s; pretty  (SExpr xs)  = text "(" <> (sep $ map pretty xs) <> text ")"
+-- >>> let testData = SExpr [ SExpr [Atom "abcde", abcd4], SExpr [Atom "abcdefgh", abcd4]]
 -- >>> putStrLn $ render $ pretty testData
 -- ((abcde ((a b c d) (a b c d) (a b c d) (a b c d)))
 --  (abcdefgh ((a b c d) (a b c d) (a b c d) (a b c d))))
 --
--- /TODO:/ example with 20 columns.
+-- on 20-column-wide page: /TODO/
+--
 -- @
 -- ((abcde ((a b c d)
 --          (a b c d)
@@ -24,6 +48,8 @@
 --    (a b c d)
 --    (a b c d))))
 -- @
+--
+-- Yet, neither Hughes' nor Wadler's library can deliver those results.
 --
 module Text.PrettyPrint.Compact (
    -- * Documents
