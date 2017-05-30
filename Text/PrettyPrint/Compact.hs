@@ -266,32 +266,32 @@ x <//> y        = (x <|> flush x) <> y
 x <$$> y = flush x <> y
 
 
--- | Doc aument @(squotes x)@ encloses document @x@ with single quotes
+-- | Document @(squotes x)@ encloses document @x@ with single quotes
 -- \"'\".
 squotes :: Doc a -> Doc a
 squotes         = enclose squote squote
 
--- | Doc aument @(dquotes x)@ encloses document @x@ with double quotes
+-- | Document @(dquotes x)@ encloses document @x@ with double quotes
 -- '\"'.
 dquotes :: Doc a -> Doc a
 dquotes         = enclose dquote dquote
 
--- | Doc aument @(braces x)@ encloses document @x@ in braces, \"{\" and
+-- | Document @(braces x)@ encloses document @x@ in braces, \"{\" and
 -- \"}\".
 braces :: Doc a -> Doc a
 braces          = enclose lbrace rbrace
 
--- | Doc aument @(parens x)@ encloses document @x@ in parenthesis, \"(\"
+-- | Document @(parens x)@ encloses document @x@ in parenthesis, \"(\"
 -- and \")\".
 parens :: Doc a -> Doc a
 parens          = enclose lparen rparen
 
--- | Doc aument @(angles x)@ encloses document @x@ in angles, \"\<\" and
+-- | Document @(angles x)@ encloses document @x@ in angles, \"\<\" and
 -- \"\>\".
 angles :: Doc a -> Doc a
 angles          = enclose langle rangle
 
--- | Doc aument @(brackets x)@ encloses document @x@ in square brackets,
+-- | Document @(brackets x)@ encloses document @x@ in square brackets,
 -- \"[\" and \"]\".
 brackets :: Doc a -> Doc a
 brackets        = enclose lbracket rbracket
