@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, ViewPatterns #-}
+{-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, ViewPatterns, DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
 module Text.PrettyPrint.Compact.Core(Layout(..),Document(..),Doc) where
 
 import Data.List (sort,groupBy,intercalate,minimumBy)
@@ -8,22 +8,40 @@ import Data.Sequence (singleton, Seq, viewl, viewr, ViewL(..), ViewR(..), (|>))
 import Data.String
 import Data.Foldable (toList)
 
-newtype L = L (Seq String) -- non-empty sequence
-  deriving (Eq,Ord,Show)
+-- | Annotated string
+data AS a = AS (Maybe a) String
+  deriving (Eq,Ord,Show,Functor,Foldable,Traversable)
 
-instance Semigroup L where
-   L (viewr -> xs :> x) <> L (viewl -> y :< ys) = L (xs <> singleton (x ++ y) <> fmap (indent ++) ys)
-      where n = length x
-            indent = Prelude.replicate n ' '
+getASString :: AS a -> String
+getASString (AS _ s) = s
 
-instance Monoid L where
-   mempty = L (singleton "")
+-- | Make non-annotated 'AS'
+mkAS :: String -> AS a
+mkAS = AS Nothing
+
+instance Semigroup a => Semigroup (AS a) where
+  AS a s <> AS b t = AS (f a b) (s <> t)
+    where
+      f (Just x) (Just y) = Just (x <> y)
+      f x        Nothing  = x
+      f Nothing  y        = y 
+
+newtype L a = L (Seq (AS a)) -- non-empty sequence
+  deriving (Eq,Ord,Show,Functor)
+
+instance Semigroup a => Semigroup (L a) where
+   L (viewr -> xs :> x) <> L (viewl -> y :< ys) = L (xs <> singleton (x <> y) <> fmap (indent <>) ys)
+      where n = length (getASString x)
+            indent = mkAS (Prelude.replicate n ' ')
+
+instance Semigroup a =>  Monoid (L a) where
+   mempty = L (singleton (mkAS ""))
    mappend = (<>)
 
-instance Layout L where
-   render (L xs) = intercalate "\n" $ toList xs
-   text = L . singleton
-   flush (L xs) = L (xs |> "")
+instance Semigroup a => Layout (L a) where
+   render (L xs) = intercalate "\n" $ map getASString $ toList xs
+   text = L . singleton . mkAS
+   flush (L xs) = L (xs |> mkAS "")
 
 
 class Monoid d => Layout d where
@@ -89,24 +107,24 @@ pareto' acc (x:xs) = if any (≺ x) acc
                             -- is false. No need to refilter acc.
 
 
-newtype Doc = MkDoc [(M,L)] -- list sorted by lexicographic order for the first component
+newtype Doc a = MkDoc [(M,L a)] -- list sorted by lexicographic order for the first component
   deriving Show
 
-instance Semigroup Doc where
+instance (Ord a, Semigroup a) => Semigroup (Doc a) where
   MkDoc xs <> MkDoc ys = MkDoc $ bests [ quasifilter (fits . fst) [x <> y | y <- ys] | x <- xs]
     where quasifilter p xs = let fxs = filter p xs
                              in if null fxs
                                 then [minimumBy (compare `on` (maxWidth . fst)) xs]
                                 else fxs
 
-instance Monoid Doc where
+instance (Ord a, Semigroup a) => Monoid (Doc a) where
   mempty = text ""
   mappend = (<>)
 
 fits :: M -> Bool
 fits x = maxWidth x <= 80
 
-instance Layout Doc where
+instance (Ord a, Semigroup a) => Layout (Doc a) where
   flush (MkDoc xs) = MkDoc $ bests $ map sort $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
   -- flush xs = pareto' [] $ sort $ (map flush xs)
   text s = MkDoc [text s]
@@ -114,7 +132,7 @@ instance Layout Doc where
   render (MkDoc xs@(x:_)) | maxWidth (fst x) <= 80 = render x
                           | otherwise = render (minimumBy (compare `on` (maxWidth . fst)) xs)
 
-instance Document Doc where
+instance (Ord a, Semigroup a) => Document (Doc a) where
   MkDoc m1 <|> MkDoc m2 = MkDoc (bests [m1,m2])
 
 
@@ -129,5 +147,5 @@ instance (Document a, Document b) => Document (a,b) where
 instance (Poset a) => Poset (a,b) where
   (a,_) ≺ (b,_) = a ≺ b
 
-instance IsString Doc where
+instance (Ord a, Semigroup a) =>  IsString (Doc a) where
   fromString = text
