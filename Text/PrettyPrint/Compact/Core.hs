@@ -20,7 +20,7 @@ import Data.Foldable (toList)
 -- invariant that there aren't two consequtive non-annotated segments;
 -- yet there is no performance reason to do so.
 --
-data AS a = AS !Int [(Maybe a, String)]
+data AS a = AS !Int [(a, String)]
   deriving (Eq,Ord,Show,Functor,Foldable,Traversable)
 
 -- | Tests the invariants of 'AS'
@@ -34,8 +34,8 @@ asLength :: AS a -> Int
 asLength (AS l _) = l
 
 -- | Make a non-annotated 'AS'.
-mkAS :: String -> AS a
-mkAS s = AS (length s) [(Nothing, s)]
+mkAS :: Monoid a => String -> AS a
+mkAS s = AS (length s) [(mempty, s)]
 
 instance Semigroup (AS a) where
   AS i xs <> AS j ys = AS (i + j) (xs <> ys)
@@ -43,17 +43,17 @@ instance Semigroup (AS a) where
 newtype L a = L (Seq (AS a)) -- non-empty sequence
   deriving (Eq,Ord,Show,Functor,Foldable,Traversable)
 
-instance Semigroup (L a) where
+instance Monoid a => Semigroup (L a) where
   L (viewr -> xs :> x) <> L (viewl -> y :< ys) = L (xs <> singleton (x <> y) <> fmap (indent <>) ys)
       where n = asLength x
             indent = mkAS (Prelude.replicate n ' ')
   L _ <> L _ = error "<> @L: invariant violated, Seq is empty"
 
-instance Monoid (L a) where
+instance Monoid a => Monoid (L a) where
    mempty = L (singleton (mkAS ""))
    mappend = (<>)
 
-instance Layout (L a) where
+instance Monoid a => Layout (L a) where
    text = L . singleton . mkAS
    flush (L xs) = L (xs |> mkAS "")
 
@@ -61,7 +61,7 @@ instance Render L where
   renderWith f (L xs) = intercalate (toList xs)
     where
       f' (AS _ s) = foldMap (uncurry f) s
-      sep = f Nothing "\n"
+      sep = f mempty "\n"
 
       intercalate []     = mempty
       intercalate (y:ys) = f' y `mappend` foldMap (mappend sep . f') ys
@@ -69,10 +69,10 @@ instance Render L where
 -- | This class is split from 'Layout', because of different
 -- kinds: @Render :: (* -> *) -> Constraint@ and @Layout :: * -> Constraint@.
 class Render d where
-  renderWith :: Monoid r
-                  => (Maybe a -> String -> r) -- ^ how to annotate the string. /Note:/ the annotation should preserve the visible length of the string.
-                  -> d a                      -- ^ renderable
-                  -> r
+  renderWith :: (Monoid r,  Monoid a)
+             => (a -> String -> r) -- ^ how to annotate the string. /Note:/ the annotation should preserve the visible length of the string.
+             -> d a                -- ^ renderable
+             -> r
 
 class Monoid d => Layout d where
   text :: String -> d
@@ -143,14 +143,14 @@ paretoOn' m acc (x:xs) = if any ((≺ m x) . m) acc
 newtype Doc a = MkDoc [(M a,L a)] -- list sorted by lexicographic order for the first component
   deriving Show
 
-instance Semigroup (Doc a) where
+instance Monoid a => Semigroup (Doc a) where
   MkDoc xs <> MkDoc ys = MkDoc $ bestsOn fst [ quasifilter (fits . fst) [x <> y | y <- ys] | x <- xs]
     where quasifilter p zs = let fzs = filter p zs
                              in if null fzs
                                 then [minimumBy (compare `on` (maxWidth . fst)) zs]
                                 else fzs
 
-instance Monoid (Doc a) where
+instance Monoid a => Monoid (Doc a) where
   mempty = text ""
   mappend = (<>)
 
@@ -158,7 +158,7 @@ instance Monoid (Doc a) where
 fits :: M a -> Bool
 fits x = maxWidth x <= 80
 
-instance Layout (Doc a) where
+instance Monoid a => Layout (Doc a) where
   flush (MkDoc xs) = MkDoc $ bestsOn fst $ map (sortOn fst) $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
   -- flush xs = paretoOn' fst [] $ sort $ (map flush xs)
   text s = MkDoc [text s]
@@ -168,7 +168,7 @@ instance Render Doc where
   renderWith f (MkDoc xs@(x:_)) | maxWidth (fst x) <= 80 = renderWith f (snd x)
                             | otherwise = renderWith f $ snd (minimumBy (compare `on` (maxWidth . fst)) xs)
 
-instance Document (Doc a) where
+instance Monoid a => Document (Doc a) where
   MkDoc m1 <|> MkDoc m2 = MkDoc (bestsOn fst [m1,m2])
 
 
@@ -179,19 +179,19 @@ instance (Layout a, Layout b) => Layout (a,b) where
 instance (Document a, Document b) => Document (a,b) where
   (a,b) <|> (c,d) = (a<|>c,b<|>d)
 
-instance IsString (Doc a) where
+instance Monoid a => IsString (Doc a) where
   fromString = text
 
 -- | `<>` new annotation to the 'Doc'.
 --
 -- Example: 'Any True' annotation will transform the rendered 'Doc' into uppercase:
 --
--- >>> let r = putStrLn . renderWith (\a x -> if a == Just (Any True) then map toUpper x else x)
+-- >>> let r = putStrLn . renderWith (\a x -> if a == Any True then map toUpper x else x)
 -- >>> r $ text "hello" <$$> annotate (Any True) (text "world")
 -- hello
 -- WORLD
 --
-annotate :: forall a. Semigroup a => a -> Doc a -> Doc a
+annotate :: forall a. Monoid a => a -> Doc a -> Doc a
 annotate a (MkDoc xs) = MkDoc (fmap (fmap annotateL) xs)
   where
     annotateL :: L a -> L a
@@ -200,8 +200,7 @@ annotate a (MkDoc xs) = MkDoc (fmap (fmap annotateL) xs)
     annotateAS :: AS a -> AS a
     annotateAS (AS i s) = AS i (fmap annotatePart s)
 
-    annotatePart (Nothing, s) = (ma, s)
-    annotatePart (Just b,  s) = (Just (b <> a), s)
+    annotatePart (b, s) = (b `mappend` a, s)
 
     ma = Just a
 

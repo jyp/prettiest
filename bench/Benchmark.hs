@@ -25,7 +25,7 @@ prettiestJSON (Array a)    = PC.encloseSep (PC.text "[") (PC.text "]") (PC.text 
 prettiestJSON Null         = PC.mempty
 prettiestJSON (Number n)   = PC.text (show n)
 
-pcRenderText :: PC.Doc a -> TL.Text
+pcRenderText :: Monoid a => PC.Doc a -> TL.Text
 pcRenderText = TLB.toLazyText . PC.renderWith (\_ -> TLB.fromString)
 
 wlJSON :: Value -> WL.Doc
