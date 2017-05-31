@@ -391,8 +391,8 @@ The expression @hask«testData» pretty-printed on 80 columns.»«
 @verbatim«
 12345678901234567890123456789012345678901234567890123456789012345678901234567890
 
-((abcde ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d)))
- (abcdefgh ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d))))
+((abcde ((a b c d) (a b c d) (a b c d) (a b c d)))
+ (abcdefgh ((a b c d) (a b c d) (a b c d) (a b c d))))
 »»
 
 Remember that by assumption we would like elements inside an S-Expr to be either
@@ -411,11 +411,9 @@ on a 20-column-wide page, they demand the following output (the first line is no
 ((abcde ((a b c d)
          (a b c d)
          (a b c d)
-         (a b c d)
          (a b c d)))
  (abcdefgh
   ((a b c d)
-   (a b c d)
    (a b c d)
    (a b c d)
    (a b c d))))
@@ -434,13 +432,8 @@ page and using Hughes' library, we would get the output shown in
 ((abcde ((a b c d)
          (a b c d)
          (a b c d)
-         (a b c d)
          (a b c d)))
  (abcdefgh ((a
-             b
-             c
-             d)
-            (a
              b
              c
              d)
@@ -491,11 +484,9 @@ produce the output shown in @fig_wadler:
   ((a b c d)
    (a b c d)
    (a b c d)
-   (a b c d)
    (a b c d)))
  (abcdefgh
   ((a b c d)
-   (a b c d)
    (a b c d)
    (a b c d)
    (a b c d))))
