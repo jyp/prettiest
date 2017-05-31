@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, ViewPatterns, DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
-module Text.PrettyPrint.Compact.Core(Layout(..),Render(..),Document(..),Doc,annotate) where
+module Text.PrettyPrint.Compact.Core(Layout(..),Render(..),Options(..),Document(..),Doc,annotate) where
 
 import Data.List (sortOn,groupBy,minimumBy)
 import Data.Function (on)
@@ -58,20 +58,26 @@ instance Monoid a => Layout (L a) where
    flush (L xs) = L (xs |> mkAS "")
 
 instance Render L where
-  renderWith f (L xs) = intercalate (toList xs)
+  renderWith opts (L xs) = intercalate (toList xs)
     where
+      f = optsAnnotate opts
       f' (AS _ s) = foldMap (uncurry f) s
       sep = f mempty "\n"
 
       intercalate []     = mempty
       intercalate (y:ys) = f' y `mappend` foldMap (mappend sep . f') ys
 
+data Options a r = Options
+    { optsPageWidth :: !Int              -- ^ maximum page width
+    , optsAnnotate  :: a -> String -> r  -- ^ how to annotate the string. /Note:/ the annotation should preserve the visible length of the string.
+    }
+
 -- | This class is split from 'Layout', because of different
 -- kinds: @Render :: (* -> *) -> Constraint@ and @Layout :: * -> Constraint@.
 class Render d where
   renderWith :: (Monoid r,  Monoid a)
-             => (a -> String -> r) -- ^ how to annotate the string. /Note:/ the annotation should preserve the visible length of the string.
-             -> d a                -- ^ renderable
+             => Options a r  -- ^ rendering options
+             -> d a          -- ^ renderable
              -> r
 
 class Monoid d => Layout d where
@@ -140,11 +146,12 @@ paretoOn' m acc (x:xs) = if any ((≺ m x) . m) acc
                             -- for all y ∈ acc, y <= x, and thus x ≺ y
                             -- is false. No need to refilter acc.
 
-newtype Doc a = MkDoc [(M a,L a)] -- list sorted by lexicographic order for the first component
-  deriving Show
+-- list sorted by lexicographic order for the first component
+-- function argument is the page width
+newtype Doc a = MkDoc (Int -> [(M a,L a)])
 
 instance Monoid a => Semigroup (Doc a) where
-  MkDoc xs <> MkDoc ys = MkDoc $ bestsOn fst [ quasifilter (fits . fst) [x <> y | y <- ys] | x <- xs]
+  MkDoc xs <> MkDoc ys = MkDoc $ \w -> bestsOn fst [ quasifilter (fits w . fst) [x <> y | y <- ys w] | x <- xs w]
     where quasifilter p zs = let fzs = filter p zs
                              in if null fzs
                                 then [minimumBy (compare `on` (maxWidth . fst)) zs]
@@ -155,21 +162,24 @@ instance Monoid a => Monoid (Doc a) where
   mappend = (<>)
 
 -- TODO: make columns configurable
-fits :: M a -> Bool
-fits x = maxWidth x <= 80
+fits :: Int -> M a -> Bool
+fits w x = maxWidth x <= w
 
 instance Monoid a => Layout (Doc a) where
-  flush (MkDoc xs) = MkDoc $ bestsOn fst $ map (sortOn fst) $ groupBy ((==) `on` (height . fst)) $ (map flush xs)
+  flush (MkDoc xs) = MkDoc $ \w -> bestsOn fst $ map (sortOn fst) $ groupBy ((==) `on` (height . fst)) $ (map flush (xs w))
   -- flush xs = paretoOn' fst [] $ sort $ (map flush xs)
-  text s = MkDoc [text s]
+  text s = MkDoc $ return [text s]
 
 instance Render Doc where
-  renderWith _ (MkDoc []) = error "No suitable layout found."
-  renderWith f (MkDoc xs@(x:_)) | maxWidth (fst x) <= 80 = renderWith f (snd x)
-                            | otherwise = renderWith f $ snd (minimumBy (compare `on` (maxWidth . fst)) xs)
+  renderWith opts (MkDoc g) = case g pageWidth of
+      [] -> error "No suitable layout found."
+      xs@(x:_) | maxWidth (fst x) <= pageWidth -> renderWith opts (snd x)
+               | otherwise -> renderWith opts $ snd (minimumBy (compare `on` (maxWidth . fst)) xs)
+    where
+      pageWidth = optsPageWidth opts
 
 instance Monoid a => Document (Doc a) where
-  MkDoc m1 <|> MkDoc m2 = MkDoc (bestsOn fst [m1,m2])
+  MkDoc m1 <|> MkDoc m2 = MkDoc $ \w -> (bestsOn fst [m1 w,m2 w])
 
 
 instance (Layout a, Layout b) => Layout (a,b) where
@@ -186,13 +196,13 @@ instance Monoid a => IsString (Doc a) where
 --
 -- Example: 'Any True' annotation will transform the rendered 'Doc' into uppercase:
 --
--- >>> let r = putStrLn . renderWith (\a x -> if a == Any True then map toUpper x else x)
+-- >>> let r = putStrLn . renderWith defaultOptions { optsAnnotate = \a x -> if a == Any True then map toUpper x else x }
 -- >>> r $ text "hello" <$$> annotate (Any True) (text "world")
 -- hello
 -- WORLD
 --
 annotate :: forall a. Monoid a => a -> Doc a -> Doc a
-annotate a (MkDoc xs) = MkDoc (fmap (fmap annotateL) xs)
+annotate a (MkDoc xs) = MkDoc $ (fmap . fmap . fmap) annotateL xs
   where
     annotateL :: L a -> L a
     annotateL (L s) = L (fmap annotateAS s)
