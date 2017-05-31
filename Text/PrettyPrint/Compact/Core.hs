@@ -58,7 +58,7 @@ instance Layout (L a) where
    flush (L xs) = L (xs |> mkAS "")
 
 instance Render L where
-  annotatedRender f (L xs) = intercalate (toList xs)
+  renderWith f (L xs) = intercalate (toList xs)
     where
       f' (AS _ s) = foldMap (uncurry f) s
       sep = f Nothing "\n"
@@ -69,7 +69,7 @@ instance Render L where
 -- | This class is split from 'Layout', because of different
 -- kinds: @Render :: (* -> *) -> Constraint@ and @Layout :: * -> Constraint@.
 class Render d where
-  annotatedRender :: Monoid r
+  renderWith :: Monoid r
                   => (Maybe a -> String -> r) -- ^ how to annotate the string. /Note:/ the annotation should preserve the visible length of the string.
                   -> d a                      -- ^ renderable
                   -> r
@@ -164,9 +164,9 @@ instance Layout (Doc a) where
   text s = MkDoc [text s]
 
 instance Render Doc where
-  annotatedRender _ (MkDoc []) = error "No suitable layout found."
-  annotatedRender f (MkDoc xs@(x:_)) | maxWidth (fst x) <= 80 = annotatedRender f (snd x)
-                            | otherwise = annotatedRender f $ snd (minimumBy (compare `on` (maxWidth . fst)) xs)
+  renderWith _ (MkDoc []) = error "No suitable layout found."
+  renderWith f (MkDoc xs@(x:_)) | maxWidth (fst x) <= 80 = renderWith f (snd x)
+                            | otherwise = renderWith f $ snd (minimumBy (compare `on` (maxWidth . fst)) xs)
 
 instance Document (Doc a) where
   MkDoc m1 <|> MkDoc m2 = MkDoc (bestsOn fst [m1,m2])
@@ -186,7 +186,7 @@ instance IsString (Doc a) where
 --
 -- Example: 'Any True' annotation will transform the rendered 'Doc' into uppercase:
 --
--- >>> let r = putStrLn . annotatedRender (\a x -> if a == Just (Any True) then map toUpper x else x)
+-- >>> let r = putStrLn . renderWith (\a x -> if a == Just (Any True) then map toUpper x else x)
 -- >>> r $ text "hello" <$$> annotate (Any True) (text "world")
 -- hello
 -- WORLD

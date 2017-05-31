@@ -57,7 +57,7 @@
 -- and in the rendering phase emphasise them by rendering them in uppercase.
 --
 -- >>> let pretty' :: SExpr -> Doc Any; pretty' (Atom s) = text s; pretty' (SExpr []) = text "()"; pretty' (SExpr (x:xs)) = text "(" <> (sep $ annotate (Any True) (pretty' x) : map pretty' xs) <> text ")"
--- >>> let render' = annotatedRender (\a x -> if a == Just (Any True) then map toUpper x else x)
+-- >>> let render' = renderWith (\a x -> if a == Just (Any True) then map toUpper x else x)
 -- >>> putStrLn $ render' $ pretty' testData
 -- ((ABCDE ((A B C D) (A B C D) (A B C D) (A B C D)))
 --  (ABCDEFGH ((A B C D) (A b c d) (A b c d) (A b c d))))
@@ -92,7 +92,7 @@ module Text.PrettyPrint.Compact (
    bool,
 
    -- * Rendering
-   annotatedRender,
+   renderWith,
    render,
 
    -- * Undocumented
@@ -106,7 +106,7 @@ import Text.PrettyPrint.Compact.Core as Text.PrettyPrint.Compact
 
 -- | Render the 'Doc' into 'String' omitting all annotations.
 render :: Doc a -> String
-render = annotatedRender (\_ s -> s)
+render = renderWith (\_ s -> s)
 
 -- | The document @(list xs)@ comma separates the documents @xs@ and
 -- encloses them in square brackets. The documents are rendered
