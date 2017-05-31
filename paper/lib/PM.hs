@@ -28,6 +28,9 @@ import System.Random
 
 newtype NoDom = NoDom [M]
 
+ribbonLength :: Int
+ribbonLength = 60
+
 randomDyck :: Int -> IO [OC]
 
 instance Layout NoDom where
@@ -167,7 +170,7 @@ comment _ = mempty
 
 preamble :: forall b. Tex b -> Tex b
 preamble body = do
-  documentClass "acmart" ["acmlarge"]
+  documentClass "acmart" ["acmsmall"]
   cmd "setcitestyle" «authoryear»
   stdPreamble
   mathpreamble
@@ -218,7 +221,7 @@ A pretty printer is a program that prints data structures in a way which
 makes them pleasant to read. (The data structures in question
 often represent programs, but not always.)
 Pretty printing has historically been used by members of the functional programming
-community to showcase proper style. Pro-eminent examples include, the pretty printer of @citet"hughes_design_1995",
+community to showcase good style. Proeminent examples include the pretty printer of @citet"hughes_design_1995",
 which remains an influential example of functional programming design, and that of
 @citet"wadler_prettier_2003" which was published as a chapter in a book dedicated to the @qu"fun of programming".
 
@@ -229,7 +232,7 @@ Hackage package @sans«pretty»@footnote«@url«https://hackage.haskell.org/pack
 while Wadler's design has been extended by Leijen and made available as the
 @sans«wl-print» package@footnote«@url«https://hackage.haskell.org/package/wl-pprint»». An ocaml implementation@footnote«@url«https://gallium.inria.fr/~fpottier/pprint/doc»» of Wadler's design also exists.
 
-While this paper improves some aspects of the aforementioned landmark pieces of work in the functional programming landscape,
+While this paper draws much inspiration from the aforementioned landmark pieces of work in the functional programming landscape,
 my goal is slightly different to that of Hughes and Wadler. Indeed, they aim first and foremost to
 demonstrate general principles of functional programming development, with an emphasis on the efficiency of the algorithm.
 Their methodological approach is to derive a @emph«greedy» algorithm from a functional specification.
@@ -253,12 +256,12 @@ Furthermore, the first principle takes precedence over the second one, which its
 In the rest of the paper, we interpret the above three principles as an optimization problem, and derive a program
 which solves it efficiently enough for practical purposes.
 
-Before diving into the details, a couple of methodological points. 
-First, Haskell is used throughout this paper in its quality of @emph«lingua franca» of functional programming pearls.
-Yet, we make no essential use of laziness. Second, 
+Before diving into the details, let us pose a couple of methodological points.
+First, Haskell is used throughout this paper in its quality of @emph«lingua franca» of functional programming pearls ---
+yet, we make no essential use of laziness. Second, 
 the source code for the paper and benchmarks, as well as a fully fledged pretty printing library based on its principles is available
 online: @url«https://github.com/jyp/prettiest». A Haskell library based on the algorithm developed here
-can be found on Hackage: @url«https://hackage.haskell.org/package/pretty-compact».
+is available as well @footnote«@url«https://hackage.haskell.org/package/pretty-compact»».
 
 
 @sec_api<-section«Interface (Syntax)»
@@ -285,7 +288,7 @@ While it is clear how the first two principles constrain the result, it
 is less clear how the third principle plays out: we must specify more precisely which
 layouts are admissible. To this end, we assert that in a pretty
 display of an S-Expr, the elements should be either
-concatenated horizontally, or aligned vertically. (Even though there possible choices, ours is sufficient for illustrative purposes.)
+concatenated horizontally, or aligned vertically. (Even though there are other possible choices, ours is sufficient for illustrative purposes.)
 For example, the legible layouts of the @hask«abcd» S-Expression defined above would be either
 
 @verbatim«
@@ -310,11 +313,10 @@ will then automatically pick the smallest (@pcp_compact) legible layout which fi
 the page (@pcp_visibility).
 
 Our layout-description API
-is similar to Hughes': we can express both
-vertical (@hask«$$») and horizontal (@hask«<>») composition of
-documents, as well as embed raw @hask«text» and provide
-choice between layouts (@hask«<|>») --- but we lack a dedicated flexible space insertion operator (@hask«<+>»).
-We give formal definition those in @sec_formal_semantics, but at this stage we keep
+is similar to Hughes': we can contatenate documents either
+vertically (@hask«$$») or horizontally (@hask«<>»), as well as embed raw @hask«text» and chose
+between layouts (@hask«<|>») --- but we lack a dedicated flexible space insertion operator (@hask«<+>»).
+We give a formal definition of those operators in @sec_formal_semantics, but at this stage we keep
 the implementation of documents abstract. We do so by using a typeclass (@hask«Doc») which
 provides the above combinators, as well as means of @hask«render»ing a
 document:
@@ -464,18 +466,6 @@ document in a narrow area, wasting vertical space. Such a waste occurs in
 many real examples: any optimistic fitting on an early line may waste
 tremendous amount of space later on.
 
-How does Wadler's library fare on the example? Unfortunately, we
-cannot answer the question in a strict sense. Indeed, Wadler's API is
-too restrictive to even @emph«express» the layout that we are after. That
-is, one can only specify a @emph«constant» amount of indentation, not
-one that depends on the contents of a document. In other words,
-Wadler's library lacks the capability to express that a multi-line
-sub-document @hask«b» should be laid out to the right of a document
-@hask«a» (even if @hask«a» is single-line).  Instead, @hask«b» must be
-put below @hask«a». Because of this restriction, even the best
-pretty printer written using Wadler's library can only
-produce the output shown in @fig_wadler:
-
 @fig_wadler<-figure«The expression @hask«testData» pretty-printed using Wadler's library.»«
 @verbatim«
 12345678901234567890
@@ -492,8 +482,18 @@ produce the output shown in @fig_wadler:
    (a b c d))))
 »
 »
-
-The above result does not look too bad --- but there is a spurious line break after the atom
+How does Wadler's library fare on the example? Unfortunately, we
+cannot answer the question in a strict sense. Indeed, Wadler's API is
+too restrictive to even @emph«express» the layout that we are after. That
+is, one can only specify a @emph«constant» amount of indentation, not
+one that depends on the contents of a document. In other words,
+Wadler's library lacks the capability to express that a multi-line
+sub-document @hask«b» should be laid out to the right of a document
+@hask«a» (even if @hask«a» is single-line).  Instead, @hask«b» must be
+put below @hask«a». Because of this restriction, even the best
+pretty printer written using Wadler's library can only
+produce the output shown in @fig_wadler.
+The result does not look too bad --- but there is a spurious line break after the atom
 @teletype«abcde». While Wadler's restriction may be acceptable to some, I find it
 unsatisfying for two reasons. First, spurious line breaks may appear
 in many places, so the rendering may be much longer than necessary, thereby violating @pcp_compact.
@@ -524,10 +524,10 @@ Pattern = expression
    listElement z,
    listElement w]
 »
-Aligning the argument of the expression below to the left of the equal sign is bad, because
+Aligning the argument of the expression below and to the left of the equal sign is bad, because
 it needlessly obscures the structure of the program; @pcp_layout is not
-respected. In summary, the lack of a combinator for relative indentation
-is a serious drawback@footnote«which is also present in the work of @citet"swierstra_linear_2009"». In fact, Leijen's
+respected. The the lack of a combinator for relative indentation
+is a serious drawback@footnote«A drawback which also hurts the work of @citet"swierstra_linear_2009"». In fact, Leijen's
 implementation of Wadler's design (@sans«wl-print»), @emph«does» feature
 an alignment combinator. However, as Hughes' does, Leijen's uses a greedy algorithm, and thus
 suffers from the same issue as Hughes' library.
@@ -671,7 +671,7 @@ class Layout l where
 »
 Additionally, as mentioned above, layouts follow a number of algebraic
 laws, (written here as QuickCheck properties@footnote«These properties can be (and were) checked when properly monomorphized using
-either of the concrete implementations provided later. The same applies for all properties stated in the paper.»):
+either of the concrete implementations provided later. The same checks were performed for all properties stated in the paper.»):
 
 @enumList[
 «Layouts form a monoid, with operator (@hask«<>») and unit @hask«empty»@footnote«recall @hask«empty = text ""»»:
@@ -779,7 +779,7 @@ by combining all three principles. Namely, to pick a most frugal layout among th
              mostFrugal .
              filter visible
 »
-Note that the call to @hask«render» in the above that of the @hask«L» instance.
+Note that the call to @hask«render» in the above snippet invokes the implementation of the @hask«L» instance.
 The rest of the above definition breaks down as follows.
 @pcp_visibility is formalized by the @hask«visible» function, which states that all lines must fit on the page:
 @haskell«
@@ -814,8 +814,8 @@ infix 3 =~
 (=~) = (==) `on` (length . lines . render)
 »
 
-We have now defined semantics compositionally. Furthermore, this semantics is executable.
-Consequently, we can implement the pretty printing an S-Expr as follows:
+We have now defined semantics compositionally. Furthermore, this semantics is executable, and thus
+we can implement the pretty printing of an S-Expr as follows:
 
 @haskell«
 showSExpr x = render (pretty x :: [L])
@@ -829,9 +829,9 @@ picked. Thus, for an input with @ensureMath«n» choices, the running time is @t
 
 
 @sec_optimization<-section«A More Efficient Implementation»
-The last chunk of work is to transform the above, clearly correct but inefficient implementation
+The next chunk of work is to transform the above, clearly correct but inefficient implementation
 to a functionally equivalent, but efficient one.
-We do so we need two insights.
+To do so we need two insights.
 
 @subsection«Measures»
 
@@ -843,7 +843,7 @@ Let us define an abstract semantics for
 layouts, which ignores the text, and captures only the amount of space used.
 
 The only parameters that matter are the maximum width of the layout, the width of its
-last line and its height (and, because layouts cannot be empty and it is convenient to counting start at zero, we do not
+last line and its height (and, because layouts cannot be empty and it is convenient to start counting from zero, we do not
 count the last line):
 @singleLayoutDiag
 In code:
@@ -854,7 +854,7 @@ data M = M {  height     :: Int,
   deriving (Show,Eq,Ord)
 »
 
-Astute readers may have guessed the above semantics by looking at the diagram for
+Astute readers may have guessed the above parameters by looking at the diagram for
 composition of layouts shown earlier. Indeed, it is the above abstract semantics (@hask«M») which justifies
 the abstract representation of a layout that the diagram uses (a box with an odd last line).
 Here is the concatenation diagram annotated with those lengths:
@@ -880,7 +880,7 @@ The other layout combinators are easy to implement:
                   lastWidth  = 0}
 »
 
-We can even give a rendering for these abstract layouts, by printing an @teletype«x» at each
+We can even give a rendering for these abstract layouts by printing an @teletype«x» at each
 occupied position, thereby completing the class instance:
 @haskell«
   render m = intercalate "\n"
@@ -968,7 +968,7 @@ valid (flush a)  => maxWidth (flush a) <= pageWidth
 Consequently, keeping invalid layouts is useless: they can never be
 combined with another layout to produce something valid.
 
-@lemma«Invalid layouts cannot be fixed»«
+@theorem«Invalid layouts cannot be fixed»«
 @spec«
 not (valid a)    => not (valid (a <> b))
 not (valid b)    => not (valid (a <> b))
@@ -1093,7 +1093,7 @@ We know by now that in any set of possible layouts, it is sufficent to consider 
 layouts.
 This subset is known as the Pareto frontier @citep"deb_multi_2016" and has the following definition.
 @definition«Pareto frontier»«
-@tm«\mathnormal{Pareto}(X) = \{ x∈X | ¬∃y∈X. x ≠ y ∧ y ≺ x\}»
+@tm«\mathnormal{Pareto}(X) = \{ x∈X ~|~ ¬∃y∈X. x ≠ y ∧ y ≺ x\}»
 »
 When sets are represented as lists without duplicates, the Pareto frontier can be computed as follows.
 @haskell«
@@ -1192,18 +1192,17 @@ The goal is to avoid long lines mixed with short lines.
 While such a feature is easily added to Hughes or Wadler's greedy pretty printer,
 it is harder to support as such on top of the basis we have so far.
 
-What we would need to do is to record the length of the 1st line and length of the last line without indentation.
+What we would need to do is to record the length of the first line and length of the last line without indentation.
 When concatenating, we add those numbers and check that they do not surpass the ribbon length. Unfortunately this
-algorithm adds two dimensions to the search space, and slows the final algorithm to impractical speeds.
+method adds two dimensions to the search space, and slows the final algorithm to impractical speeds.
 
 An alternative approach to avoid too long lines is to interpret the ribbon length as the maximum
 size of a self-contained sublayout fitting on a single line. This interpretation can
-be implemented simply, by filtering out intermediate results that do not fit the ribbon.
+be implemented efficiently, by filtering out intermediate results that do not fit the ribbon.
 This can be done be re-defining @hask«valid» as follows:
 
 @haskell«
 fitRibbon m = height m > 0 || maxWidth m < ribbonLength
-  where ribbonLength = 60
 
 valid' m = valid m && fitRibbon m
 »
@@ -1269,7 +1268,7 @@ and depends only on the amount of text to render.
 
 One may wonder if the effect that we observe is not specific to full trees.
 To control this hypothesis we ran the same experiment on 100 random S-expressions of exponentially increasing length.
-These S-expressions were generated by picking random Dyck words of a certain length (using the @hask«randomDyck» function shown below) and then interleaving parentheses
+These S-expressions were generated by picking random Dyck words of a certain length (using the @hask«randomDyck» function shown below) and then interleaving the obtained parentheses
 with atoms.
 @haskell«
 randomDyck maxLen = go 0 0 where
@@ -1327,10 +1326,10 @@ three informal principles.
 I have carefully refined this informal definition to a formal semantics (arguably simpler than that of the state of the art).
 I avoided cutting any corner and went for the absolute prettiest layout. Doing so I could not obtain a greedy algorithm,
 but still have derived a reasonably efficient implementation.
-In the end, the standard methodology worked well I could use it from start to finish.
+In the end, the standard methodology worked well: I could use it from start to finish.
 
-@acknowledgements«Most of the work described in this paper was carried out while the author was employed by Chalmers University of Technology.
-Facundo Domingez, Atze van der Ploeg and Arnaud Spiwack as well as anonymous ICFP reviewers provided useful feedback on drafts of this paper.
+@acknowledgements«Some of the work described in this paper was carried out while the author was employed by Chalmers University of Technology.
+Facundo Domingez, Atze van der Ploeg, Arnaud Spiwack and anonymous ICFP reviewers provided useful feedback on drafts of this paper.
 Using the QuickSpec tool, Nicholas Smallbone helped
 finding a bug in the final implementation: the concatenation operator
 did not preserve the invariant that lists were sorted. »
@@ -1348,7 +1347,8 @@ appendix = do
   paragraph«Proof of measure being a Layout-homomorphism»
   enumList [
    spec«
-measure (a ++ [""])
+measure (flush a)
+                    == measure (a ++ [""])
                     == M { maxWidth = maximum ((map length) (a ++ [""]))
                          , height   = length  (a ++ [""]) - 1
                          , lastWidth = length $ last $ (a ++ [""])
@@ -1370,7 +1370,8 @@ measure (a ++ [""])
    ,
    spec«
 measure (xs <> (y:ys))
-                       == M { maxWidth = maximum ((map length) (init xs ++ [last xs ++ y] ++ map (indent ++) ys))
+                       == M { maxWidth = maximum (map length (  init xs ++ [last xs ++ y] ++
+                                                                map (indent ++) ys))
                             , height  = length (init xs ++ [last xs ++ y] ++ map (indent ++) ys) - 1
                             , lastWidth = length $ last $ (init xs ++ [last xs ++ y] ++ map (indent ++) ys)
                             }
@@ -1380,16 +1381,19 @@ measure (xs <> (y:ys))
                             , lastWidth = last ((  init (map length xs) ++ [length (last xs) + length y] ++
                                                    map (\y -> length (last xs) + length y) ys))
                             }
-                       == M { maxWidth = maximum (init (map length xs) ++ map (\y -> length (last xs) + length y) (y:ys))
+                       == M { maxWidth = maximum (  init (map length xs) ++
+                                                    map (\y -> length (last xs) + length y) (y:ys))
                             , height  = (length xs - 1) + (length (y:ys) - 1)
-                            , lastWidth = last $ (init (map length xs) ++ map (\y -> length (last xs) + length y) (y:ys))
+                            , lastWidth = last (  init (map length xs) ++
+                                                  map (\y -> length (last xs) + length y) (y:ys))
                             }
                        == M { maxWidth = maximum [  maximum (init (map length xs)),
                                                     length (last xs) + maximum (map length (y:ys))]
                             , height  = (length xs - 1) + (length (y:ys) - 1)
-                            , lastWidth = last $ (map (\y -> length (last xs) + length y) (y:ys))
+                            , lastWidth = last (map (\y -> length (last xs) + length y) (y:ys))
                             }
-                       == M { maxWidth = maximum [maximum (map length xs), length (last xs) + maximum (map length (y:ys))]
+                       == M { maxWidth = maximum [  maximum (map length xs),
+                                                    length (last xs) + maximum (map length (y:ys))]
                             , height  = (length xs - 1) + (length (y:ys) - 1)
                             , lastWidth = length (last xs) + last $ (map length (y:ys))
                             }
