@@ -1,5 +1,52 @@
-{-# LANGUAGE OverloadedStrings #-}
-
+{-# LANGUAGE OverloadedStrings, DataKinds #-}
+-- | Compact pretty-printer.
+--
+-- == Examples
+--
+-- Assume that we want to pretty print S-Expressions, which can either be atom or a list of S-Expressions.
+--
+-- >>> data SExpr = SExpr [SExpr] | Atom String deriving Show
+-- >>> let pretty :: KnownNat w => SExpr -> Doc w (); pretty (Atom s) = text s; pretty (SExpr xs) = text "(" <> (sep $ map pretty xs) <> text ")"
+--
+-- Using the above representation, the S-Expression @(a b c d)@ has the following encoding:
+--
+-- >>> let abcd = SExpr [Atom "a",Atom "b",Atom "c",Atom "d"]
+--
+-- The legible layouts of the @abcd@ S-Expression defined above would be either
+--
+-- >>> putStrLn $ render $ pretty abcd
+-- (a b c d)
+--
+-- >>> putStrLn $ renderWith (\_ s -> s) (pretty abcd :: Doc 5 ())
+-- (a
+--  b
+--  c
+--  d)
+--
+-- The @testData@ S-Expression is specially crafted to
+-- demonstrate general shortcomings of both Hughes and Wadler libraries.
+--
+-- >>> let abcd4 = SExpr [abcd,abcd,abcd,abcd]
+-- >>> let testData = SExpr [ SExpr [Atom "abcde", abcd4], SExpr [Atom "abcdefgh", abcd4]]
+-- >>> putStrLn $ render $ pretty testData
+-- ((abcde ((a b c d) (a b c d) (a b c d) (a b c d)))
+--  (abcdefgh ((a b c d) (a b c d) (a b c d) (a b c d))))
+--
+-- on 20-column-wide page:
+--
+-- >>> putStrLn $ renderWith (\_ s -> s) (pretty testData :: Doc 20 ())
+-- ((abcde ((a b c d)
+--          (a b c d)
+--          (a b c d)
+--          (a b c d)))
+--  (abcdefgh
+--   ((a b c d)
+--    (a b c d)
+--    (a b c d)
+--    (a b c d))))
+--
+-- Yet, neither Hughes' nor Wadler's library can deliver those results.
+--
 module Text.PrettyPrint.Compact (
    -- * Documents
    Doc,
@@ -15,6 +62,9 @@ module Text.PrettyPrint.Compact (
    -- * List combinators
    hsep, sep, hcat, vcat, cat, punctuate,
 
+   -- * Fill combiantors
+   fillSep, fillCat,
+
    -- * Bracketing combinators
    enclose, squotes, dquotes, parens, angles, braces, brackets,
 
@@ -27,6 +77,7 @@ module Text.PrettyPrint.Compact (
    bool,
 
    -- * Rendering
+   renderWith,
    render,
 
    -- * Undocumented
@@ -35,21 +86,26 @@ module Text.PrettyPrint.Compact (
 
 import Data.Monoid
 import Data.List (intersperse)
+import GHC.TypeLits (KnownNat)
 
 import Text.PrettyPrint.Compact.Core as Text.PrettyPrint.Compact
+
+-- | Render the 'Doc' into 'String' omitting all annotations.
+render :: Doc 80 a -> String
+render = renderWith (\_ s -> s)
 
 -- | The document @(list xs)@ comma separates the documents @xs@ and
 -- encloses them in square brackets. The documents are rendered
 -- horizontally if that fits the page. Otherwise they are aligned
 -- vertically. All comma separators are put in front of the elements.
-list :: [Doc] -> Doc
+list :: KnownNat w => [Doc w a] -> Doc w a
 list            = encloseSep lbracket rbracket comma
 
 -- | The document @(tupled xs)@ comma separates the documents @xs@ and
 -- encloses them in parenthesis. The documents are rendered
 -- horizontally if that fits the page. Otherwise they are aligned
 -- vertically. All comma separators are put in front of the elements.
-tupled :: [Doc] -> Doc
+tupled :: KnownNat w => [Doc w a] -> Doc w a
 tupled          = encloseSep lparen   rparen  comma
 
 
@@ -57,7 +113,7 @@ tupled          = encloseSep lparen   rparen  comma
 -- semi colons and encloses them in braces. The documents are rendered
 -- horizontally if that fits the page. Otherwise they are aligned
 -- vertically. All semi colons are put in front of the elements.
-semiBraces :: [Doc] -> Doc
+semiBraces :: KnownNat w => [Doc w a] -> Doc w a
 semiBraces      = encloseSep lbrace   rbrace  semi
 
 -- | The document @(enclosure l r sep xs)@ concatenates the documents
@@ -83,7 +139,7 @@ semiBraces      = encloseSep lbrace   rbrace  semi
 --      ,200
 --      ,3000]
 -- @
-encloseSep :: Doc -> Doc -> Doc -> [Doc] -> Doc
+encloseSep :: KnownNat w => Doc w a -> Doc w a -> Doc w a -> [Doc w a] -> Doc w a
 encloseSep left right sep ds
     = (\mid -> mid <> right) $ case ds of
         []  -> left <> mempty
@@ -118,7 +174,7 @@ encloseSep left right sep ds
 --
 -- (If you want put the commas in front of their elements instead of
 -- at the end, you should use 'tupled' or, in general, 'encloseSep'.)
-punctuate :: Doc -> [Doc] -> [Doc]
+punctuate :: KnownNat w => Doc w a -> [Doc w a] -> [Doc w a]
 punctuate p []      = []
 punctuate p [d]     = [d]
 punctuate p (d:ds)  = (d <> p) : punctuate p ds
@@ -133,7 +189,7 @@ punctuate p (d:ds)  = (d <> p) : punctuate p ds
 -- horizontally with @(\<+\>)@, if it fits the page, or vertically with
 -- @(\<$\>)@.
 --
-sep :: [Doc] -> Doc
+sep :: KnownNat w => [Doc w a] -> Doc w a
 sep [] = mempty
 sep [x] = x
 sep xs = hsep xs <|> vcat xs
@@ -145,12 +201,12 @@ sep xs = hsep xs <|> vcat xs
 -- @xs@.
 --
 -- > fillSep xs  = foldr (\<\/\>) empty xs
-fillSep :: [Doc] -> Doc
+fillSep :: KnownNat w => [Doc w a] -> Doc w a
 fillSep         = foldDoc (</>)
 
 -- | The document @(hsep xs)@ concatenates all documents @xs@
 -- horizontally with @(\<+\>)@.
-hsep :: [Doc] -> Doc
+hsep :: KnownNat w => [Doc w a] -> Doc w a
 hsep            = foldDoc (<+>)
 
 -- | The document @(cat xs)@ concatenates all documents @xs@ either
@@ -158,7 +214,7 @@ hsep            = foldDoc (<+>)
 -- @(\<$$\>)@.
 --
 -- > cat xs  = group (vcat xs)
-cat :: [Doc] -> Doc
+cat :: KnownNat w => [Doc w a] -> Doc w a
 cat [] =  mempty
 cat [x] = x
 cat xs = hcat xs <|> vcat xs
@@ -168,133 +224,133 @@ cat xs = hcat xs <|> vcat xs
 -- a @linebreak@ and continues doing that for all documents in @xs@.
 --
 -- > fillCat xs  = foldr (\<\/\/\>) empty xs
-fillCat :: [Doc] -> Doc
+fillCat :: KnownNat w => [Doc w a] -> Doc w a
 fillCat         = foldDoc (<//>)
 
 -- | The document @(hcat xs)@ concatenates all documents @xs@
 -- horizontally with @(\<\>)@.
-hcat :: [Doc] -> Doc
+hcat :: KnownNat w => [Doc w a] -> Doc w a
 hcat            = foldDoc (<>)
 
 -- | The document @(vcat xs)@ concatenates all documents @xs@
 -- vertically with @($$)@.
-vcat :: [Doc] -> Doc
+vcat :: KnownNat w => [Doc w a] -> Doc w a
 vcat            = foldDoc ($$)
 
-foldDoc :: (Doc -> Doc -> Doc) -> [Doc] -> Doc
+foldDoc :: KnownNat w => (Doc w a -> Doc w a -> Doc w a) -> [Doc w a] -> Doc w a
 foldDoc _ []       = mempty
 foldDoc f ds       = foldr1 f ds
 
 -- | The document @(x \<+\> y)@ concatenates document @x@ and @y@ with a
 -- @space@ in between.  (infixr 6)
-(<+>) :: Doc -> Doc -> Doc
+(<+>) :: KnownNat w => Doc w a -> Doc w a -> Doc w a
 x <+> y         = x <> space <> y
 
 -- | The document @(x \<\/\> y)@ puts @x@ and @y@ either next to each other
 -- (with a @space@ in between) or underneath each other. (infixr 5)
-(</>) :: Doc -> Doc -> Doc
+(</>) :: KnownNat w => Doc w a -> Doc w a -> Doc w a
 x </> y         = ((x <> space) <|> flush x) <> y
 
 -- | The document @(x \<\/\/\> y)@ puts @x@ and @y@ either right next to each
 -- other or underneath each other. (infixr 5)
-(<//>) :: Doc -> Doc -> Doc
+(<//>) :: KnownNat w => Doc w a -> Doc w a -> Doc w a
 x <//> y        = (x <|> flush x) <> y
 
 
 -- | The document @(x \<$$\> y)@ concatenates document @x@ and @y@ with
 -- a linebreak in between. (infixr 5)
-(<$$>) :: Doc -> Doc -> Doc
+(<$$>) :: KnownNat w => Doc w a -> Doc w a -> Doc w a
 x <$$> y = flush x <> y
 
 
 -- | Document @(squotes x)@ encloses document @x@ with single quotes
 -- \"'\".
-squotes :: Doc -> Doc
+squotes :: KnownNat w => Doc w a -> Doc w a
 squotes         = enclose squote squote
 
 -- | Document @(dquotes x)@ encloses document @x@ with double quotes
 -- '\"'.
-dquotes :: Doc -> Doc
+dquotes :: KnownNat w => Doc w a -> Doc w a
 dquotes         = enclose dquote dquote
 
 -- | Document @(braces x)@ encloses document @x@ in braces, \"{\" and
 -- \"}\".
-braces :: Doc -> Doc
+braces :: KnownNat w => Doc w a -> Doc w a
 braces          = enclose lbrace rbrace
 
 -- | Document @(parens x)@ encloses document @x@ in parenthesis, \"(\"
 -- and \")\".
-parens :: Doc -> Doc
+parens :: KnownNat w => Doc w a -> Doc w a
 parens          = enclose lparen rparen
 
 -- | Document @(angles x)@ encloses document @x@ in angles, \"\<\" and
 -- \"\>\".
-angles :: Doc -> Doc
+angles :: KnownNat w => Doc w a -> Doc w a
 angles          = enclose langle rangle
 
 -- | Document @(brackets x)@ encloses document @x@ in square brackets,
 -- \"[\" and \"]\".
-brackets :: Doc -> Doc
+brackets :: KnownNat w => Doc w a -> Doc w a
 brackets        = enclose lbracket rbracket
 
 -- | The document @(enclose l r x)@ encloses document @x@ between
 -- documents @l@ and @r@ using @(\<\>)@.
-enclose :: Doc -> Doc -> Doc -> Doc
+enclose :: KnownNat w => Doc w a -> Doc w a -> Doc w a -> Doc w a
 enclose l r x   = l <> x <> r
 
-char :: Char -> Doc
+char :: KnownNat w => Char -> Doc w a
 char x = text [x]
 
 -- | The document @lparen@ contains a left parenthesis, \"(\".
-lparen :: Doc
+lparen :: KnownNat w => Doc w a
 lparen          = char '('
 -- | The document @rparen@ contains a right parenthesis, \")\".
-rparen :: Doc
+rparen :: KnownNat w => Doc w a
 rparen          = char ')'
 -- | The document @langle@ contains a left angle, \"\<\".
-langle :: Doc
+langle :: KnownNat w => Doc w a
 langle          = char '<'
 -- | The document @rangle@ contains a right angle, \">\".
-rangle :: Doc
+rangle :: KnownNat w => Doc w a
 rangle          = char '>'
 -- | The document @lbrace@ contains a left brace, \"{\".
-lbrace :: Doc
+lbrace :: KnownNat w => Doc w a
 lbrace          = char '{'
 -- | The document @rbrace@ contains a right brace, \"}\".
-rbrace :: Doc
+rbrace :: KnownNat w => Doc w a
 rbrace          = char '}'
 -- | The document @lbracket@ contains a left square bracket, \"[\".
-lbracket :: Doc
+lbracket :: KnownNat w => Doc w a
 lbracket        = char '['
 -- | The document @rbracket@ contains a right square bracket, \"]\".
-rbracket :: Doc
+rbracket :: KnownNat w => Doc w a
 rbracket        = char ']'
 
 
 -- | The document @squote@ contains a single quote, \"'\".
-squote :: Doc
+squote :: KnownNat w => Doc w a
 squote          = char '\''
 -- | The document @dquote@ contains a double quote, '\"'.
-dquote :: Doc
+dquote :: KnownNat w => Doc w a
 dquote          = char '"'
 -- | The document @semi@ contains a semi colon, \";\".
-semi :: Doc
+semi :: KnownNat w => Doc w a
 semi            = char ';'
 -- | The document @colon@ contains a colon, \":\".
-colon :: Doc
+colon :: KnownNat w => Doc w a
 colon           = char ':'
 -- | The document @comma@ contains a comma, \",\".
-comma :: Doc
+comma :: KnownNat w => Doc w a
 comma           = char ','
 
 -- | The document @dot@ contains a single dot, \".\".
-dot :: Doc
+dot :: KnownNat w => Doc w a
 dot             = char '.'
 -- | The document @backslash@ contains a back slash, \"\\\".
-backslash :: Doc
+backslash :: KnownNat w => Doc w a
 backslash       = char '\\'
 -- | The document @equals@ contains an equal sign, \"=\".
-equals :: Doc
+equals :: KnownNat w => Doc w a
 equals          = char '='
 
 -----------------------------------------------------------
@@ -307,35 +363,35 @@ equals          = char '='
 -- using @line@ for newline characters and @char@ for all other
 -- characters. It is used instead of 'text' whenever the text contains
 -- newline characters.
-string :: String -> Doc
+string :: KnownNat w => String -> Doc w a
 string = vcat . map text . lines
 
-bool :: Bool -> Doc
+bool :: KnownNat w => Bool -> Doc w a
 bool b          = text (show b)
 
 -- | The document @(int i)@ shows the literal integer @i@ using
 -- 'text'.
-int :: Int -> Doc
+int :: KnownNat w => Int -> Doc w a
 int i           = text (show i)
 
 -- | The document @(integer i)@ shows the literal integer @i@ using
 -- 'text'.
-integer :: Integer -> Doc
+integer :: KnownNat w => Integer -> Doc w a
 integer i       = text (show i)
 
 -- | The document @(float f)@ shows the literal float @f@ using
 -- 'text'.
-float :: Float -> Doc
+float :: KnownNat w => Float -> Doc w a
 float f         = text (show f)
 
 -- | The document @(double d)@ shows the literal double @d@ using
 -- 'text'.
-double :: Double -> Doc
+double :: KnownNat w => Double -> Doc w a
 double d        = text (show d)
 
 -- | The document @(rational r)@ shows the literal rational @r@ using
 -- 'text'.
-rational :: Rational -> Doc
+rational :: KnownNat w => Rational -> Doc w a
 rational r      = text (show r)
 
 
@@ -359,7 +415,7 @@ rational r      = text (show r)
 -- The @hang@ combinator is implemented as:
 --
 -- > hang i x  = align (nest i x)
-hang :: Int -> Doc -> Doc -> Doc
+hang :: KnownNat w => Int -> Doc w a -> Doc w a -> Doc w a
 hang n x y = (x <+> y) <|> (x $$ nest' n y)
 
 -- | The document @(nest i x)@ renders document @x@ with the current
@@ -377,17 +433,20 @@ hang n x y = (x <+> y) <|> (x $$ nest' n y)
 -- @
 
 
-space :: Doc
+space :: KnownNat w =>  Doc w a
 space = text " "
 
 
-nest' :: Int -> Doc -> Doc
+nest' :: KnownNat w => Int -> Doc w a -> Doc w a
 nest' n x = spaces n <> x
 
-spaces :: Int -> Doc
+spaces :: KnownNat w => Int -> Doc w a
 spaces n = text $ replicate n ' '
 
 -- | The document @(x \<$$\> y)@ concatenates document @x@ and @y@ with
 -- a linebreak in between. (infixr 5)
-($$) :: Doc -> Doc -> Doc
+($$) :: KnownNat w => Doc w a -> Doc w a -> Doc w a
 ($$)  = (<$$>)
+
+-- $setup
+-- >>> :set -XDataKinds
