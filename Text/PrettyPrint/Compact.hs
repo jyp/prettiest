@@ -17,14 +17,13 @@
 -- >>> putStrLn $ render $ pretty abcd
 -- (a b c d)
 --
--- or /TODO/
+-- or
 --
--- @
+-- >>> putStrLn $ renderWith defaultOptions { optsPageWidth = 5 } $ pretty abcd
 -- (a
 --  b
 --  c
 --  d)
--- @
 --
 -- The @testData@ S-Expression is specially crafted to
 -- demonstrate general shortcomings of both Hughes and Wadler libraries.
@@ -35,9 +34,9 @@
 -- ((abcde ((a b c d) (a b c d) (a b c d) (a b c d)))
 --  (abcdefgh ((a b c d) (a b c d) (a b c d) (a b c d))))
 --
--- on 20-column-wide page: /TODO/
+-- on 20-column-wide page
 --
--- @
+-- >>> putStrLn $ renderWith defaultOptions { optsPageWidth = 20 } $ pretty testData
 -- ((abcde ((a b c d)
 --          (a b c d)
 --          (a b c d)
@@ -47,7 +46,6 @@
 --    (a b c d)
 --    (a b c d)
 --    (a b c d))))
--- @
 --
 -- Yet, neither Hughes' nor Wadler's library can deliver those results.
 --
@@ -57,7 +55,7 @@
 -- and in the rendering phase emphasise them by rendering them in uppercase.
 --
 -- >>> let pretty' :: SExpr -> Doc Any; pretty' (Atom s) = text s; pretty' (SExpr []) = text "()"; pretty' (SExpr (x:xs)) = text "(" <> (sep $ annotate (Any True) (pretty' x) : map pretty' xs) <> text ")"
--- >>> let render' = renderWith (\a x -> if a == Any True then map toUpper x else x)
+-- >>> let render' = renderWith defaultOptions { optsAnnotate  = \a x -> if a == Any True then map toUpper x else x }
 -- >>> putStrLn $ render' $ pretty' testData
 -- ((ABCDE ((A B C D) (A B C D) (A B C D) (A B C D)))
 --  (ABCDEFGH ((A B C D) (A b c d) (A b c d) (A b c d))))
@@ -94,6 +92,8 @@ module Text.PrettyPrint.Compact (
    -- * Rendering
    renderWith,
    render,
+   Options(..),
+   defaultOptions,
 
    -- * Undocumented
    -- column, nesting, width
@@ -106,7 +106,13 @@ import Text.PrettyPrint.Compact.Core as Text.PrettyPrint.Compact
 
 -- | Render the 'Doc' into 'String' omitting all annotations.
 render :: Monoid a => Doc a -> String
-render = renderWith (\_ s -> s)
+render = renderWith defaultOptions
+
+defaultOptions :: Options a String
+defaultOptions = Options
+    { optsAnnotate = \_ s -> s
+    , optsPageWidth = 80
+    }
 
 -- | The document @(list xs)@ comma separates the documents @xs@ and
 -- encloses them in square brackets. The documents are rendered

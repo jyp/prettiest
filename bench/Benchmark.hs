@@ -26,7 +26,8 @@ prettiestJSON Null         = PC.mempty
 prettiestJSON (Number n)   = PC.text (show n)
 
 pcRenderText :: Monoid a => PC.Doc a -> TL.Text
-pcRenderText = TLB.toLazyText . PC.renderWith (\_ -> TLB.fromString)
+pcRenderText = TLB.toLazyText . PC.renderWith PC.defaultOptions
+    { PC.optsAnnotate = \_ -> TLB.fromString }
 
 wlJSON :: Value -> WL.Doc
 wlJSON (Bool True)     = WL.text "true"
