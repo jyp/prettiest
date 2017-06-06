@@ -1,7 +1,10 @@
 {-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, ViewPatterns, DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
 module Text.PrettyPrint.Compact.Core(Layout(..),Render(..),Options(..),Document(..),Doc,annotate) where
 
-import Data.List (sortOn,groupBy,minimumBy)
+import Prelude ()
+import Prelude.Compat as P
+
+import Data.List.Compat (sortOn,groupBy,minimumBy)
 import Data.Function (on)
 import Data.Semigroup
 import Data.Sequence (singleton, Seq, viewl, viewr, ViewL(..), ViewR(..), (|>))
@@ -46,7 +49,7 @@ newtype L a = L (Seq (AS a)) -- non-empty sequence
 instance Monoid a => Semigroup (L a) where
   L (viewr -> xs :> x) <> L (viewl -> y :< ys) = L (xs <> singleton (x <> y) <> fmap (indent <>) ys)
       where n = asLength x
-            indent = mkAS (Prelude.replicate n ' ')
+            indent = mkAS (P.replicate n ' ')
   L _ <> L _ = error "<> @L: invariant violated, Seq is empty"
 
 instance Monoid a => Monoid (L a) where
@@ -138,7 +141,7 @@ bestsOn m = paretoOn' m [] . mergeAllOn m
 
 -- | @paretoOn m = paretoOn' m []@
 paretoOn' :: Poset b => (a -> b) -> [a] -> [a] -> [a]
-paretoOn' m acc [] = Prelude.reverse acc
+paretoOn' m acc [] = P.reverse acc
 paretoOn' m acc (x:xs) = if any ((≺ m x) . m) acc
                             then paretoOn' m acc xs
                             else paretoOn' m (x:acc) xs
