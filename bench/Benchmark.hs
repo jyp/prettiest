@@ -1,5 +1,8 @@
 module Main (main) where
 
+import Prelude ()
+import Prelude.Compat
+
 import Control.DeepSeq (force)
 import Control.Exception (evaluate)
 import Data.Aeson (Value (..), decode)

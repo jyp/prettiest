@@ -16,6 +16,13 @@ category: Text
 maintainer: Jean-Philippe Bernardy <jeanphilippe.bernardy@gmail.com>
 build-type: Simple
 Cabal-Version: >= 1.8
+tested-with:
+  GHC == 7.4.2,
+  GHC == 7.6.3,
+  GHC == 7.8.4,
+  GHC == 7.10.3,
+  GHC == 8.0.2,
+  GHC == 8.2.1
 
 source-repository head
                   type: git
@@ -23,12 +30,16 @@ source-repository head
 
 
 Library
-        exposed-modules:
-                Text.PrettyPrint.Compact
-                Text.PrettyPrint.Compact.Core
-        build-depends:
-                      base >= 3 && < 5,
-                      containers
+  exposed-modules:
+    Text.PrettyPrint.Compact
+    Text.PrettyPrint.Compact.Core
+  build-depends:
+    base >= 3 && < 5,
+    base-compat >= 0.9.3 && <0.10,
+    containers
+
+  if !impl(ghc >= 8.0)
+    build-depends: semigroups
 
 benchmark pretty-comparison
   type: exitcode-stdio-1.0
@@ -37,6 +48,7 @@ benchmark pretty-comparison
   build-depends:
     aeson,
     base,
+    base-compat,
     bytestring,
     criterion,
     deepseq,
