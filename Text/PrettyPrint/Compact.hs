@@ -95,6 +95,9 @@ module Text.PrettyPrint.Compact (
    Options(..),
    defaultOptions,
 
+   -- * Annotations
+   annotate,
+
    -- * Undocumented
    -- column, nesting, width
    ) where
