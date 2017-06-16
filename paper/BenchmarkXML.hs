@@ -11,7 +11,9 @@ import Data.Monoid
 import Text.XML.Light.Input
 import Text.XML.Light.Types
 
-pcXML :: Element -> PC.Doc
+type DOC = PC.Doc ()
+
+pcXML :: Element -> DOC
 pcXML Element{..} =
   PC.encloseSep
     (PC.encloseSep (PC.text "<" <> PC.text (qName elName)) (PC.text ">")
@@ -20,10 +22,10 @@ pcXML Element{..} =
     (PC.text "</" <> PC.text (qName elName) <> PC.text ">")
     (map pcContent elContent)
 
-pcAttrib :: Attr -> PC.Doc
+pcAttrib :: Attr -> DOC
 pcAttrib Attr{..} = PC.text (qName attrKey) <> PC.text "=" <> PC.text (show attrVal)
 
-pcContent :: Content -> PC.Doc
+pcContent :: Content -> DOC
 pcContent (Elem e) = pcXML e
 pcContent (Text CData{..}) = PC.text cdData
 pcContent (CRef r) = PC.text r

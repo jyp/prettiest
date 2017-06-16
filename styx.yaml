@@ -9,8 +9,8 @@ local-packages:
   #   location: ../lp-diagrams
 
 nixpkgs:
-  commit: 878bbaf4e9d49c251d90f0790d2e7ebcf622ddd0
-  sha256: 118zrg05kmhvcs6di2myv735yaz8sdxsjrw6z4a52717lllz34w9
+  commit: ec9a23332f06eca2996b15dfd83abfd54a27437a
+  sha256: 09d225y0a4ldx08b5rfhy7jk4qp0nj4q7xsjb49hvb5an79xmgdl
 
 source-deps:
   lp-diagrams:
