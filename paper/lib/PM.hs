@@ -109,22 +109,19 @@ performanceBars :: String -> [(Point' Double,Point' Double,Point' Double)]
 performanceBars fname = [(Point x l, Point x m, Point x h)
                   | (_,nlines,(l,m,h)) <- performanceData fname, let x = fromIntegral nlines]
 
-scatterWithErrors :: PlotCanvas a -> [(Vec2 a,Vec2 a,Vec2 a)] -> TexDiagram ()
-scatterWithErrors (bx,_outerBox,xform) inputs = do
-  let three f (a,b,c) = (f a, f b, f c)
-  forM_ (map (three (interpBox bx . (forward <$> xform <*>))) inputs) $ \(_l,m,_h) -> do
-    -- draw $ path $ polyline [l,h]
-    -- stroke "red" $ path $ polyline [m - Point 3 0, m + Point (-3) 0]
-    showDot (constant 2) "black" m
-    -- forM [l,h] $ \z -> stroke "red" $ path $ polyline [z - Point 2 0, z + Point 2 0]
-    -- error bars are so narrow that we do not see them.
+scatterPlot' :: Monad m => PlotCanvas a -> [Vec2 a] -> Diagram lab m ()
+scatterPlot' (bx,_outerBox,xform) input = forM_ (map (forward <$> xform <*>) input) $ \z -> do
+  pt <- using (outline "black") $ circle "plotMark"
+  width pt === constant 3
+  pt # Center .=. interpBox bx z
+
 
 performancePlot :: String -> Vec2 (ShowFct TeX Double) -> Vec2 (Transform Double) -> Diagram TeX Tex (PlotCanvas Double)
 performancePlot fname sho axes' =  do
   let  points = (performancePoints fname)
        points' = sequenceA points
   c@(bx,outerBox,_) <- preparePlot sho axes' (minimum <$> points') (maximum <$> points')
-  scatterPlot c points
+  scatterPlot' c points
   width bx === constant 200
   D.height bx === constant 100
   xaxisLab <- label "xaxisLab" "number of lines of output"
