@@ -103,6 +103,8 @@ import Data.Monoid
 import Data.List (intersperse)
 
 import Text.PrettyPrint.Compact.Core as Text.PrettyPrint.Compact
+import Text.PrettyPrint.Compact.Core (singleLine)
+
 
 -- | Render the 'Doc' into 'String' omitting all annotations.
 render :: Monoid a => Doc a -> String
@@ -227,7 +229,7 @@ fillSep         = foldDoc (</>)
 -- | The document @(hsep xs)@ concatenates all documents @xs@
 -- horizontally with @(\<+\>)@.
 hsep :: Monoid a => [Doc a] -> Doc a
-hsep            = foldDoc (<+>)
+hsep            = foldDoc (<-+>)
 
 -- | The document @(cat xs)@ concatenates all documents @xs@ either
 -- horizontally with @(\<\>)@, if it fits the page, or vertically with
@@ -248,9 +250,9 @@ fillCat :: Monoid a => [Doc a] -> Doc a
 fillCat         = foldDoc (<//>)
 
 -- | The document @(hcat xs)@ concatenates all documents @xs@
--- horizontally with @(\<\>)@.
+-- horizontally with @(\<-\>)@.
 hcat :: Monoid a => [Doc a] -> Doc a
-hcat            = foldDoc (<>)
+hcat            = foldDoc (<->)
 
 -- | The document @(vcat xs)@ concatenates all documents @xs@
 -- vertically with @($$)@.
@@ -261,20 +263,32 @@ foldDoc :: Monoid a => (Doc a -> Doc a -> Doc a) -> [Doc a] -> Doc a
 foldDoc _ []       = mempty
 foldDoc f ds       = foldr1 f ds
 
+-- | The document @(x \<-\> y)@ concatenates document @x@ and @y@, if
+-- @x@ fits on a single line, and fails otherwise.
+(<->) :: Monoid a => Doc a -> Doc a -> Doc a
+x <-> y         = singleLine x <> y
+
 -- | The document @(x \<+\> y)@ concatenates document @x@ and @y@ with a
 -- @space@ in between.  (infixr 6)
 (<+>) :: Monoid a => Doc a -> Doc a -> Doc a
 x <+> y         = x <> space <> y
 
--- | The document @(x \<\/\> y)@ puts @x@ and @y@ either next to each other
--- (with a @space@ in between) or underneath each other. (infixr 5)
-(</>) :: Monoid a => Doc a -> Doc a -> Doc a
-x </> y         = ((x <> space) <|> flush x) <> y
+-- | The document @(x \<-+\> y)@ concatenates document @x@ and @y@
+-- with a @space@ in between, if @x@ fits on a single line, and fails
+-- otherwise.  (infixr 6)
+(<-+>) :: Monoid a => Doc a -> Doc a -> Doc a
+x <-+> y         = (singleLine x <> space <> y)
 
--- | The document @(x \<\/\/\> y)@ puts @x@ and @y@ either right next to each
--- other or underneath each other. (infixr 5)
+-- | The document @(x \<\/\> y)@ puts @x@ and @y@ either next to each other
+-- (with a @space@ in between) if @x@ fits on a single line, or underneath each other. (infixr 5)
+(</>) :: Monoid a => Doc a -> Doc a -> Doc a
+x </> y         = ((singleLine x <> space) <|> flush x) <> y
+
+-- | The document @(x \<\/\/\> y)@ puts @x@ and @y@ either right next
+-- to each other (if @x@ fits on a single line) or underneath each
+-- other. (infixr 5)
 (<//>) :: Monoid a => Doc a -> Doc a -> Doc a
-x <//> y        = (x <|> flush x) <> y
+x <//> y        = (singleLine x <|> flush x) <> y
 
 
 -- | The document @(x \<$$\> y)@ concatenates document @x@ and @y@ with

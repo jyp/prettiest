@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, ViewPatterns, DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
-module Text.PrettyPrint.Compact.Core(Layout(..),Render(..),Options(..),Document(..),Doc,annotate) where
+module Text.PrettyPrint.Compact.Core(Layout(..),Render(..),Options(..),Document(..),Doc(..),annotate) where
 
 import Prelude ()
 import Prelude.Compat as P
@@ -90,6 +90,7 @@ class Monoid d => Layout d where
 
 class Layout d => Document d where
   (<|>) :: d -> d -> d
+  singleLine :: d -> d -- fail if the argument is multi-line
 
 -- | type parameter is phantom.
 data M a = M {height    :: Int,
@@ -151,14 +152,19 @@ paretoOn' m acc (x:xs) = if any ((≺ m x) . m) acc
 
 -- list sorted by lexicographic order for the first component
 -- function argument is the page width
-newtype Doc a = MkDoc (Int -> [(M a,L a)])
+-- TODO: add a boolean to filter out multiline layouts.
+newtype Doc a = MkDoc {fromDoc :: Int -> [(M a,L a)]}
 
 instance Monoid a => Semigroup (Doc a) where
-  MkDoc xs <> MkDoc ys = MkDoc $ \w -> bestsOn fst [ quasifilter (fits w . fst) [x <> y | y <- ys w] | x <- xs w]
-    where quasifilter p zs = let fzs = filter p zs
-                             in if null fzs
-                                then [minimumBy (compare `on` (maxWidth . fst)) zs]
-                                else fzs
+  MkDoc xs <> MkDoc ys = MkDoc $ \w -> bestsOn fst [ discardInvalid w [x <> y | y <- ys w] | x <- xs w]
+
+discardInvalid w = quasifilter (fits w . fst)
+
+quasifilter _ [] = []
+quasifilter p zs = let fzs = filter p zs
+                   in if null fzs -- in case that there are no valid layouts, we take a narrow one.
+                      then [minimumBy (compare `on` (maxWidth . fst)) zs]
+                      else fzs
 
 instance Monoid a => Monoid (Doc a) where
   mempty = text ""
@@ -174,23 +180,21 @@ instance Monoid a => Layout (Doc a) where
   text s = MkDoc $ return [text s]
 
 instance Render Doc where
-  renderWith opts (MkDoc g) = case g pageWidth of
+  renderWith opts (MkDoc g) = case xs of
       [] -> error "No suitable layout found."
-      xs@(x:_) | maxWidth (fst x) <= pageWidth -> renderWith opts (snd x)
-               | otherwise -> renderWith opts $ snd (minimumBy (compare `on` (maxWidth . fst)) xs)
+      ((_,x):_) -> renderWith opts x
     where
       pageWidth = optsPageWidth opts
+      xs = discardInvalid pageWidth (g pageWidth)
 
 instance Monoid a => Document (Doc a) where
-  MkDoc m1 <|> MkDoc m2 = MkDoc $ \w -> (bestsOn fst [m1 w,m2 w])
+  MkDoc m1 <|> MkDoc m2 = MkDoc $ \w -> bestsOn fst [m1 w,m2 w]
+  singleLine (MkDoc m) = MkDoc $ \w -> takeWhile ((== 0). height . fst) (m w)
 
 
 instance (Layout a, Layout b) => Layout (a,b) where
   text s = (text s, text s)
   flush (a,b) = (flush a, flush b)
-
-instance (Document a, Document b) => Document (a,b) where
-  (a,b) <|> (c,d) = (a<|>c,b<|>d)
 
 instance Monoid a => IsString (Doc a) where
   fromString = text
