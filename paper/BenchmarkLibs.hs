@@ -26,7 +26,7 @@ import qualified Text.PrettyPrint.Leijen as WL
 import qualified Text.PrettyPrint.HughesPJ as HPJ
 import Data.Monoid
 
-prettiestJSON :: Value -> PC.Doc
+prettiestJSON :: Value -> PC.Doc ()
 prettiestJSON (Bool True) = PC.text "true"
 prettiestJSON (Bool False) = PC.text "false"
 prettiestJSON (Object o) = PC.encloseSep (PC.text "{") (PC.text "}") (PC.text ",") (map prettyKV $ H.toList o)
