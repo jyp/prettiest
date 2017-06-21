@@ -1,18 +1,14 @@
 * Intro
 
-- Typesetting is non-local (if you change something towards the
-  beginning it may have effects way down the document)
-- Typesetting is critically sensitive to small changes: every saved line counts
+- Typesetting is cahotic (if you change something towards the
+  beginning it may have non-linear effects way down the document)
 
---> greedy typesetting algorithms are (as best) difficult to realise
+- Typesetting is critically sensitive to small changes: every saved
+  line counts
+
+--> greedy typesetting algorithms are (at best) difficult to realise
 
 * Pretty-printing pearls: "state of the art"
-
-- Hughes: can waste tremendous amount of space by making a wrong early choice
-
-- Wadler:
-  - will consistently waste space
-  - lack of "hang" feature
 
 
 (a b c d)
@@ -23,6 +19,20 @@ or
  b
  c
  d)
+
+Example:
+
+((abcde ((a b c d)
+         (a b c d)
+         (a b c d)
+         (a b c d)
+         (a b c d)))
+ (abcdefgh
+  ((a b c d)
+   (a b c d)
+   (a b c d)
+   (a b c d)
+   (a b c d))))
 
 * Hughes
 
@@ -56,6 +66,10 @@ or
 
 * Wadler
 
+- Wadler:
+  - will waste a line here and there
+  - lack of "hang" feature
+
 12345678901234567890
 
 ((abcde
@@ -71,11 +85,13 @@ or
    (a b c d)
    (a b c d))))
 
-
-* Not happy
+* Not statified
 
 - I am not happy with any of the above
-- What do I really want?
+
+- What do I *really* want?
+
+On the example:
 
 ((abcde ((a b c d)
          (a b c d)
@@ -89,20 +105,28 @@ or
    (a b c d)
    (a b c d))))
 
+In general?
 
 * Asimov Laws of Robotics (paraphrased)
 1. A robot shall not harm humans
 2. A robot shall follow human orders
 3. A robot shall not destroy itself
 
-* My laws of pretty-printing (paraphrased)
+* My Laws of Pretty-Printing (paraphrased)
 1. A pretty-printer shall not print beyond the right margin
 2. A pretty-printer shall reveal the structure of the input
 3. A pretty-printer shall use as few lines as possible
 
-1 and 3 are ok; but what about 2?
+- Hughes breaks 3
+- Wadler breaks 2
 
-* Describing legible layouts
+* What does rule 2 really mean?
+
+- User-specified
+- But it is clear that everyone (except Phil Wadler) wants to be able
+  to express vertical alignment after an arbitrary document.
+
+* Describing rule-2 layouts
 
 class Layout l where
   (<>)    :: l -> l -> l
@@ -178,22 +202,33 @@ instance Doc [L] where
 
 * Performance
 
-Abyssal performance: every choice induces two layouts. No hope to
-print any document with any reasonable amount of disjunction
+Unacceptable performance: every choice induces two layouts.
+Printing any document with >20 disjunctions is unrealistic.
 
 * The useful parts
-The choice of layout depends only on 3 parameters: width, height and lastWidth
+The choice of layout depends only on 3 parameters: width, height the
+width of the last line.
 
--- diagram
+
+             width
+         <---------------->
+         xxxxxxxxxxxxxxxxxx ^
+         xxxxxxxxxxxxxxxxxx |  height
+         xxxxxxxxxxxxxxxxxx v
+         xxxxxxx
+         <----->
+        last width
 
 * Domination
 
 a dominates b iff. a is smaller in all three dimensions
 
-If a dominates b, then for any context ctx, ctx a dominates ctx b
+If a dominates b, then for any context ctx,
 
-So, we can at any point discard all dominated layouts from the set of
-possible layouts.
+   ctx a  dominates  ctx b
+
+So, we can at any point we can discard all dominated layouts from the
+set of possible layouts.
 
 * Experimental Results (asymptotic)
 
