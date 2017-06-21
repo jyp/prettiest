@@ -250,7 +250,7 @@ fillCat :: Monoid a => [Doc a] -> Doc a
 fillCat         = foldDoc (<//>)
 
 -- | The document @(hcat xs)@ concatenates all documents @xs@
--- horizontally with @(\<\>)@.
+-- horizontally with @(\<-\>)@.
 hcat :: Monoid a => [Doc a] -> Doc a
 hcat            = foldDoc (<->)
 
