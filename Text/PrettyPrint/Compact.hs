@@ -229,7 +229,7 @@ fillSep         = foldDoc (</>)
 -- | The document @(hsep xs)@ concatenates all documents @xs@
 -- horizontally with @(\<+\>)@.
 hsep :: Monoid a => [Doc a] -> Doc a
-hsep            = foldDoc (<+>)
+hsep            = foldDoc (<-+>)
 
 -- | The document @(cat xs)@ concatenates all documents @xs@ either
 -- horizontally with @(\<\>)@, if it fits the page, or vertically with
@@ -264,9 +264,9 @@ foldDoc _ []       = mempty
 foldDoc f ds       = foldr1 f ds
 
 -- | The document @(x \<-\> y)@ concatenates document @x@ and @y@, if
--- the result fits on a single line, and fails otherwise.
+-- @x@ fits on a single line, and fails otherwise.
 (<->) :: Monoid a => Doc a -> Doc a -> Doc a
-x <-> y         = singleLine (x <> y)
+x <-> y         = singleLine x <> y
 
 -- | The document @(x \<+\> y)@ concatenates document @x@ and @y@ with a
 -- @space@ in between.  (infixr 6)
@@ -274,13 +274,13 @@ x <-> y         = singleLine (x <> y)
 x <+> y         = x <> space <> y
 
 -- | The document @(x \<-+\> y)@ concatenates document @x@ and @y@
--- with a @space@ in between, if the result fits on a single line, and
--- fails otherwise.  (infixr 6)
+-- with a @space@ in between, if @x@ fits on a single line, and fails
+-- otherwise.  (infixr 6)
 (<-+>) :: Monoid a => Doc a -> Doc a -> Doc a
-x <-+> y         = singleLine (x <> space <> y)
+x <-+> y         = (singleLine x <> space <> y)
 
 -- | The document @(x \<\/\> y)@ puts @x@ and @y@ either next to each other
--- (with a @space@ in between) or underneath each other. (infixr 5)
+-- (with a @space@ in between) if @x@ fits on a single line, or underneath each other. (infixr 5)
 (</>) :: Monoid a => Doc a -> Doc a -> Doc a
 x </> y         = ((singleLine x <> space) <|> flush x) <> y
 

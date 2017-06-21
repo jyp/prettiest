@@ -157,10 +157,12 @@ newtype Doc a = MkDoc (Int -> [(M a,L a)])
 
 instance Monoid a => Semigroup (Doc a) where
   MkDoc xs <> MkDoc ys = MkDoc $ \w -> bestsOn fst [ quasifilter (fits w . fst) [x <> y | y <- ys w] | x <- xs w]
-    where quasifilter p zs = let fzs = filter p zs
-                             in if null fzs
-                                then [minimumBy (compare `on` (maxWidth . fst)) zs]
-                                else fzs
+
+quasifilter _ [] = []
+quasifilter p zs = let fzs = filter p zs
+                   in if null fzs
+                      then [minimumBy (compare `on` (maxWidth . fst)) zs]
+                      else fzs
 
 instance Monoid a => Monoid (Doc a) where
   mempty = text ""
@@ -185,15 +187,12 @@ instance Render Doc where
 
 instance Monoid a => Document (Doc a) where
   MkDoc m1 <|> MkDoc m2 = MkDoc $ \w -> (bestsOn fst [m1 w,m2 w])
-  singleLine (MkDoc m) = MkDoc $ \w -> filter ((== 0). length . fst) (m w)
+  singleLine (MkDoc m) = MkDoc $ \w -> filter ((== 0). height . fst) (m w)
 
 
 instance (Layout a, Layout b) => Layout (a,b) where
   text s = (text s, text s)
   flush (a,b) = (flush a, flush b)
-
-instance (Document a, Document b) => Document (a,b) where
-  (a,b) <|> (c,d) = (a<|>c,b<|>d)
 
 instance Monoid a => IsString (Doc a) where
   fromString = text
