@@ -90,6 +90,7 @@ class Monoid d => Layout d where
 
 class Layout d => Document d where
   (<|>) :: d -> d -> d
+  singleLine :: d -> d -- fail if the argument is multi-line
 
 -- | type parameter is phantom.
 data M a = M {height    :: Int,
@@ -151,6 +152,7 @@ paretoOn' m acc (x:xs) = if any ((≺ m x) . m) acc
 
 -- list sorted by lexicographic order for the first component
 -- function argument is the page width
+-- TODO: add a boolean to filter out multiline layouts.
 newtype Doc a = MkDoc (Int -> [(M a,L a)])
 
 instance Monoid a => Semigroup (Doc a) where
@@ -183,6 +185,7 @@ instance Render Doc where
 
 instance Monoid a => Document (Doc a) where
   MkDoc m1 <|> MkDoc m2 = MkDoc $ \w -> (bestsOn fst [m1 w,m2 w])
+  singleLine (MkDoc m) = MkDoc $ \w -> filter ((== 0). length . fst) (m w)
 
 
 instance (Layout a, Layout b) => Layout (a,b) where
