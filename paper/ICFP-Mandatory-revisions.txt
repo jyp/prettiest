@@ -1,4 +1,4 @@
-I have adressed the mandatory revisions as follows:
+I have addressed the mandatory revisions as follows:
 
 1. I have changed the citation style as requested.
 
@@ -13,7 +13,7 @@ I have adressed the mandatory revisions as follows:
 4. I have performed a new series of tests which exercises the pretty
    printer in typical conditions (sec 7.2). To do so I've pretty
    printed several typical XML and JSON inputs. In this series of
-   tests I've measured the rendering time (not just layout). I have
-   also run the test with Wadler-Leijen and Hughes-Peyton Jones
-   libraries.
+   tests I've measured the rendering time (not just the runtime of the
+   layout algorithm). I have also run the test with Wadler-Leijen and
+   Hughes-Peyton Jones libraries.
 
