@@ -167,13 +167,39 @@ comment _ = mempty
 
 preamble :: forall b. Tex b -> Tex b
 preamble body = do
-  documentClass "acmart" ["acmsmall"]
+  documentClass "acmart" ["format=acmsmall", "review=false", "screen=true"]
   cmd "setcitestyle" «authoryear»
+  texLn "\\setcopyright{none}"
+  texLn "\\acmJournal{PACMPL}"
+  texLn "\\acmYear{2017}"
+  texLn "\\acmVolume{1}"
+  texLn "\\acmNumber{1}"
+  texLn "\\acmArticle{6}"
+  texLn "\\acmMonth{9}"
+  texLn "\\acmDOI{10.1145/3110250}"
+  texLn "\\begin{CCSXML}"
+  texLn "<ccs2012>"
+  texLn "<concept>"
+  texLn "<concept_id>10011007.10011006.10011008.10011009.10011012</concept_id>"
+  texLn "<concept_desc>Software and its engineering~Functional languages</concept_desc>"
+  texLn "<concept_significance>500</concept_significance>"
+  texLn "</concept>"
+  texLn "<concept>"
+  texLn "<concept_id>10002950.10003624.10003625.10003630</concept_id>"
+  texLn "<concept_desc>Mathematics of computing~Combinatorial optimization</concept_desc>"
+  texLn "<concept_significance>100</concept_significance>"
+  texLn "</concept>"
+  texLn "</ccs2012>"
+  texLn "\\end{CCSXML}"
+  texLn "\\ccsdesc[500]{Software and its engineering~Functional languages}"
+  texLn "\\ccsdesc[100]{Mathematics of computing~Combinatorial optimization}"
+
   stdPreamble
   mathpreamble
   cmd "input" $ tex "../PaperTools/latex/unicodedefs"
 
-  title "Functional Pearl: a pretty but not greedy printer"
+  title "A pretty but not greedy printer"
+  subtitle "Functional pearl"
   authorinfo [AuthorInfo "Jean-Philippe Bernardy" "jean-philippe.bernardy@gu.se" "University of Gothenburg, Department of Philosophy, Linguistics and Theory of Science"]
   env "document" body
 
@@ -187,7 +213,7 @@ header :: Tex ()
 header = do
   abstract
   maketitle
-  keywords $ ["Pearl", "Pretty Printing"]
+  keywords $ ["Functional Pearl", "Pretty Printing"]
   return ()
 
 bibliographyAll :: TeX
@@ -1242,9 +1268,9 @@ binary tree of depth @hask«n».
 Thus, for @hask«testExpr n» the pretty printer is offered @tm«2^n-1» choices,
 for a total of @tm«2^{2^n-1}» possible layouts to consider.
 
-We have run the layout algorithm for @hask«n» ranging from 1 to 16, and obtained the following results.
+We have run the layout algorithm for @hask«n» ranging from 1 to 16, and obtained the results shown in @figPlotFull.
 
-@center«@performancePlotFull»
+@figPlotFull<-figure«Layout times for full trees.»«@center«@performancePlotFull»»
 While @emph«criterion» provides confidence intervals, they are so thin that they
 are not visible at the scale of the plots, thus we have not attempted to render them.
 We observe that inputs for @hask«n»@tm«∈[0,1,2,3]» can all be printed on a single line,
@@ -1279,8 +1305,8 @@ randomDyck maxLen = go 0 0 where
       where  open  = (Open: ) <$> go (1+opened) closed
              close = (Close:) <$> go opened (1+closed)
 »
-We obtained to following results:
-@center«@performancePlotRandom»
+We obtained the results shown in @figPlotRandom.
+@figPlotRandom<-figure«Layout times for random trees.»«@center«@performancePlotRandom»»
 The results corroborate those obtained for full trees:
 the observed running time is proportional to the length of the output.
 Furthermore the layout speed for random trees is roughly 10 times that of full trees;
