@@ -167,7 +167,9 @@ comment _ = mempty
 
 preamble :: forall b. Tex b -> Tex b
 preamble body = do
-  documentClass "acmart" ["format=acmsmall", "review=false", "screen=true"]
+  documentClass "acmart" ["format=acmsmall", "review=false"
+                         -- , "screen=true" -- colored links
+                         ]
   cmd "setcitestyle" «authoryear»
   texLn "\\setcopyright{none}"
   texLn "\\acmJournal{PACMPL}"
@@ -176,6 +178,7 @@ preamble body = do
   texLn "\\acmNumber{1}"
   texLn "\\acmArticle{6}"
   texLn "\\acmMonth{9}"
+  texLn "\\acmPrice{}"
   texLn "\\acmDOI{10.1145/3110250}"
   texLn "\\begin{CCSXML}"
   texLn "<ccs2012>"
@@ -193,13 +196,13 @@ preamble body = do
   texLn "\\end{CCSXML}"
   texLn "\\ccsdesc[500]{Software and its engineering~Functional languages}"
   texLn "\\ccsdesc[100]{Mathematics of computing~Combinatorial optimization}"
+  cmd "keywords" «Pretty Printing»
 
   stdPreamble
   mathpreamble
   cmd "input" $ tex "../PaperTools/latex/unicodedefs"
 
-  title "A pretty but not greedy printer"
-  subtitle "Functional pearl"
+  title "A pretty but not greedy printer (Functional pearl)"
   authorinfo [AuthorInfo "Jean-Philippe Bernardy" "jean-philippe.bernardy@gu.se" "University of Gothenburg, Department of Philosophy, Linguistics and Theory of Science"]
   env "document" body
 
@@ -213,7 +216,6 @@ header :: Tex ()
 header = do
   abstract
   maketitle
-  keywords $ ["Functional Pearl", "Pretty Printing"]
   return ()
 
 bibliographyAll :: TeX
@@ -550,7 +552,7 @@ Pattern = expression
 Aligning the argument of the expression below and to the left of the equal sign is bad, because
 it needlessly obscures the structure of the program; @pcp_layout is not
 respected. The the lack of a combinator for relative indentation
-is a serious drawback@footnote«A drawback which also hurts the work of @citet"swierstra_linear_2009"». In fact, Leijen's
+is a serious drawback@footnote«The work of @citet"swierstra_linear_2009" suffers from the same drawback.». In fact, Leijen's
 implementation of Wadler's design (@sans«wl-print»), @emph«does» feature
 an alignment combinator. However, as Hughes' does, Leijen's uses a greedy algorithm, and thus
 suffers from the same issue as Hughes' library.
@@ -1314,11 +1316,11 @@ the straight line corresponding to this speed is shown for reference on the plot
 
 One may wonder how the elimination of dominated outputs impacts the performance.
 In fact, in this configuration
-the algorithm has an exponential behaviour, and thus our test machine ran out of memory even for relatively simple outputs.
+the algorithm has an exponential behavior, and thus our test machine ran out of memory even for relatively simple outputs.
 Thus we could not produce more than four useful data points, and thus omitted the corresponding plot.
 @subsection«Tests for full outputs and typical inputs»
 
-Even though the asymptotic behaviour of the optimized algorithm is linear, one may wonder if its absolute performance is
+Even though the asymptotic behavior of the optimized algorithm is linear, one may wonder if its absolute performance is
 satisfactory for typical pretty-printing tasks. Thus we evaluated a
 complete pretty-printing task, including
 not only the selection of the layout but its actual printing. We did so using our complete
@@ -1351,11 +1353,21 @@ I avoided cutting any corner and went for the absolute prettiest layout. Doing s
 but still have derived a reasonably efficient implementation.
 In the end, the standard methodology worked well: I could use it from start to finish.
 
+
 @acknowledgements«Some of the work described in this paper was carried out while the author was employed by Chalmers University of Technology.
 Facundo Domingez, Atze van der Ploeg, Arnaud Spiwack and anonymous ICFP reviewers provided useful feedback on drafts of this paper.
 Using the QuickSpec tool, Nicholas Smallbone helped
 finding a bug in the final implementation: the concatenation operator
 did not preserve the invariant that lists were sorted. »
+
+@section«Addendum»
+After this paper settled to a final version, Anton Podkopaev pointed to us that @citet"azero_optimal_1998" proposed pretty printing combinators
+with the same semantics as that presented here (no compromise between greediness and  @pcp_compact). However their
+implementation had exponential behavior. @citet"podkopaev_polynomial_2014" took that semantics and proposed a more efficient implementation,
+which computes for every document its minimal @hask«height» for every pair of @hask«maxWidth» and @hask«lastWidth».
+Their strategy is similar to mine, with the following tradeoff. In this paper I do not keep track of every @hask«witdth» and @hask«lastWidth»: only those which
+lie on the pareto frontier. In return I have to pay a larger constant cost to sieve through intermediate results.
+Yet I conjecture that for non-pathological inputs the asymptotic complexities for both algorithms are the same. 
 »
 
 
@@ -1580,7 +1592,7 @@ Note that we pick the narrowest result fitting on min. lines lines!
 
 @subsection«Laws vs compositional semantics»
 
-Note that laws may only @emph«partially» specify the behaviour, while a
+Note that laws may only @emph«partially» specify the behavior, while a
 semantic model will always fully constrain it.
 
 (exercise: does the above set of laws fully constrain the semantic model?)
