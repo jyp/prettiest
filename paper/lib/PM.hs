@@ -171,7 +171,7 @@ preamble body = do
                          -- , "screen=true" -- colored links
                          ]
   cmd "setcitestyle" «authoryear»
-  texLn "\\setcopyright{none}"
+  texLn "\\setcopyright{rightsretained}"
   texLn "\\acmJournal{PACMPL}"
   texLn "\\acmYear{2017}"
   texLn "\\acmVolume{1}"
@@ -202,7 +202,7 @@ preamble body = do
   mathpreamble
   cmd "input" $ tex "../PaperTools/latex/unicodedefs"
 
-  title "A pretty but not greedy printer (Functional pearl)"
+  title "A Pretty But Not Greedy Printer (Functional Pearl)"
   authorinfo [AuthorInfo "Jean-Philippe Bernardy" "jean-philippe.bernardy@gu.se" "University of Gothenburg, Department of Philosophy, Linguistics and Theory of Science"]
   env "document" body
 
@@ -1365,7 +1365,7 @@ After this paper settled to a final version, Anton Podkopaev pointed to us that 
 with the same semantics as that presented here (no compromise between greediness and  @pcp_compact). However their
 implementation had exponential behavior. @citet"podkopaev_polynomial_2014" took that semantics and proposed a more efficient implementation,
 which computes for every document its minimal @hask«height» for every pair of @hask«maxWidth» and @hask«lastWidth».
-Their strategy is similar to mine, with the following tradeoff. In this paper I do not keep track of every @hask«witdth» and @hask«lastWidth»: only those which
+Their strategy is similar to mine, with the following tradeoff. In this paper I do not keep track of every @hask«witdth» and @hask«lastWidth», but only of those which
 lie on the pareto frontier. In return I have to pay a larger constant cost to sieve through intermediate results.
 Yet I conjecture that for non-pathological inputs the asymptotic complexities for both algorithms are the same. 
 »
@@ -1408,9 +1408,11 @@ measure (xs <> (y:ys))
                        == M { maxWidth = maximum (map length (  init xs ++ [last xs ++ y] ++
                                                                 map (indent ++) ys))
                             , height  = length (init xs ++ [last xs ++ y] ++ map (indent ++) ys) - 1
-                            , lastWidth = length $ last $ (init xs ++ [last xs ++ y] ++ map (indent ++) ys)
+                            , lastWidth = length $ last $ (  init xs ++ [last xs ++ y] ++
+                                                             map (indent ++) ys)
                             }
-                       == M { maxWidth = maximum (( init (map length xs) ++ [length (last xs) + length y] ++
+                       == M { maxWidth = maximum (( init (map length xs) ++ [  length (last xs) +
+                                                                               length y] ++
                                                     map (\y -> length (last xs) + length y) ys))
                             , height  = length (init xs) + 1 + length ys - 1
                             , lastWidth = last ((  init (map length xs) ++ [length (last xs) + length y] ++
