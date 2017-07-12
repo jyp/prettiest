@@ -152,11 +152,10 @@ paretoOn' m acc (x:xs) = if any ((≺ m x) . m) acc
 
 -- list sorted by lexicographic order for the first component
 -- function argument is the page width
--- TODO: add a boolean to filter out multiline layouts.
-newtype Doc a = MkDoc {fromDoc :: Int -> [(M a,L a)]}
+newtype Doc a = MkDoc {fromDoc :: Bool {- single line only -} -> Int -> [(M a,L a)]}
 
 instance Monoid a => Semigroup (Doc a) where
-  MkDoc xs <> MkDoc ys = MkDoc $ \w -> bestsOn fst [ discardInvalid w [x <> y | y <- ys w] | x <- xs w]
+  MkDoc xs <> MkDoc ys = MkDoc $ \s w -> bestsOn fst [ discardInvalid w [x <> y | y <- ys s w] | x <- xs s w]
 
 discardInvalid w = quasifilter (fits w . fst)
 
@@ -170,14 +169,15 @@ instance Monoid a => Monoid (Doc a) where
   mempty = text ""
   mappend = (<>)
 
--- TODO: make columns configurable
 fits :: Int -> M a -> Bool
 fits w x = maxWidth x <= w
 
 instance Monoid a => Layout (Doc a) where
-  flush (MkDoc xs) = MkDoc $ \w -> bestsOn fst $ map (sortOn fst) $ groupBy ((==) `on` (height . fst)) $ (map flush (xs w))
+  flush (MkDoc xs) = MkDoc $ \s w -> if s
+    then []
+    else bestsOn fst $ map (sortOn fst) $ groupBy ((==) `on` (height . fst)) $ (map flush (xs s w))
   -- flush xs = paretoOn' fst [] $ sort $ (map flush xs)
-  text s = MkDoc $ return [text s]
+  text s = MkDoc $ \_ w -> [text s]
 
 instance Render Doc where
   renderWith opts (MkDoc g) = case xs of
@@ -185,11 +185,11 @@ instance Render Doc where
       ((_,x):_) -> renderWith opts x
     where
       pageWidth = optsPageWidth opts
-      xs = discardInvalid pageWidth (g pageWidth)
+      xs = discardInvalid pageWidth (g False pageWidth)
 
 instance Monoid a => Document (Doc a) where
-  MkDoc m1 <|> MkDoc m2 = MkDoc $ \w -> bestsOn fst [m1 w,m2 w]
-  singleLine (MkDoc m) = MkDoc $ \w -> takeWhile ((== 0). height . fst) (m w)
+  MkDoc m1 <|> MkDoc m2 = MkDoc $ \s w -> bestsOn fst [m1 s w,m2 s w]
+  singleLine (MkDoc m) = MkDoc $ \_s w -> (m True w)
 
 
 instance (Layout a, Layout b) => Layout (a,b) where
@@ -209,7 +209,7 @@ instance Monoid a => IsString (Doc a) where
 -- WORLD
 --
 annotate :: forall a. Monoid a => a -> Doc a -> Doc a
-annotate a (MkDoc xs) = MkDoc $ (fmap . fmap . fmap) annotateL xs
+annotate a (MkDoc xs) = MkDoc $ \s w -> (fmap . fmap) annotateL (xs s w)
   where
     annotateL :: L a -> L a
     annotateL (L s) = L (fmap annotateAS s)
