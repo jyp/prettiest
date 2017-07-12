@@ -227,7 +227,7 @@ fillSep :: Monoid a => [Doc a] -> Doc a
 fillSep         = foldDoc (</>)
 
 -- | The document @(hsep xs)@ concatenates all documents @xs@
--- horizontally with @(\<+\>)@.
+-- horizontally with @(\<-+\>)@.
 hsep :: Monoid a => [Doc a] -> Doc a
 hsep            = foldDoc (<-+>)
 
@@ -235,7 +235,6 @@ hsep            = foldDoc (<-+>)
 -- horizontally with @(\<\>)@, if it fits the page, or vertically with
 -- @(\<$$\>)@.
 --
--- > cat xs  = group (vcat xs)
 cat :: Monoid a => [Doc a] -> Doc a
 cat [] =  mempty
 cat [x] = x
@@ -265,6 +264,7 @@ foldDoc f ds       = foldr1 f ds
 
 -- | The document @(x \<-\> y)@ concatenates document @x@ and @y@, if
 -- @x@ fits on a single line, and fails otherwise.
+-- This operator is useful to force using a multi-line layout for the compound when @x@ does not fit on a single line.
 (<->) :: Monoid a => Doc a -> Doc a -> Doc a
 x <-> y         = singleLine x <> y
 
@@ -276,6 +276,7 @@ x <+> y         = x <> space <> y
 -- | The document @(x \<-+\> y)@ concatenates document @x@ and @y@
 -- with a @space@ in between, if @x@ fits on a single line, and fails
 -- otherwise.  (infixr 6)
+-- This operator is useful to force using a multi-line layout for the compound when @x@ does not fit on a single line.
 (<-+>) :: Monoid a => Doc a -> Doc a -> Doc a
 x <-+> y         = (singleLine x <> space <> y)
 
