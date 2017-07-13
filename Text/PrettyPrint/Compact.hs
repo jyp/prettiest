@@ -392,12 +392,9 @@ equals          = char '='
 -- Combinators for prelude types
 -----------------------------------------------------------
 
--- string is like "text" but replaces '\n' by "line"
-
--- | The document @(string s)@ concatenates all characters in @s@
--- using @line@ for newline characters and @char@ for all other
--- characters. It is used instead of 'text' whenever the text contains
--- newline characters.
+-- | The document @(string s)@ concatenates vertically all lines in
+-- @s@.  It can be used instead of 'text' whenever the text
+-- contains newline characters.
 string :: Monoid a => String -> Doc a
 string = vcat . map text . lines
 
