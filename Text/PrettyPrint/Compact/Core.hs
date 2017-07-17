@@ -1,6 +1,7 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, ViewPatterns, DeriveFunctor, DeriveFoldable, DeriveTraversable, LambdaCase #-}
-module Text.PrettyPrint.Compact.Core(Layout(..),renderWith,Options(..),Document(..),Doc) where
+module Text.PrettyPrint.Compact.Core(Annotation,Layout(..),renderWith,Options(..),Document(..),Doc) where
 
 import Prelude ()
 import Prelude.Compat as P
@@ -95,7 +96,7 @@ class Layout d where
   annotate :: forall a. Monoid a => a -> d a -> d a
 
 class Layout d => Document d where
-  (<|>) :: d a -> d a -> d a
+  (<|>) :: Eq a => d a -> d a -> d a
   singleLine :: d a -> d a -- fail if the argument is multi-line
 
 -- | type parameter is phantom.
@@ -120,7 +121,7 @@ instance Layout M where
   flush a = M {maxWidth = maxWidth a,
                height = height a + 1,
                lastWidth = 0}
-  annotate a M{..} = M{..}
+  annotate _ M{..} = M{..}
 class Poset a where
   (≺) :: a -> a -> Bool
 
@@ -187,16 +188,16 @@ instance Layout ODoc where
   text s = MkDoc $ \_ w -> [text s]
   annotate a (MkDoc xs) = MkDoc $ \s w -> fmap (annotate a) (xs s w)
 
-renderWith :: (Monoid r,  Monoid a)
+renderWith :: (Monoid r,  Monoid a, Eq a)
            => Options a r  -- ^ rendering options
            -> Doc a          -- ^ renderable
            -> r
-renderWith opts (MkDoc g) = case xs of
+renderWith opts d = case xs of
     [] -> error "No suitable layout found."
     ((_ :-: x):_) -> renderWithL opts x
   where
     pageWidth = optsPageWidth opts
-    xs = discardInvalid pageWidth (g False pageWidth)
+    xs = discardInvalid pageWidth (fromDoc (interp d) False pageWidth)
 
 instance Document ODoc where
   MkDoc m1 <|> MkDoc m2 = MkDoc $ \s w -> bestsOn frst [m1 s w,m2 s w]
@@ -218,18 +219,31 @@ instance (Layout a, Layout b) => Layout (Pair a b) where
 instance Monoid a => IsString (Doc a) where
   fromString = text
 
-data DDoc a = Text String | Flush (DDoc a) | DDoc a :<> DDoc a | DDoc a :<|> DDoc a | SingleLine (DDoc a) | Annotate a (DDoc a)
+data DDoc a = Text String | Flush (DDoc a) | S (Seq (DDoc a)) | DDoc a :<|> DDoc a | SingleLine (DDoc a) | Annotate a (DDoc a)
+  deriving Eq
 
-interp :: Monoid a => DDoc a -> ODoc a
+type Annotation a = (Eq a, Monoid a)
+
+interp :: Annotation a => DDoc a -> ODoc a
 interp = \case
   Text s -> text s
   Flush d -> flush (interp d)
   SingleLine d -> singleLine (interp d)
-  d :<> e -> interp d <> interp e
+  S ds -> foldMap interp $ catTexts $ toList ds
   d :<|> e -> interp d <|> interp e
+  Annotate a d -> annotate a (interp d)
+
+
+catTexts :: forall a. [DDoc a] -> [DDoc a]
+catTexts (Text t:Text u:xs) = catTexts (Text (t<>u):xs)
+catTexts (x:xs) = x:catTexts xs
+catTexts [] = []
 
 instance Semigroup (DDoc a) where
-  (<>) = (:<>)
+  S as <> S bs = S (as <> bs)
+  S as <> b = S (as <> singleton b)
+  a <> S bs = S (singleton a <> bs)
+  a <> b = S (singleton a <> singleton b)
 
 instance Monoid a => Monoid (DDoc a) where
   mempty = text ""
@@ -238,13 +252,18 @@ instance Monoid a => Monoid (DDoc a) where
 instance Layout DDoc where
   text = Text
   flush = Flush
-  annotate = Annotate
+  annotate = Annotate -- can be pushed down to text. Is this a good idea? (Note it'll get rid of complications in the classes, etc.)
 
 instance Document DDoc where
-  (<|>) = (:<|>)
-  singleLine = SingleLine
+  S (viewl -> a :< as) <|> S (viewl -> b :< bs) | a == b = a <> (S as <|> S bs)
+  S (viewr -> as :> a) <|> S (viewr -> bs :> b) | a == b = (S as <|> S bs) <> a
+  Flush a <|> Flush b = Flush (a <|> b)
+  Annotate a b <|> Annotate a' d | a == a' = Annotate a' (b <|> d)
+  SingleLine a <|> SingleLine b = SingleLine (a <|> b)
+  a <|> b = a :<|> b
+  singleLine = SingleLine -- todo: can be eliminated.
 
-type Doc = ODoc
+type Doc = DDoc
 
 
 -- $setup
