@@ -1,5 +1,7 @@
-{-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, ViewPatterns, DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
-module Text.PrettyPrint.Compact.Core(Layout(..),Render(..),Options(..),Document(..),Doc(..),annotate) where
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, ViewPatterns, DeriveFunctor, DeriveFoldable, DeriveTraversable, LambdaCase #-}
+module Text.PrettyPrint.Compact.Core(Annotation,Layout(..),renderWith,Options(..),Document(..),Doc,singleLine) where
 
 import Prelude ()
 import Prelude.Compat as P
@@ -56,41 +58,46 @@ instance Monoid a => Monoid (L a) where
    mempty = L (singleton (mkAS ""))
    mappend = (<>)
 
-instance Monoid a => Layout (L a) where
+instance Layout L where
    text = L . singleton . mkAS
    flush (L xs) = L (xs |> mkAS "")
+   annotate a (L s') = L (fmap annotateAS s')
+      where annotateAS (AS i s) = AS i (fmap annotatePart s)
+            annotatePart (b, s) = (b `mappend` a, s)
 
-instance Render L where
-  renderWith opts (L xs) = intercalate (toList xs)
-    where
-      f = optsAnnotate opts
-      f' (AS _ s) = foldMap (uncurry f) s
-      sep = f mempty "\n"
 
-      intercalate []     = mempty
-      intercalate (y:ys) = f' y `mappend` foldMap (mappend sep . f') ys
+renderWithL :: (Monoid a, Monoid r) => Options a r -> L a -> r
+renderWithL opts (L xs) = intercalate (toList xs)
+  where
+    f = optsAnnotate opts
+    f' (AS _ s) = foldMap (uncurry f) s
+    sep = f mempty "\n"
+
+    intercalate []     = mempty
+    intercalate (y:ys) = f' y `mappend` foldMap (mappend sep . f') ys
 
 data Options a r = Options
     { optsPageWidth :: !Int              -- ^ maximum page width
     , optsAnnotate  :: a -> String -> r  -- ^ how to annotate the string. /Note:/ the annotation should preserve the visible length of the string.
     }
 
--- | This class is split from 'Layout', because of different
--- kinds: @Render :: (* -> *) -> Constraint@ and @Layout :: * -> Constraint@.
-class Render d where
-  renderWith :: (Monoid r,  Monoid a)
-             => Options a r  -- ^ rendering options
-             -> d a          -- ^ renderable
-             -> r
-
-class Monoid d => Layout d where
-  text :: String -> d
-  flush :: d -> d
-  -- render :: d -> String
+class Layout d where
+  text :: Monoid a => String -> d a
+  flush :: Monoid a => d a -> d a
+  -- | `<>` new annotation to the 'Doc'.
+  --
+  -- Example: 'Any True' annotation will transform the rendered 'Doc' into uppercase:
+  --
+  -- >>> let r = putStrLn . renderWith defaultOptions { optsAnnotate = \a x -> if a == Any True then map toUpper x else x }
+  -- >>> r $ text "hello" <$$> annotate (Any True) (text "world")
+  -- hello
+  -- WORLD
+  --
+  annotate :: forall a. Monoid a => a -> d a -> d a
 
 class Layout d => Document d where
-  (<|>) :: d -> d -> d
-  singleLine :: d -> d -- fail if the argument is multi-line
+  (<|>) :: Eq a => d a -> d a -> d a
+  empty :: d a
 
 -- | type parameter is phantom.
 data M a = M {height    :: Int,
@@ -105,16 +112,16 @@ instance Semigroup (M a) where
        height = height a + height b,
        lastWidth = lastWidth a + lastWidth b}
 
-instance Monoid (M a) where
+instance Monoid a => Monoid (M a) where
   mempty = text ""
   mappend = (<>)
 
-instance Layout (M a) where
+instance Layout M where
   text s = M {height = 0, maxWidth = length s, lastWidth = length s}
   flush a = M {maxWidth = maxWidth a,
                height = height a + 1,
                lastWidth = 0}
-
+  annotate _ M{..} = M{..}
 class Poset a where
   (≺) :: a -> a -> Bool
 
@@ -142,7 +149,7 @@ bestsOn m = paretoOn' m [] . mergeAllOn m
 
 -- | @paretoOn m = paretoOn' m []@
 paretoOn' :: Poset b => (a -> b) -> [a] -> [a] -> [a]
-paretoOn' m acc [] = P.reverse acc
+paretoOn' _ acc [] = P.reverse acc
 paretoOn' m acc (x:xs) = if any ((≺ m x) . m) acc
                             then paretoOn' m acc xs
                             else paretoOn' m (x:acc) xs
@@ -152,21 +159,20 @@ paretoOn' m acc (x:xs) = if any ((≺ m x) . m) acc
 
 -- list sorted by lexicographic order for the first component
 -- function argument is the page width
--- TODO: add a boolean to filter out multiline layouts.
-newtype Doc a = MkDoc {fromDoc :: Int -> [(M a,L a)]}
+newtype ODoc a = MkDoc {fromDoc :: Int -> [(Pair M L a)]}
 
-instance Monoid a => Semigroup (Doc a) where
-  MkDoc xs <> MkDoc ys = MkDoc $ \w -> bestsOn fst [ discardInvalid w [x <> y | y <- ys w] | x <- xs w]
+instance Monoid a => Semigroup (ODoc a) where
+  MkDoc xs <> MkDoc ys = MkDoc $ \w -> bestsOn frst [ discardInvalid w [x <> y | y <- ys w] | x <- xs w]
 
-discardInvalid w = quasifilter (fits w . fst)
+discardInvalid w = quasifilter (fits w . frst)
 
 quasifilter _ [] = []
 quasifilter p zs = let fzs = filter p zs
                    in if null fzs -- in case that there are no valid layouts, we take a narrow one.
-                      then [minimumBy (compare `on` (maxWidth . fst)) zs]
+                      then [minimumBy (compare `on` (maxWidth . frst)) zs]
                       else fzs
 
-instance Monoid a => Monoid (Doc a) where
+instance Monoid a => Monoid (ODoc a) where
   mempty = text ""
   mappend = (<>)
 
@@ -174,52 +180,105 @@ instance Monoid a => Monoid (Doc a) where
 fits :: Int -> M a -> Bool
 fits w x = maxWidth x <= w
 
-instance Monoid a => Layout (Doc a) where
-  flush (MkDoc xs) = MkDoc $ \w -> bestsOn fst $ map (sortOn fst) $ groupBy ((==) `on` (height . fst)) $ (map flush (xs w))
+instance Layout ODoc where
+  flush (MkDoc xs) = MkDoc $ \w -> bestsOn frst $ map (sortOn frst) $ groupBy ((==) `on` (height . frst)) $ (map flush (xs w))
   -- flush xs = paretoOn' fst [] $ sort $ (map flush xs)
-  text s = MkDoc $ return [text s]
+  text s = MkDoc $ \w -> [text s]
+  annotate a (MkDoc xs) = MkDoc $ \w -> fmap (annotate a) (xs w)
 
-instance Render Doc where
-  renderWith opts (MkDoc g) = case xs of
-      [] -> error "No suitable layout found."
-      ((_,x):_) -> renderWith opts x
-    where
-      pageWidth = optsPageWidth opts
-      xs = discardInvalid pageWidth (g pageWidth)
+renderWith :: (Monoid r,  Monoid a, Eq a)
+           => Options a r  -- ^ rendering options
+           -> Doc a          -- ^ renderable
+           -> r
+renderWith opts d = case xs of
+    [] -> error "No suitable layout found."
+    ((_ :-: x):_) -> renderWithL opts x
+  where
+    pageWidth = optsPageWidth opts
+    xs = discardInvalid pageWidth (fromDoc (interp d) pageWidth)
 
-instance Monoid a => Document (Doc a) where
-  MkDoc m1 <|> MkDoc m2 = MkDoc $ \w -> bestsOn fst [m1 w,m2 w]
-  singleLine (MkDoc m) = MkDoc $ \w -> takeWhile ((== 0). height . fst) (m w)
+instance Document ODoc where
+  MkDoc m1 <|> MkDoc m2 = MkDoc $ \w -> bestsOn frst [m1 w,m2 w]
+  empty = MkDoc $ \_ -> []
 
+data Pair f g a = (:-:) {frst :: f a, scnd :: g a}
 
-instance (Layout a, Layout b) => Layout (a,b) where
-  text s = (text s, text s)
-  flush (a,b) = (flush a, flush b)
+instance (Semigroup (f a), Semigroup (g a)) => Semigroup (Pair f g a) where
+  (x :-: y) <> (x' :-: y') = (x <> x') :-: (y <> y')
+instance (Monoid (f a), Monoid (g a)) => Monoid (Pair f g a) where
+  mempty = mempty :-: mempty
+  mappend (x :-: y)(x' :-: y') = (x `mappend` x') :-: (y `mappend` y')
+
+instance (Layout a, Layout b) => Layout (Pair a b) where
+  text s = text s :-: text s
+  flush (a:-:b) = (flush a:-: flush b)
+  annotate x (a:-:b) = (annotate x a:-:annotate x b)
 
 instance Monoid a => IsString (Doc a) where
   fromString = text
 
--- | `<>` new annotation to the 'Doc'.
---
--- Example: 'Any True' annotation will transform the rendered 'Doc' into uppercase:
---
--- >>> let r = putStrLn . renderWith defaultOptions { optsAnnotate = \a x -> if a == Any True then map toUpper x else x }
--- >>> r $ text "hello" <$$> annotate (Any True) (text "world")
--- hello
--- WORLD
---
-annotate :: forall a. Monoid a => a -> Doc a -> Doc a
-annotate a (MkDoc xs) = MkDoc $ (fmap . fmap . fmap) annotateL xs
-  where
-    annotateL :: L a -> L a
-    annotateL (L s) = L (fmap annotateAS s)
+data DDoc a = Text String | Flush (DDoc a) | S (Seq (DDoc a)) | DDoc a :<|> DDoc a | Fail | Annotate a (DDoc a)
+  deriving Eq
 
-    annotateAS :: AS a -> AS a
-    annotateAS (AS i s) = AS i (fmap annotatePart s)
+type Annotation a = (Eq a, Monoid a)
 
-    annotatePart (b, s) = (b `mappend` a, s)
+interp :: Annotation a => DDoc a -> ODoc a
+interp = \case
+  Text s -> text s
+  Flush d -> flush (interp d)
+  Fail -> empty
+  S ds -> foldMap interp $ catTexts $ toList ds
+  d :<|> e -> interp d <|> interp e
+  Annotate a d -> annotate a (interp d)
 
-    ma = Just a
+
+catTexts :: forall a. [DDoc a] -> [DDoc a]
+catTexts (Text t:Text u:xs) = catTexts (Text (t<>u):xs)
+catTexts (x:xs) = x:catTexts xs
+catTexts [] = []
+
+instance Semigroup (DDoc a) where
+  Fail <> _ = Fail
+  _ <> Fail = Fail
+  S as <> S bs = S (as <> bs)
+  S as <> b = S (as <> singleton b)
+  a <> S bs = S (singleton a <> bs)
+  a <> b = S (singleton a <> singleton b)
+
+instance Monoid a => Monoid (DDoc a) where
+  mempty = text ""
+  mappend = (<>)
+
+instance Layout DDoc where
+  text = Text
+  flush (Flush x) = Flush x
+  flush x = Flush x
+  annotate = Annotate -- can be pushed down to text. Is this a good idea? (Note it'll get rid of complications in the classes, etc.)
+
+instance Document DDoc where
+  S (viewl -> a :< as) <|> S (viewl -> b :< bs) | a == b = a <> (S as <|> S bs)
+  S (viewr -> as :> a) <|> S (viewr -> bs :> b) | a == b = (S as <|> S bs) <> a
+  Flush a <|> Flush b = Flush (a <|> b)
+  Annotate a b <|> Annotate a' d | a == a' = Annotate a' (b <|> d)
+  a <|> b = a <||> b
+  empty = Fail
+
+(<||>) :: forall a. DDoc a -> DDoc a -> DDoc a
+a <||> Fail = a
+Fail <||> a = a
+a <||> b = a :<|> b
+
+
+singleLine :: forall a. Monoid a => DDoc a -> DDoc a
+singleLine (Flush _) = Fail
+singleLine (Annotate a d) = Annotate a (singleLine d)
+singleLine (Text s) = Text s
+singleLine (a :<|> b) = singleLine a <||> singleLine b
+singleLine Fail = Fail
+singleLine (S xs) = foldMap singleLine xs
+
+type Doc = DDoc
+
 
 -- $setup
 -- >>> import Text.PrettyPrint.Compact

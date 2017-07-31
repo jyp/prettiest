@@ -1,0 +1,103 @@
+A couple more optimisations which can be done (not implemented nor documented in the paper)
+
+* Optimisation 1: bounds
+
+We can compute an upper bound (b), such that any produced layout which
+is above b can be discarded.
+
+Let us assume that a bound is a set of points (layout measures). A
+layout should be kept only if no point in the bound dominates it.
+Equivalently, if a single point in the bound dominates a layout x, x
+can be discarded.
+
+Consequently,
+ - if a frontier contains the origin point then the search can be
+   stopped (it will dominate any possible layout)
+ - coordinates below zero can be replaced by zero in the bound.
+
+The computation of bounds can be done as follows:
+
+** Bounds given by disjunction
+Consider a0 <|> a. Assuming that we have computed the
+pareto frontier for a0, we can use it as the bound for the document
+a.
+
+** Bounds given by composition
+
+Consider a = x <> y.
+
+
+Recall that the (horizontal) composition of layout measures can be
+done as follows:
+
+h = h1 + h2
+w = max w1 (l1 + w2)
+l = l1 + l2
+
+Aside: we can also define the subtraction as follows:
+
+  (h, w, l) - (h0,w0,l0) = (h2,w2,l2)
+  where
+     h2   = h - h1
+     w2  <= w - l1
+     l2   = l - l1
+
+
+Assume that we have
+- a~, the bound of a
+- x~; the pareto limit for x
+
+We can compute
+- y~, the bound for y
+
+For y to be valid, it suffices that, for any point p on x~, p <> y is
+better that any point q on b. Thus a set of possible points r for y
+is:
+
+y~ = {r | p <- x, q <- b, ¬ b < (x <> y)}
+
+we can rewrite the condition ¬ b < (x <> y), and obtain
+
+y~ = {(h2,w2,l2) | p <- (h1,w1,l1),
+                   q <- (h ,q ,l),
+                   h1 + h2 < h ∨
+                   max w1 (l1+w2) < w ∨
+                   l1 + l2 < l}
+or equivalently (because w1 < w will hold by construction)
+
+y~ = {(h2,w2,l2) | p <- (h1,w1,l1),
+                   q <- (h ,q ,l),
+                   h1 + h2 < h ∨
+                   l1 + w2 < w ∨
+                   l1 + l2 < l}
+
+but, it suffices to take the largest h2, l2, w2; so we can
+simplify the formula like so:
+
+
+y~ = {(h2,w2,l2) | p <- (h1,w1,l1),
+                   q <- (h ,w ,l),
+                   h2 = h - h1,
+                   w2 = w - l1,
+                   l2 = l - l1 }
+
+And, additionally, we can take the pareto frontier of y~ (because
+domination is transitive)
+
+** Bounds given by flush
+
+x~ = {(h-1,w,w) | (h,w,l) <- (flush x)~}
+
+
+We see here that it is in fact not useful to remember the lastwidth in
+bounds. Indeed
+  - it is forgotten as every "flush"
+  - if the bound of the lastwidth is reached so is the bound of the
+    width (because we process the documents left to right in <>)
+
+* Opt 2.
+
+
+In x <> y. Let (freeSpace = min {p ∈ x | width x - lastWidth x}). Then
+we do not have to care about layouts of y that are narrower than
+freeSpace at the expense of other factors /when computing y/.
