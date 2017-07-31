@@ -203,7 +203,7 @@ preamble body = do
   cmd "input" $ tex "../PaperTools/latex/unicodedefs"
 
   title "A Pretty But Not Greedy Printer (Functional Pearl)"
-  authorinfo [AuthorInfo "Jean-Philippe Bernardy" "jean-philippe.bernardy@gu.se" "University of Gothenburg, Department of Philosophy, Linguistics and Theory of Science"]
+  authorinfo [AuthorInfo "Jean-Philippe Bernardy" "jean-philippe.bernardy@gu.se" "University of Gothenburg, Sweden"]
   env "document" body
 
 principle :: TeX -> TeX -> Tex TeX
@@ -265,7 +265,6 @@ In the process, they give themselves some leeway as to what they accept as prett
 In contrast, my primary goal is to produce @emph«the prettiest output», at the cost of efficiency. Yet, the final result is reasonably
 efficient (@sec_timings).
 
-@newpage
 Let us specify the desired behavior of a pretty printer, first informally, as the following principles:
 
 @pcp_visibility<-principle«Visibility»« A pretty printer shall
@@ -447,7 +446,7 @@ on a 20-column-wide page, they demand the following output (the first line is no
 »
 Yet, neither Hughes' nor Wadler's library can deliver those results.
 
-@sec_notSoPretty<-subsection«The limitations of Hughes and Wadler»
+@sec_notSoPretty<-subsection«The Limitations of Hughes and Wadler»
 
 Let us take a moment to see why.  On a 20-column
 page and using Hughes' library, we would get the output shown in
@@ -953,7 +952,7 @@ Having properly refined the problem, and continuing to ignore the detail of
 actually rendering the text, we may proceed to give a fast
 implementation of the pretty printer.
 
-@subsection«Early filtering out invalid results»
+@subsection«Early Filtering Out Invalid Results»
 
 The first optimization is to filter out invalid results early; like so:
 
@@ -1000,7 +999,7 @@ not (valid b)    => not (valid (a <> b))
 not (valid a)    => not (valid (flush a))
 »»«By contrapositive of @lem_valid_mono»
 
-@subsection«Pruning out dominated results»
+@subsection«Pruning Out Dominated Results»
 
 The second optimization relies on the insight that even certain valid results
 are dominated by others. That is, they can be discarded early.
@@ -1113,7 +1112,7 @@ a <= b ∧ c <= d   =>  max a c <= max b d
 
 
 
-@subsection«Pareto frontier»
+@subsection«Pareto Frontier»
 We know by now that in any set of possible layouts, it is sufficent to consider the subset of non-dominated
 layouts.
 This subset is known as the Pareto frontier @citep"deb_multi_2016" and has the following definition.
@@ -1158,7 +1157,7 @@ The above is the final, optimized version of the layout-computation algorithm.
 To obtain a complete library from the above design,
 one should pay attention to a few more points that we discuss in this section.
 
-@subsection«Re-pairing with text»
+@subsection«Re-pairing With Text»
 
 Eventually, one might be interested in getting a complete
 pretty printed output, not just the amount of space that
@@ -1209,7 +1208,7 @@ nest n y = spaces n <> y
   where spaces n = text (replicate n ' ')
 »
 
-@subsection«Ribbon length»
+@subsection«Ribbon Length»
 
 Another subtle feature of Hughes' library is the ability to limit
 the amount of text on a single line, ignoring the current indentation.
@@ -1242,7 +1241,7 @@ Our benchmarking tool is O'Sullivan's @emph«criterion» benchmarking library,
 which provides precise timings even for operations lasting less than a microsecond.
 All benchmarks ran on a single core of an Intel Xeon E5-2640 v4, using GHC 8.0.
 
-@subsection«Behaviour at scale»
+@subsection«Behaviour At Scale»
 
 In order to benchmark our pretty printer on large outputs, we have used it to lay out
 full binary trees and random trees, represented as S-Expressions.
@@ -1318,7 +1317,7 @@ One may wonder how the elimination of dominated outputs impacts the performance.
 In fact, in this configuration
 the algorithm has an exponential behavior, and thus our test machine ran out of memory even for relatively simple outputs.
 Thus we could not produce more than four useful data points, and thus omitted the corresponding plot.
-@subsection«Tests for full outputs and typical inputs»
+@subsection«Tests for Full Outputs and Typical Inputs»
 
 Even though the asymptotic behavior of the optimized algorithm is linear, one may wonder if its absolute performance is
 satisfactory for typical pretty-printing tasks. Thus we evaluated a
@@ -1378,7 +1377,7 @@ appendix = do
   -- subsection«Raw benchmark runtimes»
   -- performanceTable dataFileName
 
-  subsection«Proof details»
+  subsection«Proof Details»
   paragraph«Proof of measure being a Layout-homomorphism»
   enumList [
    spec«
