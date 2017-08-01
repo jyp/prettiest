@@ -1,5 +1,5 @@
 name: pretty-compact
-version: 2.0
+version: 2.1
 synopsis: Pretty-printing library
 description:
   This package contains a pretty-printing library, a set of API's
