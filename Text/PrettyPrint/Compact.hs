@@ -110,7 +110,7 @@ import Text.PrettyPrint.Compact.Core (singleLine)
 
 
 -- | Render the 'Doc' into 'String' omitting all annotations.
-render :: Monoid a => Doc a -> String
+render :: Annotation a => Doc a -> String
 render = renderWith defaultOptions
 
 defaultOptions :: Options a String
@@ -123,14 +123,14 @@ defaultOptions = Options
 -- encloses them in square brackets. The documents are rendered
 -- horizontally if that fits the page. Otherwise they are aligned
 -- vertically. All comma separators are put in front of the elements.
-list :: Monoid a => [Doc a] -> Doc a
+list :: Annotation a => [Doc a] -> Doc a
 list            = encloseSep lbracket rbracket comma
 
 -- | The document @(tupled xs)@ comma separates the documents @xs@ and
 -- encloses them in parenthesis. The documents are rendered
 -- horizontally if that fits the page. Otherwise they are aligned
 -- vertically. All comma separators are put in front of the elements.
-tupled :: Monoid a => [Doc a] -> Doc a
+tupled :: Annotation a => [Doc a] -> Doc a
 tupled          = encloseSep lparen   rparen  comma
 
 
@@ -138,7 +138,7 @@ tupled          = encloseSep lparen   rparen  comma
 -- semi colons and encloses them in braces. The documents are rendered
 -- horizontally if that fits the page. Otherwise they are aligned
 -- vertically. All semi colons are put in front of the elements.
-semiBraces :: Monoid a => [Doc a] -> Doc a
+semiBraces :: Annotation a => [Doc a] -> Doc a
 semiBraces      = encloseSep lbrace   rbrace  semi
 
 -- | The document @(enclosure l r sep xs)@ concatenates the documents
@@ -164,7 +164,7 @@ semiBraces      = encloseSep lbrace   rbrace  semi
 --      ,200
 --      ,3000]
 -- @
-encloseSep :: Monoid a => Doc a -> Doc a -> Doc a -> [Doc a] -> Doc a
+encloseSep :: Annotation a => Doc a -> Doc a -> Doc a -> [Doc a] -> Doc a
 encloseSep left right sep ds
     = (\mid -> mid <> right) $ case ds of
         []  -> left <> mempty
@@ -199,7 +199,7 @@ encloseSep left right sep ds
 --
 -- (If you want put the commas in front of their elements instead of
 -- at the end, you should use 'tupled' or, in general, 'encloseSep'.)
-punctuate :: Monoid a => Doc a -> [Doc a] -> [Doc a]
+punctuate :: Annotation a => Doc a -> [Doc a] -> [Doc a]
 punctuate p []      = []
 punctuate p [d]     = [d]
 punctuate p (d:ds)  = (d <> p) : punctuate p ds
@@ -214,7 +214,7 @@ punctuate p (d:ds)  = (d <> p) : punctuate p ds
 -- horizontally with @(\<+\>)@, if it fits the page, or vertically with
 -- @(\<$\>)@.
 --
-sep :: Monoid a => [Doc a] -> Doc a
+sep :: Annotation a => [Doc a] -> Doc a
 sep [] = mempty
 sep [x] = x
 sep xs = hsep xs <|> vcat xs
@@ -226,12 +226,12 @@ sep xs = hsep xs <|> vcat xs
 -- @xs@.
 --
 -- > fillSep xs  = foldr (\<\/\>) empty xs
-fillSep :: Monoid a => [Doc a] -> Doc a
+fillSep :: Annotation a => [Doc a] -> Doc a
 fillSep         = foldDoc (</>)
 
 -- | The document @(hsep xs)@ concatenates all documents @xs@
 -- horizontally with @(\<+\>)@.
-hsep :: Monoid a => [Doc a] -> Doc a
+hsep :: Annotation a => [Doc a] -> Doc a
 hsep            = foldDoc (<-+>)
 
 -- | The document @(cat xs)@ concatenates all documents @xs@ either
@@ -239,7 +239,7 @@ hsep            = foldDoc (<-+>)
 -- @(\<$$\>)@.
 --
 -- > cat xs  = group (vcat xs)
-cat :: Monoid a => [Doc a] -> Doc a
+cat :: Annotation a => [Doc a] -> Doc a
 cat [] =  mempty
 cat [x] = x
 cat xs = hcat xs <|> vcat xs
@@ -249,145 +249,145 @@ cat xs = hcat xs <|> vcat xs
 -- a @linebreak@ and continues doing that for all documents in @xs@.
 --
 -- > fillCat xs  = foldr (\<\/\/\>) empty xs
-fillCat :: Monoid a => [Doc a] -> Doc a
+fillCat :: Annotation a => [Doc a] -> Doc a
 fillCat         = foldDoc (<//>)
 
 -- | The document @(hcat xs)@ concatenates all documents @xs@
 -- horizontally with @(\<-\>)@.
-hcat :: Monoid a => [Doc a] -> Doc a
+hcat :: Annotation a => [Doc a] -> Doc a
 hcat            = foldDoc (<->)
 
 -- | The document @(vcat xs)@ concatenates all documents @xs@
 -- vertically with @($$)@.
-vcat :: Monoid a => [Doc a] -> Doc a
+vcat :: Annotation a => [Doc a] -> Doc a
 vcat            = foldDoc ($$)
 
-foldDoc :: Monoid a => (Doc a -> Doc a -> Doc a) -> [Doc a] -> Doc a
+foldDoc :: Annotation a => (Doc a -> Doc a -> Doc a) -> [Doc a] -> Doc a
 foldDoc _ []       = mempty
 foldDoc f ds       = foldr1 f ds
 
 -- | The document @(x \<-\> y)@ concatenates document @x@ and @y@, if
 -- @x@ fits on a single line, and fails otherwise.
-(<->) :: Monoid a => Doc a -> Doc a -> Doc a
+(<->) :: Annotation a => Doc a -> Doc a -> Doc a
 x <-> y         = singleLine x <> y
 
 -- | The document @(x \<+\> y)@ concatenates document @x@ and @y@ with a
 -- @space@ in between.  (infixr 6)
-(<+>) :: Monoid a => Doc a -> Doc a -> Doc a
+(<+>) :: Annotation a => Doc a -> Doc a -> Doc a
 x <+> y         = x <> space <> y
 
 -- | The document @(x \<-+\> y)@ concatenates document @x@ and @y@
 -- with a @space@ in between, if @x@ fits on a single line, and fails
 -- otherwise.  (infixr 6)
-(<-+>) :: Monoid a => Doc a -> Doc a -> Doc a
+(<-+>) :: Annotation a => Doc a -> Doc a -> Doc a
 x <-+> y         = (singleLine x <> space <> y)
 
 -- | The document @(x \<\/\> y)@ puts @x@ and @y@ either next to each other
 -- (with a @space@ in between) if @x@ fits on a single line, or underneath each other. (infixr 5)
-(</>) :: Monoid a => Doc a -> Doc a -> Doc a
+(</>) :: Annotation a => Doc a -> Doc a -> Doc a
 x </> y         = ((singleLine x <> space) <|> flush x) <> y
 
 -- | The document @(x \<\/\/\> y)@ puts @x@ and @y@ either right next
 -- to each other (if @x@ fits on a single line) or underneath each
 -- other. (infixr 5)
-(<//>) :: Monoid a => Doc a -> Doc a -> Doc a
+(<//>) :: Annotation a => Doc a -> Doc a -> Doc a
 x <//> y        = (singleLine x <|> flush x) <> y
 
 
 -- | The document @(x \<$$\> y)@ concatenates document @x@ and @y@ with
 -- a linebreak in between. (infixr 5)
-(<$$>) :: Monoid a => Doc a -> Doc a -> Doc a
+(<$$>) :: Annotation a => Doc a -> Doc a -> Doc a
 x <$$> y = flush x <> y
 
 
 -- | Document @(squotes x)@ encloses document @x@ with single quotes
 -- \"'\".
-squotes :: Monoid a => Doc a -> Doc a
+squotes :: Annotation a => Doc a -> Doc a
 squotes         = enclose squote squote
 
 -- | Document @(dquotes x)@ encloses document @x@ with double quotes
 -- '\"'.
-dquotes :: Monoid a => Doc a -> Doc a
+dquotes :: Annotation a => Doc a -> Doc a
 dquotes         = enclose dquote dquote
 
 -- | Document @(braces x)@ encloses document @x@ in braces, \"{\" and
 -- \"}\".
-braces :: Monoid a => Doc a -> Doc a
+braces :: Annotation a => Doc a -> Doc a
 braces          = enclose lbrace rbrace
 
 -- | Document @(parens x)@ encloses document @x@ in parenthesis, \"(\"
 -- and \")\".
-parens :: Monoid a => Doc a -> Doc a
+parens :: Annotation a => Doc a -> Doc a
 parens          = enclose lparen rparen
 
 -- | Document @(angles x)@ encloses document @x@ in angles, \"\<\" and
 -- \"\>\".
-angles :: Monoid a => Doc a -> Doc a
+angles :: Annotation a => Doc a -> Doc a
 angles          = enclose langle rangle
 
 -- | Document @(brackets x)@ encloses document @x@ in square brackets,
 -- \"[\" and \"]\".
-brackets :: Monoid a => Doc a -> Doc a
+brackets :: Annotation a => Doc a -> Doc a
 brackets        = enclose lbracket rbracket
 
 -- | The document @(enclose l r x)@ encloses document @x@ between
 -- documents @l@ and @r@ using @(\<\>)@.
-enclose :: Monoid a => Doc a -> Doc a -> Doc a -> Doc a
+enclose :: Annotation a => Doc a -> Doc a -> Doc a -> Doc a
 enclose l r x   = l <> x <> r
 
-char :: Monoid a => Char -> Doc a
+char :: Annotation a => Char -> Doc a
 char x = text [x]
 
 -- | The document @lparen@ contains a left parenthesis, \"(\".
-lparen :: Monoid a => Doc a
+lparen :: Annotation a => Doc a
 lparen          = char '('
 -- | The document @rparen@ contains a right parenthesis, \")\".
-rparen :: Monoid a => Doc a
+rparen :: Annotation a => Doc a
 rparen          = char ')'
 -- | The document @langle@ contains a left angle, \"\<\".
-langle :: Monoid a => Doc a
+langle :: Annotation a => Doc a
 langle          = char '<'
 -- | The document @rangle@ contains a right angle, \">\".
-rangle :: Monoid a => Doc a
+rangle :: Annotation a => Doc a
 rangle          = char '>'
 -- | The document @lbrace@ contains a left brace, \"{\".
-lbrace :: Monoid a => Doc a
+lbrace :: Annotation a => Doc a
 lbrace          = char '{'
 -- | The document @rbrace@ contains a right brace, \"}\".
-rbrace :: Monoid a => Doc a
+rbrace :: Annotation a => Doc a
 rbrace          = char '}'
 -- | The document @lbracket@ contains a left square bracket, \"[\".
-lbracket :: Monoid a => Doc a
+lbracket :: Annotation a => Doc a
 lbracket        = char '['
 -- | The document @rbracket@ contains a right square bracket, \"]\".
-rbracket :: Monoid a => Doc a
+rbracket :: Annotation a => Doc a
 rbracket        = char ']'
 
 
 -- | The document @squote@ contains a single quote, \"'\".
-squote :: Monoid a => Doc a
+squote :: Annotation a => Doc a
 squote          = char '\''
 -- | The document @dquote@ contains a double quote, '\"'.
-dquote :: Monoid a => Doc a
+dquote :: Annotation a => Doc a
 dquote          = char '"'
 -- | The document @semi@ contains a semi colon, \";\".
-semi :: Monoid a => Doc a
+semi :: Annotation a => Doc a
 semi            = char ';'
 -- | The document @colon@ contains a colon, \":\".
-colon :: Monoid a => Doc a
+colon :: Annotation a => Doc a
 colon           = char ':'
 -- | The document @comma@ contains a comma, \",\".
-comma :: Monoid a => Doc a
+comma :: Annotation a => Doc a
 comma           = char ','
 
 -- | The document @dot@ contains a single dot, \".\".
-dot :: Monoid a => Doc a
+dot :: Annotation a => Doc a
 dot             = char '.'
 -- | The document @backslash@ contains a back slash, \"\\\".
-backslash :: Monoid a => Doc a
+backslash :: Annotation a => Doc a
 backslash       = char '\\'
 -- | The document @equals@ contains an equal sign, \"=\".
-equals :: Monoid a => Doc a
+equals :: Annotation a => Doc a
 equals          = char '='
 
 -----------------------------------------------------------
@@ -400,35 +400,35 @@ equals          = char '='
 -- using @line@ for newline characters and @char@ for all other
 -- characters. It is used instead of 'text' whenever the text contains
 -- newline characters.
-string :: Monoid a => String -> Doc a
+string :: Annotation a => String -> Doc a
 string = vcat . map text . lines
 
-bool :: Monoid a => Bool -> Doc a
+bool :: Annotation a => Bool -> Doc a
 bool b          = text (show b)
 
 -- | The document @(int i)@ shows the literal integer @i@ using
 -- 'text'.
-int :: Monoid a => Int -> Doc a
+int :: Annotation a => Int -> Doc a
 int i           = text (show i)
 
 -- | The document @(integer i)@ shows the literal integer @i@ using
 -- 'text'.
-integer :: Monoid a => Integer -> Doc a
+integer :: Annotation a => Integer -> Doc a
 integer i       = text (show i)
 
 -- | The document @(float f)@ shows the literal float @f@ using
 -- 'text'.
-float :: Monoid a => Float -> Doc a
+float :: Annotation a => Float -> Doc a
 float f         = text (show f)
 
 -- | The document @(double d)@ shows the literal double @d@ using
 -- 'text'.
-double :: Monoid a => Double -> Doc a
+double :: Annotation a => Double -> Doc a
 double d        = text (show d)
 
 -- | The document @(rational r)@ shows the literal rational @r@ using
 -- 'text'.
-rational :: Monoid a => Rational -> Doc a
+rational :: Annotation a => Rational -> Doc a
 rational r      = text (show r)
 
 
@@ -452,7 +452,7 @@ rational r      = text (show r)
 -- The @hang@ combinator is implemented as:
 --
 -- > hang i x  = align (nest i x)
-hang :: Monoid a => Int -> Doc a -> Doc a -> Doc a
+hang :: Annotation a => Int -> Doc a -> Doc a -> Doc a
 hang n x y = (x <+> y) <|> (x $$ nest' n y)
 
 -- | The document @(nest i x)@ renders document @x@ with the current
@@ -470,19 +470,19 @@ hang n x y = (x <+> y) <|> (x $$ nest' n y)
 -- @
 
 
-space :: Monoid a => Doc a
+space :: Annotation a => Doc a
 space = text " "
 
 
-nest' :: Monoid a => Int -> Doc a -> Doc a
+nest' :: Annotation a => Int -> Doc a -> Doc a
 nest' n x = spaces n <> x
 
-spaces :: Monoid a => Int -> Doc a
+spaces :: Annotation a => Int -> Doc a
 spaces n = text $ replicate n ' '
 
 -- | The document @(x \<$$\> y)@ concatenates document @x@ and @y@ with
 -- a linebreak in between. (infixr 5)
-($$) :: Monoid a => Doc a -> Doc a -> Doc a
+($$) :: Annotation a => Doc a -> Doc a -> Doc a
 ($$)  = (<$$>)
 
 -- $setup
