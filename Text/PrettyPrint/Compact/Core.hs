@@ -1,7 +1,8 @@
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, ViewPatterns, DeriveFunctor, DeriveFoldable, DeriveTraversable, LambdaCase #-}
-module Text.PrettyPrint.Compact.Core(Annotation,Layout(..),renderWith,Options(..),Document(..),Doc) where
+module Text.PrettyPrint.Compact.Core(Annotation,Layout(..),renderWith,Options(..),groupingBy,Doc) where
 
 import Prelude ()
 import Prelude.Compat as P
@@ -95,11 +96,6 @@ class Layout d where
   --
   annotate :: forall a. Monoid a => a -> d a -> d a
 
-class Layout d => Document d where
-  -- (<|>) :: Eq a => d a -> d a -> d a
-  groupingBy :: Monoid a => String -> [(Int,d a)] -> d a
-  empty :: d a
-
 -- | type parameter is phantom.
 data M a = M {height    :: Int,
               lastWidth :: Int,
@@ -186,7 +182,7 @@ instance Layout ODoc where
   flush (MkDoc xs) = MkDoc $ \w -> fmap flush (xs w)
   annotate a (MkDoc xs) = MkDoc $ \w -> fmap (annotate a) (xs w)
 
-renderWith :: (Monoid r,  Monoid a, Eq a)
+renderWith :: (Monoid r, Annotation a)
            => Options a r  -- ^ rendering options
            -> ODoc a          -- ^ renderable
            -> r
@@ -208,18 +204,17 @@ spaces n = text $ replicate n ' '
 a $$ b = flush a <> b
 
 second f (a,b) = (a, f b)
-instance Document ODoc where
-  -- MkDoc m1 <|> MkDoc m2 = MkDoc $ \w -> bestsOn frst [m1 w,m2 w]
-  groupingBy _ [] = mempty
-  groupingBy separator ms = MkDoc $ \w ->
-    let mws = map (second (($ w) . fromDoc)) ms
-        (_,lastMw) = last mws
-        hcatElems = map (onlySingleLine . snd) (init mws) ++ [lastMw] -- all the elements except the first must fit on a single line
-        vcatElems = map (\(indent,x) -> map (spaces indent <>) x) mws
-        horizontal = discardInvalid w $ foldr1 (liftA2 (\x y -> x <> text separator <> y)) hcatElems
-        vertical = foldr1 (\xs ys -> bestsOn frst [[x $$ y | y <- ys] | x <- xs]) vcatElems
-    in bestsOn frst [horizontal,vertical]
-  empty = MkDoc $ \_ -> []
+
+groupingBy :: Monoid a => String -> [(Int,Doc a)] -> Doc a
+groupingBy _ [] = mempty
+groupingBy separator ms = MkDoc $ \w ->
+  let mws = map (second (($ w) . fromDoc)) ms
+      (_,lastMw) = last mws
+      hcatElems = map (onlySingleLine . snd) (init mws) ++ [lastMw] -- all the elements except the first must fit on a single line
+      vcatElems = map (\(indent,x) -> map (spaces indent <>) x) mws
+      horizontal = discardInvalid w $ foldr1 (liftA2 (\x y -> x <> text separator <> y)) hcatElems
+      vertical = foldr1 (\xs ys -> bestsOn frst [[x $$ y | y <- ys] | x <- xs]) vcatElems
+  in bestsOn frst [horizontal,vertical]
 
 data Pair f g a = (:-:) {frst :: f a, scnd :: g a}
 
@@ -240,7 +235,7 @@ instance Monoid a => IsString (Doc a) where
 -- data DDoc a = Text String | Flush (DDoc a) | S (Seq (DDoc a)) | DDoc a :<|> DDoc a | Fail | Annotate a (DDoc a)
 --   deriving Eq
 
-type Annotation a = (Eq a, Monoid a)
+type Annotation a = (Monoid a)
 
 -- interp :: Annotation a => DDoc a -> ODoc a
 -- interp = \case
@@ -291,6 +286,22 @@ type Annotation a = (Eq a, Monoid a)
 
 type Doc = ODoc
 
+tt :: Doc ()
+tt = groupingBy " " $ map (4,) $ 
+     ((replicate 4 $ groupingBy " " (map (4,) (map text ["fw"]))) ++
+      [groupingBy " " (map (0,) (map text ["fw","arstnwfyut","arstin","arstaruf"]))])
+
+{-> putStrLn (renderWith Options { optsAnnotate = \_ s -> s , optsPageWidth = 4} tt)
+
+    fw
+    fw
+    fw
+    fw
+    fw
+    arstnwfyut
+    arstin
+    arstaruf
+-}
 
 -- $setup
 -- >>> import Text.PrettyPrint.Compact

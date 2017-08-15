@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | Compact pretty-printer.
 --
@@ -70,13 +71,13 @@ module Text.PrettyPrint.Compact (
    hang, encloseSep, list, tupled, semiBraces,
 
    -- * Operators
-   (<+>), ($$), (</>), (<//>), (<$$>), (<|>),
+   (<+>), ($$), (</>), (<//>), (<$$>),
 
    -- * List combinators
    hsep, sep, hcat, vcat, cat, punctuate,
 
    -- * Fill combiantors
-   fillSep, fillCat,
+   -- fillSep, fillCat,
 
    -- * Bracketing combinators
    enclose, squotes, dquotes, parens, angles, braces, brackets,
@@ -103,11 +104,8 @@ module Text.PrettyPrint.Compact (
    ) where
 
 import Data.Monoid
-import Data.List (intersperse)
 
 import Text.PrettyPrint.Compact.Core as Text.PrettyPrint.Compact
-import Text.PrettyPrint.Compact.Core (singleLine)
-
 
 -- | Render the 'Doc' into 'String' omitting all annotations.
 render :: Annotation a => Doc a -> String
@@ -165,11 +163,11 @@ semiBraces      = encloseSep lbrace   rbrace  semi
 --      ,3000]
 -- @
 encloseSep :: Annotation a => Doc a -> Doc a -> Doc a -> [Doc a] -> Doc a
-encloseSep left right sep ds =
+encloseSep left right separator ds
     = (<> right) $ case ds of
         []  -> left
         [d] -> left <> d
-        (d:ds') -> cat (left <> d:map (sep <>) ds')
+        (d:ds') -> cat (left <> d:map (separator <>) ds')
 
 -----------------------------------------------------------
 -- punctuate p [d1,d2,...,dn] => [d1 <> p,d2 <> p, ... ,dn]
@@ -200,8 +198,8 @@ encloseSep left right sep ds =
 -- (If you want put the commas in front of their elements instead of
 -- at the end, you should use 'tupled' or, in general, 'encloseSep'.)
 punctuate :: Annotation a => Doc a -> [Doc a] -> [Doc a]
-punctuate p []      = []
-punctuate p [d]     = [d]
+punctuate _p []      = []
+punctuate _p [d]     = [d]
 punctuate p (d:ds)  = (d <> p) : punctuate p ds
 
 
@@ -216,7 +214,7 @@ punctuate p (d:ds)  = (d <> p) : punctuate p ds
 -- must fit on a single line.
 --
 sep :: Annotation a => [Doc a] -> Doc a
-sep xs = groupBy " " (map (0,) xs)
+sep xs = groupingBy " " (map (0,) xs)
 
 
 -- -- | The document @(fillSep xs)@ concatenates documents @xs@
@@ -238,7 +236,7 @@ hsep            = foldDoc (<+>)
 -- @(\<$$\>)@.
 --
 cat :: Annotation a => [Doc a] -> Doc a
-cat xs = groupBy "" (map (0,) xs)
+cat xs = groupingBy "" (map (0,) xs)
 
 -- -- | The document @(fillCat xs)@ concatenates documents @xs@
 -- -- horizontally with @(\<\>)@ as long as its fits the page, than inserts
@@ -270,13 +268,13 @@ x <+> y         = x <> space <> y
 -- | The document @(x \<\/\> y)@ puts @x@ and @y@ either next to each other
 -- (with a @space@ in between) or underneath each other. (infixr 5)
 (</>) :: Annotation a => Doc a -> Doc a -> Doc a
-x </> y         = hang' " " "" x y
+x </> y         = hang' " " 0 x y
 
 -- | The document @(x \<\/\/\> y)@ puts @x@ and @y@ either right next
 -- to each other (if @x@ fits on a single line) or underneath each
 -- other. (infixr 5)
 (<//>) :: Annotation a => Doc a -> Doc a -> Doc a
-x <//> y        = hang' "" "" x y
+x <//> y        = hang' "" 0 x y
 
 
 -- | The document @(x \<$$\> y)@ concatenates document @x@ and @y@ with
@@ -438,29 +436,13 @@ rational r      = text (show r)
 --
 -- > hang i x  = align (nest i x)
 hang :: Annotation a => Int -> Doc a -> Doc a -> Doc a
-hang n x y = groupBy " " [(0,x), (n,y)]
+hang n x y = groupingBy " " [(0,x), (n,y)]
 
--- | The document @(nest i x)@ renders document @x@ with the current
--- indentation level increased by i (See also 'hang', 'align' and
--- 'indent').
---
--- > nest 2 (text "hello" <$$$> text "world") <$$$> text "!"
---
--- outputs as:
---
--- @
--- hello
---   world
--- !
--- @
-
+hang' :: Annotation a => String -> Int -> Doc a -> Doc a -> Doc a
+hang' separator n x y = groupingBy separator [(0,x), (n,y)]
 
 space :: Annotation a => Doc a
 space = text " "
-
-
-nest' :: Annotation a => Int -> Doc a -> Doc a
-nest' n x = spaces n <> x
 
 spaces :: Annotation a => Int -> Doc a
 spaces n = text $ replicate n ' '
