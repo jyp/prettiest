@@ -12,7 +12,7 @@ import Data.Semigroup
 import Data.Sequence (singleton, Seq, viewl, viewr, ViewL(..), ViewR(..), (|>))
 import Data.String
 import Data.Foldable (toList)
-
+import Control.Applicative (liftA2)
 -- | Annotated string, which consists of segments with separate (or no) annotations.
 --
 -- We keep annotated segments in a container (list).
@@ -96,7 +96,8 @@ class Layout d where
   annotate :: forall a. Monoid a => a -> d a -> d a
 
 class Layout d => Document d where
-  (<|>) :: Eq a => d a -> d a -> d a
+  -- (<|>) :: Eq a => d a -> d a -> d a
+  groupingBy :: Monoid a => String -> [(Int,d a)] -> d a
   empty :: d a
 
 -- | type parameter is phantom.
@@ -161,6 +162,8 @@ paretoOn' m acc (x:xs) = if any ((≺ m x) . m) acc
 -- function argument is the page width
 newtype ODoc a = MkDoc {fromDoc :: Int -> [(Pair M L a)]}
 
+app w xs ys = bestsOn frst [discardInvalid w [x <> y | y <- ys] | x <- xs]
+
 instance Monoid a => Semigroup (ODoc a) where
   MkDoc xs <> MkDoc ys = MkDoc $ \w -> bestsOn frst [ discardInvalid w [x <> y | y <- ys w] | x <- xs w]
 
@@ -181,24 +184,40 @@ fits :: Int -> M a -> Bool
 fits w x = maxWidth x <= w
 
 instance Layout ODoc where
-  flush (MkDoc xs) = MkDoc $ \w -> bestsOn frst $ map (sortOn frst) $ groupBy ((==) `on` (height . frst)) $ (map flush (xs w))
+  -- flush (MkDoc xs) = MkDoc $ \w -> bestsOn frst $ map (sortOn frst) $ groupingBy ((==) `on` (height . frst)) $ (map flush (xs w))
   -- flush xs = paretoOn' fst [] $ sort $ (map flush xs)
-  text s = MkDoc $ \w -> [text s]
+  text s = MkDoc $ \_ -> [text s]
   annotate a (MkDoc xs) = MkDoc $ \w -> fmap (annotate a) (xs w)
 
 renderWith :: (Monoid r,  Monoid a, Eq a)
            => Options a r  -- ^ rendering options
-           -> Doc a          -- ^ renderable
+           -> ODoc a          -- ^ renderable
            -> r
 renderWith opts d = case xs of
     [] -> error "No suitable layout found."
     ((_ :-: x):_) -> renderWithL opts x
   where
     pageWidth = optsPageWidth opts
-    xs = discardInvalid pageWidth (fromDoc (interp d) pageWidth)
+    xs = discardInvalid pageWidth (fromDoc d pageWidth)
 
+onlySingleLine :: [Pair M L a] -> [Pair M L a]
+onlySingleLine = takeWhile (\(M{..} :-: _) -> height == 0)
+
+spaces :: (Monoid a,Layout l) => Int -> l a
+spaces n = text $ replicate n ' '
+
+($$) ::       (Layout d, Monoid a, Semigroup (d a)) =>
+              d a -> d a -> d a
+a $$ b = flush a <> b
+  
 instance Document ODoc where
-  MkDoc m1 <|> MkDoc m2 = MkDoc $ \w -> bestsOn frst [m1 w,m2 w]
+  -- MkDoc m1 <|> MkDoc m2 = MkDoc $ \w -> bestsOn frst [m1 w,m2 w]
+  groupingBy _ [] = mempty
+  groupingBy separator ms = MkDoc $ \w -> 
+    let ds = [(onlySingleLine mw, map (spaces indent <>) mw) | (indent,MkDoc m) <- ms, let mw = m w]
+        horizontal = foldr1 (liftA2 (\x y -> x <> text separator <> y)) (map fst ds)
+        vertical = foldr1 (liftA2 ($$)) (map snd ds)
+    in bestsOn frst [horizontal,vertical]
   empty = MkDoc $ \_ -> []
 
 data Pair f g a = (:-:) {frst :: f a, scnd :: g a}
@@ -222,14 +241,14 @@ data DDoc a = Text String | Flush (DDoc a) | S (Seq (DDoc a)) | DDoc a :<|> DDoc
 
 type Annotation a = (Eq a, Monoid a)
 
-interp :: Annotation a => DDoc a -> ODoc a
-interp = \case
-  Text s -> text s
-  Flush d -> flush (interp d)
-  Fail -> empty
-  S ds -> foldMap interp $ catTexts $ toList ds
-  d :<|> e -> interp d <|> interp e
-  Annotate a d -> annotate a (interp d)
+-- interp :: Annotation a => DDoc a -> ODoc a
+-- interp = \case
+--   Text s -> text s
+--   Flush d -> flush (interp d)
+--   Fail -> empty
+--   S ds -> foldMap interp $ catTexts $ toList ds
+--   d :<|> e -> interp d <|> interp e
+--   Annotate a d -> annotate a (interp d)
 
 
 catTexts :: forall a. [DDoc a] -> [DDoc a]
@@ -255,13 +274,13 @@ instance Layout DDoc where
   flush x = Flush x
   annotate = Annotate -- can be pushed down to text. Is this a good idea? (Note it'll get rid of complications in the classes, etc.)
 
-instance Document DDoc where
-  S (viewl -> a :< as) <|> S (viewl -> b :< bs) | a == b = a <> (S as <|> S bs)
-  S (viewr -> as :> a) <|> S (viewr -> bs :> b) | a == b = (S as <|> S bs) <> a
-  Flush a <|> Flush b = Flush (a <|> b)
-  Annotate a b <|> Annotate a' d | a == a' = Annotate a' (b <|> d)
-  a <|> b = a <||> b
-  empty = Fail
+-- instance Document DDoc where
+--   -- S (viewl -> a :< as) <|> S (viewl -> b :< bs) | a == b = a <> (S as <|> S bs)
+--   -- S (viewr -> as :> a) <|> S (viewr -> bs :> b) | a == b = (S as <|> S bs) <> a
+--   Flush a <|> Flush b = Flush (a <|> b)
+--   Annotate a b <|> Annotate a' d | a == a' = Annotate a' (b <|> d)
+--   a <|> b = a <||> b
+--   empty = Fail
 
 (<||>) :: forall a. DDoc a -> DDoc a -> DDoc a
 a <||> Fail = a
