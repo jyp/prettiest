@@ -1,7 +1,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, ViewPatterns, DeriveFunctor, DeriveFoldable, DeriveTraversable, LambdaCase #-}
-module Text.PrettyPrint.Compact.Core(Annotation,Layout(..),renderWith,Options(..),Document(..),Doc,singleLine) where
+module Text.PrettyPrint.Compact.Core(Annotation,Layout(..),renderWith,Options(..),Document(..),Doc) where
 
 import Prelude ()
 import Prelude.Compat as P
@@ -162,8 +162,6 @@ paretoOn' m acc (x:xs) = if any ((≺ m x) . m) acc
 -- function argument is the page width
 newtype ODoc a = MkDoc {fromDoc :: Int -> [(Pair M L a)]}
 
-app w xs ys = bestsOn frst [discardInvalid w [x <> y | y <- ys] | x <- xs]
-
 instance Monoid a => Semigroup (ODoc a) where
   MkDoc xs <> MkDoc ys = MkDoc $ \w -> bestsOn frst [ discardInvalid w [x <> y | y <- ys w] | x <- xs w]
 
@@ -184,9 +182,8 @@ fits :: Int -> M a -> Bool
 fits w x = maxWidth x <= w
 
 instance Layout ODoc where
-  -- flush (MkDoc xs) = MkDoc $ \w -> bestsOn frst $ map (sortOn frst) $ groupingBy ((==) `on` (height . frst)) $ (map flush (xs w))
-  -- flush xs = paretoOn' fst [] $ sort $ (map flush xs)
   text s = MkDoc $ \_ -> [text s]
+  flush (MkDoc xs) = MkDoc $ \w -> fmap flush (xs w)
   annotate a (MkDoc xs) = MkDoc $ \w -> fmap (annotate a) (xs w)
 
 renderWith :: (Monoid r,  Monoid a, Eq a)
@@ -206,17 +203,21 @@ onlySingleLine = takeWhile (\(M{..} :-: _) -> height == 0)
 spaces :: (Monoid a,Layout l) => Int -> l a
 spaces n = text $ replicate n ' '
 
-($$) ::       (Layout d, Monoid a, Semigroup (d a)) =>
-              d a -> d a -> d a
+($$) :: (Layout d, Monoid a, Semigroup (d a)) =>
+        d a -> d a -> d a
 a $$ b = flush a <> b
-  
+
+second f (a,b) = (a, f b)
 instance Document ODoc where
   -- MkDoc m1 <|> MkDoc m2 = MkDoc $ \w -> bestsOn frst [m1 w,m2 w]
   groupingBy _ [] = mempty
-  groupingBy separator ms = MkDoc $ \w -> 
-    let ds = [(onlySingleLine mw, map (spaces indent <>) mw) | (indent,MkDoc m) <- ms, let mw = m w]
-        horizontal = foldr1 (liftA2 (\x y -> x <> text separator <> y)) (map fst ds)
-        vertical = foldr1 (liftA2 ($$)) (map snd ds)
+  groupingBy separator ms = MkDoc $ \w ->
+    let mws = map (second (($ w) . fromDoc)) ms
+        (_,lastMw) = last mws
+        hcatElems = map (onlySingleLine . snd) (init mws) ++ [lastMw] -- all the elements except the first must fit on a single line
+        vcatElems = map (\(indent,x) -> map (spaces indent <>) x) mws
+        horizontal = discardInvalid w $ foldr1 (liftA2 (\x y -> x <> text separator <> y)) hcatElems
+        vertical = foldr1 (\xs ys -> bestsOn frst [[x $$ y | y <- ys] | x <- xs]) vcatElems
     in bestsOn frst [horizontal,vertical]
   empty = MkDoc $ \_ -> []
 
@@ -236,8 +237,8 @@ instance (Layout a, Layout b) => Layout (Pair a b) where
 instance Monoid a => IsString (Doc a) where
   fromString = text
 
-data DDoc a = Text String | Flush (DDoc a) | S (Seq (DDoc a)) | DDoc a :<|> DDoc a | Fail | Annotate a (DDoc a)
-  deriving Eq
+-- data DDoc a = Text String | Flush (DDoc a) | S (Seq (DDoc a)) | DDoc a :<|> DDoc a | Fail | Annotate a (DDoc a)
+--   deriving Eq
 
 type Annotation a = (Eq a, Monoid a)
 
@@ -251,28 +252,28 @@ type Annotation a = (Eq a, Monoid a)
 --   Annotate a d -> annotate a (interp d)
 
 
-catTexts :: forall a. [DDoc a] -> [DDoc a]
-catTexts (Text t:Text u:xs) = catTexts (Text (t<>u):xs)
-catTexts (x:xs) = x:catTexts xs
-catTexts [] = []
+-- catTexts :: forall a. [DDoc a] -> [DDoc a]
+-- catTexts (Text t:Text u:xs) = catTexts (Text (t<>u):xs)
+-- catTexts (x:xs) = x:catTexts xs
+-- catTexts [] = []
 
-instance Semigroup (DDoc a) where
-  Fail <> _ = Fail
-  _ <> Fail = Fail
-  S as <> S bs = S (as <> bs)
-  S as <> b = S (as <> singleton b)
-  a <> S bs = S (singleton a <> bs)
-  a <> b = S (singleton a <> singleton b)
+-- instance Semigroup (DDoc a) where
+--   Fail <> _ = Fail
+--   _ <> Fail = Fail
+--   S as <> S bs = S (as <> bs)
+--   S as <> b = S (as <> singleton b)
+--   a <> S bs = S (singleton a <> bs)
+--   a <> b = S (singleton a <> singleton b)
 
-instance Monoid a => Monoid (DDoc a) where
-  mempty = text ""
-  mappend = (<>)
+-- instance Monoid a => Monoid (DDoc a) where
+--   mempty = text ""
+--   mappend = (<>)
 
-instance Layout DDoc where
-  text = Text
-  flush (Flush x) = Flush x
-  flush x = Flush x
-  annotate = Annotate -- can be pushed down to text. Is this a good idea? (Note it'll get rid of complications in the classes, etc.)
+-- instance Layout DDoc where
+--   text = Text
+--   flush (Flush x) = Flush x
+--   flush x = Flush x
+--   annotate = Annotate -- can be pushed down to text. Is this a good idea? (Note it'll get rid of complications in the classes, etc.)
 
 -- instance Document DDoc where
 --   -- S (viewl -> a :< as) <|> S (viewl -> b :< bs) | a == b = a <> (S as <|> S bs)
@@ -282,21 +283,13 @@ instance Layout DDoc where
 --   a <|> b = a <||> b
 --   empty = Fail
 
-(<||>) :: forall a. DDoc a -> DDoc a -> DDoc a
-a <||> Fail = a
-Fail <||> a = a
-a <||> b = a :<|> b
+-- (<||>) :: forall a. DDoc a -> DDoc a -> DDoc a
+-- a <||> Fail = a
+-- Fail <||> a = a
+-- a <||> b = a :<|> b
 
 
-singleLine :: forall a. Monoid a => DDoc a -> DDoc a
-singleLine (Flush _) = Fail
-singleLine (Annotate a d) = Annotate a (singleLine d)
-singleLine (Text s) = Text s
-singleLine (a :<|> b) = singleLine a <||> singleLine b
-singleLine Fail = Fail
-singleLine (S xs) = foldMap singleLine xs
-
-type Doc = DDoc
+type Doc = ODoc
 
 
 -- $setup
