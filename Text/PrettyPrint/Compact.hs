@@ -68,7 +68,7 @@ module Text.PrettyPrint.Compact (
    -- * Basic combinators
    module Data.Monoid, text, flush, char,
 
-   hang, encloseSep, list, tupled, semiBraces,
+   hang, hangWith, encloseSep, list, tupled, semiBraces,
 
    -- * Operators
    (<+>), ($$), (</>), (<//>), (<$$>),
@@ -210,7 +210,7 @@ punctuate p (d:ds)  = (d <> p) : punctuate p ds
 
 -- | The document @(sep xs)@ concatenates all documents @xs@ either
 -- horizontally with @(\<+\>)@, if it fits the page, or vertically
--- with @(\<$\>)@. Documents on the left of horizontal concatenation
+-- with @(\<$$\>)@. Documents on the left of horizontal concatenation
 -- must fit on a single line.
 --
 sep :: Annotation a => [Doc a] -> Doc a
@@ -268,13 +268,13 @@ x <+> y         = x <> space <> y
 -- | The document @(x \<\/\> y)@ puts @x@ and @y@ either next to each other
 -- (with a @space@ in between) or underneath each other. (infixr 5)
 (</>) :: Annotation a => Doc a -> Doc a -> Doc a
-x </> y         = hang' " " 0 x y
+x </> y         = hang 0 x y
 
 -- | The document @(x \<\/\/\> y)@ puts @x@ and @y@ either right next
 -- to each other (if @x@ fits on a single line) or underneath each
 -- other. (infixr 5)
 (<//>) :: Annotation a => Doc a -> Doc a -> Doc a
-x <//> y        = hang' "" 0 x y
+x <//> y        = hangWith "" 0 x y
 
 
 -- | The document @(x \<$$\> y)@ concatenates document @x@ and @y@ with
@@ -417,35 +417,22 @@ rational r      = text (show r)
 
 
 -- | The hang combinator implements hanging indentation. The document
--- @(hang i x)@ renders document @x@ with a nesting level set to the
--- current column plus @i@. The following example uses hanging
--- indentation for some text:
---
--- > test  = hang 4 (fillSep (map text
--- >         (words "the hang combinator indents these words !")))
---
--- Which lays out on a page with a width of 20 characters as:
---
--- @
--- the hang combinator
---     indents these
---     words !
--- @
---
--- The @hang@ combinator is implemented as:
---
--- > hang i x  = align (nest i x)
-hang :: Annotation a => Int -> Doc a -> Doc a -> Doc a
-hang n x y = groupingBy " " [(0,x), (n,y)]
+-- @(hang i x y)@ either @x@ and @y@ concatenated with @\<+\>@ or @y@
+-- below @x@ with an additional indentation of @i@.
 
-hang' :: Annotation a => String -> Int -> Doc a -> Doc a -> Doc a
-hang' separator n x y = groupingBy separator [(0,x), (n,y)]
+hang :: Annotation a => Int -> Doc a -> Doc a -> Doc a
+hang = hangWith " "
+
+
+-- | The hang combinator implements hanging indentation. The document
+-- @(hang separator i x y)@ either @x@ and @y@ concatenated with @\<\>
+-- text separator \<\>@ or @y@ below @x@ with an additional
+-- indentation of @i@.
+hangWith :: Annotation a => String -> Int -> Doc a -> Doc a -> Doc a
+hangWith separator n x y = groupingBy separator [(0,x), (n,y)]
 
 space :: Annotation a => Doc a
 space = text " "
-
-spaces :: Annotation a => Int -> Doc a
-spaces n = text $ replicate n ' '
 
 -- | The document @(x \<$$\> y)@ concatenates document @x@ and @y@ with
 -- a linebreak in between. (infixr 5)
