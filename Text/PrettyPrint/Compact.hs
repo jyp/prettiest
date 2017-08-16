@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | Compact pretty-printer.
 --
@@ -67,16 +68,16 @@ module Text.PrettyPrint.Compact (
    -- * Basic combinators
    module Data.Monoid, text, flush, char,
 
-   hang, encloseSep, list, tupled, semiBraces,
+   hang, hangWith, encloseSep, list, tupled, semiBraces,
 
    -- * Operators
-   (<+>), ($$), (</>), (<//>), (<$$>), (<|>),
+   (<+>), ($$), (</>), (<//>), (<$$>),
 
    -- * List combinators
    hsep, sep, hcat, vcat, cat, punctuate,
 
    -- * Fill combiantors
-   fillSep, fillCat,
+   -- fillSep, fillCat,
 
    -- * Bracketing combinators
    enclose, squotes, dquotes, parens, angles, braces, brackets,
@@ -103,11 +104,8 @@ module Text.PrettyPrint.Compact (
    ) where
 
 import Data.Monoid
-import Data.List (intersperse)
 
 import Text.PrettyPrint.Compact.Core as Text.PrettyPrint.Compact
-import Text.PrettyPrint.Compact.Core (singleLine)
-
 
 -- | Render the 'Doc' into 'String' omitting all annotations.
 render :: Annotation a => Doc a -> String
@@ -165,11 +163,11 @@ semiBraces      = encloseSep lbrace   rbrace  semi
 --      ,3000]
 -- @
 encloseSep :: Annotation a => Doc a -> Doc a -> Doc a -> [Doc a] -> Doc a
-encloseSep left right sep ds
-    = (\mid -> mid <> right) $ case ds of
-        []  -> left <> mempty
+encloseSep left right separator ds
+    = (<> right) $ case ds of
+        []  -> left
         [d] -> left <> d
-        (d:ds') -> hcat (left:intersperse (sep<>text " ") ds) <|> vcat (left <> d:map (sep <>) ds')
+        (d:ds') -> cat (left <> d:map (separator <>) ds')
 
 -----------------------------------------------------------
 -- punctuate p [d1,d2,...,dn] => [d1 <> p,d2 <> p, ... ,dn]
@@ -200,8 +198,8 @@ encloseSep left right sep ds
 -- (If you want put the commas in front of their elements instead of
 -- at the end, you should use 'tupled' or, in general, 'encloseSep'.)
 punctuate :: Annotation a => Doc a -> [Doc a] -> [Doc a]
-punctuate p []      = []
-punctuate p [d]     = [d]
+punctuate _p []      = []
+punctuate _p [d]     = [d]
 punctuate p (d:ds)  = (d <> p) : punctuate p ds
 
 
@@ -211,51 +209,47 @@ punctuate p (d:ds)  = (d <> p) : punctuate p ds
 
 
 -- | The document @(sep xs)@ concatenates all documents @xs@ either
--- horizontally with @(\<+\>)@, if it fits the page, or vertically with
--- @(\<$\>)@.
+-- horizontally with @(\<+\>)@, if it fits the page, or vertically
+-- with @(\<$$\>)@. Documents on the left of horizontal concatenation
+-- must fit on a single line.
 --
 sep :: Annotation a => [Doc a] -> Doc a
-sep [] = mempty
-sep [x] = x
-sep xs = hsep xs <|> vcat xs
+sep xs = groupingBy " " (map (0,) xs)
 
 
--- | The document @(fillSep xs)@ concatenates documents @xs@
--- horizontally with @(\<+\>)@ as long as its fits the page, than
--- inserts a @line@ and continues doing that for all documents in
--- @xs@.
---
--- > fillSep xs  = foldr (\<\/\>) empty xs
-fillSep :: Annotation a => [Doc a] -> Doc a
-fillSep         = foldDoc (</>)
+-- -- | The document @(fillSep xs)@ concatenates documents @xs@
+-- -- horizontally with @(\<+\>)@ as long as its fits the page, than
+-- -- inserts a @line@ and continues doing that for all documents in
+-- -- @xs@.
+-- --
+-- -- > fillSep xs  = foldr (\<\/\>) empty xs
+-- fillSep :: Annotation a => [Doc a] -> Doc a
+-- fillSep         = foldDoc (</>)
 
 -- | The document @(hsep xs)@ concatenates all documents @xs@
 -- horizontally with @(\<+\>)@.
 hsep :: Annotation a => [Doc a] -> Doc a
-hsep            = foldDoc (<-+>)
+hsep            = foldDoc (<+>)
 
 -- | The document @(cat xs)@ concatenates all documents @xs@ either
 -- horizontally with @(\<\>)@, if it fits the page, or vertically with
 -- @(\<$$\>)@.
 --
--- > cat xs  = group (vcat xs)
 cat :: Annotation a => [Doc a] -> Doc a
-cat [] =  mempty
-cat [x] = x
-cat xs = hcat xs <|> vcat xs
+cat xs = groupingBy "" (map (0,) xs)
 
--- | The document @(fillCat xs)@ concatenates documents @xs@
--- horizontally with @(\<\>)@ as long as its fits the page, than inserts
--- a @linebreak@ and continues doing that for all documents in @xs@.
---
--- > fillCat xs  = foldr (\<\/\/\>) empty xs
-fillCat :: Annotation a => [Doc a] -> Doc a
-fillCat         = foldDoc (<//>)
+-- -- | The document @(fillCat xs)@ concatenates documents @xs@
+-- -- horizontally with @(\<\>)@ as long as its fits the page, than inserts
+-- -- a @linebreak@ and continues doing that for all documents in @xs@.
+-- --
+-- -- > fillCat xs  = foldr (\<\/\/\>) empty xs
+-- fillCat :: Annotation a => [Doc a] -> Doc a
+-- fillCat         = foldDoc (<//>)
 
 -- | The document @(hcat xs)@ concatenates all documents @xs@
--- horizontally with @(\<-\>)@.
+-- horizontally with @(\<\>)@.
 hcat :: Annotation a => [Doc a] -> Doc a
-hcat            = foldDoc (<->)
+hcat            = foldDoc (<>)
 
 -- | The document @(vcat xs)@ concatenates all documents @xs@
 -- vertically with @($$)@.
@@ -266,39 +260,26 @@ foldDoc :: Annotation a => (Doc a -> Doc a -> Doc a) -> [Doc a] -> Doc a
 foldDoc _ []       = mempty
 foldDoc f ds       = foldr1 f ds
 
--- | The document @(x \<-\> y)@ concatenates document @x@ and @y@, if
--- @x@ fits on a single line, and fails otherwise.
-(<->) :: Annotation a => Doc a -> Doc a -> Doc a
-x <-> y         = singleLine x <> y
-
 -- | The document @(x \<+\> y)@ concatenates document @x@ and @y@ with a
 -- @space@ in between.  (infixr 6)
 (<+>) :: Annotation a => Doc a -> Doc a -> Doc a
 x <+> y         = x <> space <> y
 
--- | The document @(x \<-+\> y)@ concatenates document @x@ and @y@
--- with a @space@ in between, if @x@ fits on a single line, and fails
--- otherwise.  (infixr 6)
-(<-+>) :: Annotation a => Doc a -> Doc a -> Doc a
-x <-+> y         = (singleLine x <> space <> y)
-
 -- | The document @(x \<\/\> y)@ puts @x@ and @y@ either next to each other
--- (with a @space@ in between) if @x@ fits on a single line, or underneath each other. (infixr 5)
+-- (with a @space@ in between) or underneath each other. (infixr 5)
 (</>) :: Annotation a => Doc a -> Doc a -> Doc a
-x </> y         = ((singleLine x <> space) <|> flush x) <> y
+x </> y         = hang 0 x y
 
 -- | The document @(x \<\/\/\> y)@ puts @x@ and @y@ either right next
 -- to each other (if @x@ fits on a single line) or underneath each
 -- other. (infixr 5)
 (<//>) :: Annotation a => Doc a -> Doc a -> Doc a
-x <//> y        = (singleLine x <|> flush x) <> y
-
+x <//> y        = hangWith "" 0 x y
 
 -- | The document @(x \<$$\> y)@ concatenates document @x@ and @y@ with
 -- a linebreak in between. (infixr 5)
 (<$$>) :: Annotation a => Doc a -> Doc a -> Doc a
-x <$$> y = flush x <> y
-
+(<$$>) = ($$)
 
 -- | Document @(squotes x)@ encloses document @x@ with single quotes
 -- \"'\".
@@ -434,56 +415,22 @@ rational r      = text (show r)
 
 
 -- | The hang combinator implements hanging indentation. The document
--- @(hang i x)@ renders document @x@ with a nesting level set to the
--- current column plus @i@. The following example uses hanging
--- indentation for some text:
---
--- > test  = hang 4 (fillSep (map text
--- >         (words "the hang combinator indents these words !")))
---
--- Which lays out on a page with a width of 20 characters as:
---
--- @
--- the hang combinator
---     indents these
---     words !
--- @
---
--- The @hang@ combinator is implemented as:
---
--- > hang i x  = align (nest i x)
+-- @(hang i x y)@ either @x@ and @y@ concatenated with @\<+\>@ or @y@
+-- below @x@ with an additional indentation of @i@.
+
 hang :: Annotation a => Int -> Doc a -> Doc a -> Doc a
-hang n x y = (x <+> y) <|> (x $$ nest' n y)
+hang = hangWith " "
 
--- | The document @(nest i x)@ renders document @x@ with the current
--- indentation level increased by i (See also 'hang', 'align' and
--- 'indent').
---
--- > nest 2 (text "hello" <$$$> text "world") <$$$> text "!"
---
--- outputs as:
---
--- @
--- hello
---   world
--- !
--- @
 
+-- | The hang combinator implements hanging indentation. The document
+-- @(hang separator i x y)@ either @x@ and @y@ concatenated with @\<\>
+-- text separator \<\>@ or @y@ below @x@ with an additional
+-- indentation of @i@.
+hangWith :: Annotation a => String -> Int -> Doc a -> Doc a -> Doc a
+hangWith separator n x y = groupingBy separator [(0,x), (n,y)]
 
 space :: Annotation a => Doc a
 space = text " "
-
-
-nest' :: Annotation a => Int -> Doc a -> Doc a
-nest' n x = spaces n <> x
-
-spaces :: Annotation a => Int -> Doc a
-spaces n = text $ replicate n ' '
-
--- | The document @(x \<$$\> y)@ concatenates document @x@ and @y@ with
--- a linebreak in between. (infixr 5)
-($$) :: Annotation a => Doc a -> Doc a -> Doc a
-($$)  = (<$$>)
 
 -- $setup
 -- >>> import Data.Monoid
