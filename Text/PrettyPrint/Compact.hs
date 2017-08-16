@@ -276,12 +276,10 @@ x </> y         = hang 0 x y
 (<//>) :: Annotation a => Doc a -> Doc a -> Doc a
 x <//> y        = hangWith "" 0 x y
 
-
 -- | The document @(x \<$$\> y)@ concatenates document @x@ and @y@ with
 -- a linebreak in between. (infixr 5)
 (<$$>) :: Annotation a => Doc a -> Doc a -> Doc a
-x <$$> y = flush x <> y
-
+(<$$>) = ($$)
 
 -- | Document @(squotes x)@ encloses document @x@ with single quotes
 -- \"'\".
@@ -433,11 +431,6 @@ hangWith separator n x y = groupingBy separator [(0,x), (n,y)]
 
 space :: Annotation a => Doc a
 space = text " "
-
--- | The document @(x \<$$\> y)@ concatenates document @x@ and @y@ with
--- a linebreak in between. (infixr 5)
-($$) :: Annotation a => Doc a -> Doc a -> Doc a
-($$)  = (<$$>)
 
 -- $setup
 -- >>> import Data.Monoid

@@ -2,7 +2,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, ViewPatterns, DeriveFunctor, DeriveFoldable, DeriveTraversable, LambdaCase #-}
-module Text.PrettyPrint.Compact.Core(Annotation,Layout(..),renderWith,Options(..),groupingBy,Doc) where
+module Text.PrettyPrint.Compact.Core(Annotation,Layout(..),renderWith,Options(..),groupingBy,Doc,($$)) where
 
 import Prelude ()
 import Prelude.Compat as P
@@ -66,7 +66,6 @@ instance Layout L where
       where annotateAS (AS i s) = AS i (fmap annotatePart s)
             annotatePart (b, s) = (b `mappend` a, s)
 
-
 renderWithL :: (Monoid a, Monoid r) => Options a r -> L a -> r
 renderWithL opts (L xs) = intercalate (toList xs)
   where
@@ -96,7 +95,7 @@ class Layout d where
   --
   annotate :: forall a. Monoid a => a -> d a -> d a
 
--- | type parameter is phantom.
+-- type parameter is phantom.
 data M a = M {height    :: Int,
               lastWidth :: Int,
               maxWidth  :: Int
@@ -173,7 +172,6 @@ instance Monoid a => Monoid (ODoc a) where
   mempty = text ""
   mappend = (<>)
 
--- TODO: make columns configurable
 fits :: Int -> M a -> Bool
 fits w x = maxWidth x <= w
 
@@ -199,8 +197,10 @@ onlySingleLine = takeWhile (\(M{..} :-: _) -> height == 0)
 spaces :: (Monoid a,Layout l) => Int -> l a
 spaces n = text $ replicate n ' '
 
-($$) :: (Layout d, Monoid a, Semigroup (d a)) =>
-        d a -> d a -> d a
+
+-- | The document @(x \$$> y)@ concatenates document @x@ and @y@ with
+-- a linebreak in between. (infixr 5)
+($$) :: (Layout d, Monoid a, Semigroup (d a)) => d a -> d a -> d a
 a $$ b = flush a <> b
 
 second f (a,b) = (a, f b)
@@ -232,76 +232,13 @@ instance (Layout a, Layout b) => Layout (Pair a b) where
 instance Monoid a => IsString (Doc a) where
   fromString = text
 
--- data DDoc a = Text String | Flush (DDoc a) | S (Seq (DDoc a)) | DDoc a :<|> DDoc a | Fail | Annotate a (DDoc a)
---   deriving Eq
-
 type Annotation a = (Monoid a)
-
--- interp :: Annotation a => DDoc a -> ODoc a
--- interp = \case
---   Text s -> text s
---   Flush d -> flush (interp d)
---   Fail -> empty
---   S ds -> foldMap interp $ catTexts $ toList ds
---   d :<|> e -> interp d <|> interp e
---   Annotate a d -> annotate a (interp d)
-
-
--- catTexts :: forall a. [DDoc a] -> [DDoc a]
--- catTexts (Text t:Text u:xs) = catTexts (Text (t<>u):xs)
--- catTexts (x:xs) = x:catTexts xs
--- catTexts [] = []
-
--- instance Semigroup (DDoc a) where
---   Fail <> _ = Fail
---   _ <> Fail = Fail
---   S as <> S bs = S (as <> bs)
---   S as <> b = S (as <> singleton b)
---   a <> S bs = S (singleton a <> bs)
---   a <> b = S (singleton a <> singleton b)
-
--- instance Monoid a => Monoid (DDoc a) where
---   mempty = text ""
---   mappend = (<>)
-
--- instance Layout DDoc where
---   text = Text
---   flush (Flush x) = Flush x
---   flush x = Flush x
---   annotate = Annotate -- can be pushed down to text. Is this a good idea? (Note it'll get rid of complications in the classes, etc.)
-
--- instance Document DDoc where
---   -- S (viewl -> a :< as) <|> S (viewl -> b :< bs) | a == b = a <> (S as <|> S bs)
---   -- S (viewr -> as :> a) <|> S (viewr -> bs :> b) | a == b = (S as <|> S bs) <> a
---   Flush a <|> Flush b = Flush (a <|> b)
---   Annotate a b <|> Annotate a' d | a == a' = Annotate a' (b <|> d)
---   a <|> b = a <||> b
---   empty = Fail
-
--- (<||>) :: forall a. DDoc a -> DDoc a -> DDoc a
--- a <||> Fail = a
--- Fail <||> a = a
--- a <||> b = a :<|> b
-
-
 type Doc = ODoc
 
-tt :: Doc ()
-tt = groupingBy " " $ map (4,) $ 
-     ((replicate 4 $ groupingBy " " (map (4,) (map text ["fw"]))) ++
-      [groupingBy " " (map (0,) (map text ["fw","arstnwfyut","arstin","arstaruf"]))])
-
-{-> putStrLn (renderWith Options { optsAnnotate = \_ s -> s , optsPageWidth = 4} tt)
-
-    fw
-    fw
-    fw
-    fw
-    fw
-    arstnwfyut
-    arstin
-    arstaruf
--}
+-- tt :: Doc ()
+-- tt = groupingBy " " $ map (4,) $ 
+--      ((replicate 4 $ groupingBy " " (map (4,) (map text ["fw"]))) ++
+--       [groupingBy " " (map (0,) (map text ["fw","arstnwfyut","arstin","arstaruf"]))])
 
 -- $setup
 -- >>> import Text.PrettyPrint.Compact
