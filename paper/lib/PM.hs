@@ -160,7 +160,7 @@ tm x = do
   return ()
 
 main :: IO ()
-main = renderTex ACMArt "Prettiest" (preamble (header >> mainText >> bibliographyAll >> appendix))
+main = renderTex ACMArt "Prettiest" (preamble (header >> mainText >> appendix >> bibliographyAll))
 
 comment :: TeX -> TeX
 comment _ = mempty
@@ -1186,7 +1186,7 @@ instance Doc [(M,L)] where
   xs <|> ys = pareto (xs ++ ys)
 »
 
-@subsection«Hughes-Style nesting»
+@subsection«Hughes-Style Nesting»
 
 Hughes proposes a @hask«nest» combinator, which indents its argument @emph«unless» it appears on the right-hand-side of a horizontal concatenation.
 The above semantics are rather involved, and appear difficult to support by a local modification of the framework developed in this paper.
