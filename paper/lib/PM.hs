@@ -168,18 +168,19 @@ comment _ = mempty
 preamble :: forall b. Tex b -> Tex b
 preamble body = do
   documentClass "acmart" ["format=acmsmall", "review=false"
-                         -- , "screen=true" -- colored links
+                         , "screen=true" -- colored links
                          ]
   cmd "setcitestyle" «authoryear»
   texLn "\\setcopyright{rightsretained}"
-  texLn "\\acmJournal{PACMPL}"
-  texLn "\\acmYear{2017}"
-  texLn "\\acmVolume{1}"
-  texLn "\\acmNumber{1}"
-  texLn "\\acmArticle{6}"
-  texLn "\\acmMonth{9}"
   texLn "\\acmPrice{}"
   texLn "\\acmDOI{10.1145/3110250}"
+  texLn "\\acmYear{2017}"
+  texLn "\\copyrightyear{2017}"
+  texLn "\\acmJournal{PACMPL}"
+  texLn "\\acmVolume{1}"
+  texLn "\\acmNumber{ICFP}"
+  texLn "\\acmArticle{6}"
+  texLn "\\acmMonth{9}"
   texLn "\\begin{CCSXML}"
   texLn "<ccs2012>"
   texLn "<concept>"
@@ -1372,8 +1373,9 @@ Yet I conjecture that for non-pathological inputs the asymptotic complexities fo
 
 appendix :: Tex ()
 appendix = do
-  cmd0"onecolumn"
-  (cmd "section*" «Appendix»)
+  -- cmd0"onecolumn"
+  cmd0 "appendix"
+  (cmd "section" «Appendix»)
   -- subsection«Raw benchmark runtimes»
   -- performanceTable dataFileName
 
