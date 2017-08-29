@@ -210,6 +210,12 @@ width of the last line.
          <----->
         last width
 
+** Why?
+#+NAME: fig:cat
+#+CAPTION: Concatenation
+#+ATTR_ORG: :width 600
+[[file:HCat.png]]
+
 * Domination
 
 a dominates b iff. a is smaller in all three dimensions
@@ -231,10 +237,10 @@ set of possible layouts.
 [[file:Balanced.png]]
 
 ** Random
-#+NAME: fig:balanced
+#+NAME: fig:random
 #+CAPTION: Balanced tree
 #+ATTR_ORG: :width 600
-[[file:Balanced.png]]
+[[file:Random.png]]
 
 * Experimental Results (absolute)
 
