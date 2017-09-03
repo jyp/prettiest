@@ -8,19 +8,24 @@
 
 - It's hard to be greedy and pretty.
 
-* Pretty-printing pearls: state of the pop-art
+* Example
 
+#+BEGIN_EXAMPLE
 (a b c d)
+#+END_EXAMPLE
 
 or
 
+#+BEGIN_EXAMPLE
 (a
  b
  c
  d)
+#+END_EXAMPLE
 
-Example:
+* What I want
 
+#+BEGIN_EXAMPLE
 ((abcde ((a b c d)
          (a b c d)
          (a b c d)
@@ -32,9 +37,13 @@ Example:
    (a b c d)
    (a b c d)
    (a b c d))))
+#+END_EXAMPLE
 
-* Hughes
+* State of the pop-art: Hughes
 
+- Greedily fit stuff on the line
+
+#+BEGIN_EXAMPLE
 12345678901234567890
 
 ((abcde ((a b c d)
@@ -62,13 +71,11 @@ Example:
              b
              c
              d))))
+#+END_EXAMPLE
 
-* Wadler
+* State of the pop-art: Wadler
 
-- Wadler:
-  - will waste a line here and there
-  - lack of "hang" feature
-
+#+BEGIN_EXAMPLE
 12345678901234567890
 
 ((abcde
@@ -83,15 +90,15 @@ Example:
    (a b c d)
    (a b c d)
    (a b c d))))
+#+END_EXAMPLE
+
+- will waste a line here and there
+- lack of "hang" feature
 
 * Not satisfied
+Remember what I want:
 
-- I am not happy with any of the above
-
-- What do I *really* want?
-
-On the example:
-
+#+BEGIN_EXAMPLE
 ((abcde ((a b c d)
          (a b c d)
          (a b c d)
@@ -103,8 +110,7 @@ On the example:
    (a b c d)
    (a b c d)
    (a b c d))))
-
-In general?
+#+END_EXAMPLE
 
 * Laws of Pretty-Printing (paraphrased)
 1. A pretty-printer shall not print beyond the right margin
@@ -115,25 +121,21 @@ In general?
 - Wadler breaks 2
 
 * What does rule 2 really mean?
-
+- Recall rule 2: "A pretty-printer shall reveal the structure of the input"
 - User-specified
-- But it is clear that everyone (except Phil Wadler) wants to be able
-  to express vertical alignment after an arbitrary document.
+- But it is clear that everyone (except perhaps Phil Wadler) wants to
+  be able to express vertical alignment after an arbitrary document.
 
 * Describing rule-2 layouts
-
+#+BEGIN_SRC haskell
 class Layout l where
-  (<>)    :: l -> l -> l
   text    :: String -> l
+  (<>)    :: l -> l -> l
   flush   :: l -> l
-  render  :: l -> String
-
-class Layout d => Doc d where
-  (<|>) :: d -> d -> d
-  fail :: d
+  (<|>)   :: l -> l -> l
+#+END_SRC
 
 * Example:
-
 #+BEGIN_SRC haskell
 data SExpr = SExpr [SExpr] | Atom String
   deriving Show
@@ -141,10 +143,9 @@ data SExpr = SExpr [SExpr] | Atom String
 
 #+BEGIN_SRC haskell
 pretty :: Doc d => SExpr -> d
-pretty  (Atom s)    = text s
-pretty  (SExpr xs)  =   text "(" <>
-                        (sep $ map pretty xs) <>
-                        text ")"
+pretty  (Atom s)    = text "(" <>
+                      (sep $ map pretty xs) <>
+                      text ")"
 
 sep :: Doc d => [d] -> d
 sep []  = empty
@@ -193,14 +194,17 @@ instance Doc [L] where
 
 * Performance
 
-Unacceptable performance: every choice induces two layouts.
-Printing any document with >20 disjunctions is unrealistic.
+- The above is an executable specification.
+
+- It has unacceptable performance: every choice induces two layouts.
+  Printing any document with >20 disjunctions is unrealistic.
 
 * The useful parts
 The choice of layout depends only on 3 parameters: width, height the
 width of the last line.
 
 
+#+BEGIN_EXAMPLE
              width
          <---------------->
          xxxxxxxxxxxxxxxxxx ^
@@ -209,8 +213,9 @@ width of the last line.
          xxxxxxx
          <----->
         last width
+#+END_EXAMPLE
 
-** Why?
+* Why?
 #+NAME: fig:cat
 #+CAPTION: Concatenation
 #+ATTR_ORG: :width 600
@@ -229,14 +234,13 @@ set of possible layouts.
 
 (proof in the paper)
 
-* Experimental Results (asymptotic)
-** Balanced
+* Experimental Results (asymptotic, balanced sexprs)
 #+NAME: fig:balanced
 #+CAPTION: Balanced tree
 #+ATTR_ORG: :width 600
 [[file:Balanced.png]]
 
-** Random
+* Experimental Results (asymptotic, random sexprs)
 #+NAME: fig:random
 #+CAPTION: Balanced tree
 #+ATTR_ORG: :width 600
@@ -244,14 +248,15 @@ set of possible layouts.
 
 * Experimental Results (absolute)
 
-| Input      |  Ours | Wadler-Leijen | Hughes-PJ |
+Render time in seconds:
+
+| Input      |  Mine | Wadler-Leijen | Hughes-PJ |
 |------------+-------+---------------+-----------|
 | JSON   1k  |   9.7 |           1.5 |       3.0 |
 | JSON   10k | 145.5 |          14.8 |      30.0 |
 | XML    1k  |  20.0 |           3.2 |      11.9 |
 | XML    10k | 245.0 |          36.1 |     192.0 |
 
-Render time in seconds
 
 * Conclusion
 
@@ -259,5 +264,7 @@ Render time in seconds
 - Yet, Hughes, Wadler went for a greedy algorithm.
 - I suspect that they had a solution in mind *before* they start their
   program derivation.
-- Attempt to do a more realistic FP pearl: bridge the gap between what
-  actually goes on in programming (graphical models) and program calculation
+- (Or worse: mechanical program derivation drove the specification)
+- This is an attempt to do a more realistic FP pearl: bridge the gap
+  between what actually goes on in programming (graphical models,
+  worry about difficult parts only) and program calculation
