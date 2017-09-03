@@ -1,14 +1,17 @@
 * Intro
 
-- Typesetting is cahotic (if you change something towards the
-  beginning it may have non-linear effects way down the document)
-
 - Typesetting is critically sensitive to small changes: every saved
   line counts
 
-- It's hard to be greedy and pretty.
+- Pretty printing (and typesetting in general) is cahotic (if you
+  change something towards the beginning it may have non-linear
+  effects way down the document)
+
+- It's hard to be greedy (decide locally) and pretty.
 
 * Example
+Assume that an s-expr can be pretty-printed either horizontally or
+vertically:
 
 #+BEGIN_EXAMPLE
 (a b c d)
@@ -23,9 +26,20 @@ or
  d)
 #+END_EXAMPLE
 
+Recall
+#+BEGIN_SRC haskell
+data SExpr = SExpr [SExpr] | Atom String
+  deriving Show
+#+END_SRC
+
 * What I want
+Pretty printing ((abcde ((a b c d) (a b c d) (a b c d) (a b c d) (a b
+c d))) (abcdefgh ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d))))
+on 20-column page should yield:
 
 #+BEGIN_EXAMPLE
+12345678901234567890
+
 ((abcde ((a b c d)
          (a b c d)
          (a b c d)
@@ -95,7 +109,7 @@ or
 - will waste a line here and there
 - lack of "hang" feature
 
-* Not satisfied
+* I am not satisfied
 Remember what I want:
 
 #+BEGIN_EXAMPLE
@@ -112,13 +126,17 @@ Remember what I want:
    (a b c d))))
 #+END_EXAMPLE
 
+- Greedy can't be pretty.
+
 * Laws of Pretty-Printing (paraphrased)
+What do I really want?
+
 1. A pretty-printer shall not print beyond the right margin
 2. A pretty-printer shall reveal the structure of the input
 3. A pretty-printer shall use as few lines as possible
 
-- Hughes breaks 3
-- Wadler breaks 2
+   - Hughes breaks 3.
+   - Wadler breaks 2.
 
 * What does rule 2 really mean?
 - Recall rule 2: "A pretty-printer shall reveal the structure of the input"
@@ -136,11 +154,6 @@ class Layout l where
 #+END_SRC
 
 * Example:
-#+BEGIN_SRC haskell
-data SExpr = SExpr [SExpr] | Atom String
-  deriving Show
-#+END_SRC
-
 #+BEGIN_SRC haskell
 pretty :: Doc d => SExpr -> d
 pretty  (Atom s)    = text "(" <>
@@ -161,7 +174,7 @@ foldDoc _ [x]     = x
 foldDoc f (x:xs)  = f x (foldDoc f xs)
 #+END_SRC
 
-* Semantics
+* Semantics (1)
 #+BEGIN_SRC haskell
 type L = [String] -- non empty.
 
@@ -181,25 +194,25 @@ instance Layout L where
   flush xs = xs ++ [""]
 
 xs $$ ys = flush xs <> ys
+#+END_SRC
 
+* Semantics (2)
+
+#+BEGIN_SRC haskell
 instance Layout [L] where
   text = pure . text
   flush = fmap flush
   xs <> ys = (<>) <$> xs <*> ys
-
-instance Doc [L] where
   xs <|> ys = (xs ++ ys)
-  fail = []
 #+END_SRC
 
 * Performance
-
 - The above is an executable specification.
 
 - It has unacceptable performance: every choice induces two layouts.
   Printing any document with >20 disjunctions is unrealistic.
 
-* The useful parts
+* Making it fast (1b): consider the useful parts only
 The choice of layout depends only on 3 parameters: width, height the
 width of the last line.
 
@@ -215,22 +228,22 @@ width of the last line.
         last width
 #+END_EXAMPLE
 
-* Why?
+* Making it fast (1b): consider the useful parts only
 #+NAME: fig:cat
 #+CAPTION: Concatenation
 #+ATTR_ORG: :width 600
 [[file:HCat.png]]
 
-* Domination
+* Making it fast (2): discard dominated results
 
-a dominates b iff. a is smaller in all three dimensions
+/a/ dominates /b/ iff. /a/ is smaller than /b/ in all three dimensions
 
-If a dominates b, then for any context ctx,
+If /a/ dominates /b/, then for any context ctx,
 
-   ctx a  dominates  ctx b
+   /ctx a/  dominates  /ctx b/
 
-So, we can at any point we can discard all dominated layouts from the
-set of possible layouts.
+So, at any point we can discard all dominated layouts from the set of
+possible layouts.
 
 (proof in the paper)
 
@@ -256,7 +269,6 @@ Render time in seconds:
 | JSON   10k | 145.5 |          14.8 |      30.0 |
 | XML    1k  |  20.0 |           3.2 |      11.9 |
 | XML    10k | 245.0 |          36.1 |     192.0 |
-
 
 * Conclusion
 
