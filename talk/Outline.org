@@ -1,15 +1,13 @@
 * Intro
 
-- Typesetting is critically sensitive to small changes: every saved
-  line counts
+- Pretty printing (and typesetting in general) is hard!
 
-- Pretty printing (and typesetting in general) is cahotic (if you
-  change something towards the beginning it may have non-linear
-  effects way down the document)
+- cahotic: if you change something towards the beginning it may have
+  non-linear effects way down the document
 
-- It's hard to be greedy (decide locally) and pretty.
+- critically sensitive to small changes: every saved line counts
 
-* Example
+* Running Example: SExpr
 Assume that an s-expr can be pretty-printed either horizontally or
 vertically:
 
@@ -31,27 +29,6 @@ Recall
 data SExpr = SExpr [SExpr] | Atom String
   deriving Show
 #+END_SRC
-
-* What I want
-Pretty printing ((abcde ((a b c d) (a b c d) (a b c d) (a b c d) (a b
-c d))) (abcdefgh ((a b c d) (a b c d) (a b c d) (a b c d) (a b c d))))
-on 20-column page should yield:
-
-#+BEGIN_EXAMPLE
-12345678901234567890
-
-((abcde ((a b c d)
-         (a b c d)
-         (a b c d)
-         (a b c d)
-         (a b c d)))
- (abcdefgh
-  ((a b c d)
-   (a b c d)
-   (a b c d)
-   (a b c d)
-   (a b c d))))
-#+END_EXAMPLE
 
 * State of the pop-art: Hughes
 
@@ -110,7 +87,7 @@ on 20-column page should yield:
 - lack of "hang" feature
 
 * I am not satisfied
-Remember what I want:
+What I want:
 
 #+BEGIN_EXAMPLE
 ((abcde ((a b c d)
@@ -126,8 +103,6 @@ Remember what I want:
    (a b c d))))
 #+END_EXAMPLE
 
-- Greedy can't be pretty.
-
 * Laws of Pretty-Printing (paraphrased)
 What do I really want?
 
@@ -137,11 +112,12 @@ What do I really want?
 
    - Hughes breaks 3.
    - Wadler breaks 2.
+   - Greedy cannot be pretty.
 
 * What does rule 2 really mean?
 - Recall rule 2: "A pretty-printer shall reveal the structure of the input"
-- User-specified
-- But it is clear that everyone (except perhaps Phil Wadler) wants to
+- Cannot be guessed, the user must specify mapping from input to layout
+- Yet: it is clear that everyone (except perhaps Phil Wadler) wants to
   be able to express vertical alignment after an arbitrary document.
 
 * Describing rule-2 layouts
@@ -174,7 +150,7 @@ foldDoc _ [x]     = x
 foldDoc f (x:xs)  = f x (foldDoc f xs)
 #+END_SRC
 
-* Semantics (1)
+* Semantics (1): Roughly following Hughes'
 #+BEGIN_SRC haskell
 type L = [String] -- non empty.
 
@@ -196,7 +172,22 @@ instance Layout L where
 xs $$ ys = flush xs <> ys
 #+END_SRC
 
-* Semantics (2)
+* Semantics (2): Horizontal composition
+
+#+BEGIN_EXAMPLE
+xxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxx
+xxxxxxyyyyyyyyyyyyyy
+      yyyyyyyyyy
+      yyyyyyyyyyyyyyyyyy
+      yyyyyyyyy
+#+END_EXAMPLE
+
+
+* Semantics (3): Disjunction
+
+By idiomatic distribution oversets
 
 #+BEGIN_SRC haskell
 instance Layout [L] where
@@ -206,7 +197,6 @@ instance Layout [L] where
   xs <|> ys = (xs ++ ys)
 #+END_SRC
 
-* Performance
 - The above is an executable specification.
 
 - It has unacceptable performance: every choice induces two layouts.
@@ -238,7 +228,7 @@ width of the last line.
 
 /a/ dominates /b/ iff. /a/ is smaller than /b/ in all three dimensions
 
-If /a/ dominates /b/, then for any context ctx,
+If /a/ dominates /b/, then for any context /ctx/,
 
    /ctx a/  dominates  /ctx b/
 
@@ -272,11 +262,13 @@ Render time in seconds:
 
 * Conclusion
 
-- Pretty-printing is not suited to greedy approach
-- Yet, Hughes, Wadler went for a greedy algorithm.
-- I suspect that they had a solution in mind *before* they start their
-  program derivation.
-- (Or worse: mechanical program derivation drove the specification)
+- We have defined pretty printing (3 principes)
+- They are not compatible with a greedy approach
+- But we can still make a fast printer
+- And even write it in pearl style!
+
 - This is an attempt to do a more realistic FP pearl: bridge the gap
   between what actually goes on in programming (graphical models,
   worry about difficult parts only) and program calculation
+
+- In the paper: all reasoning steps and lovely typesetting.
