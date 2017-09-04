@@ -1,8 +1,12 @@
+#+TITLE: A pretty but not greedy printer (pearl)
+#+DATE: September 4th 2017
+#+AUTHOR: Jean-Philippe Bernardy, University of Gothenburg
+
 * Intro
 
 - Pretty printing (and typesetting in general) is hard!
 
-- cahotic: if you change something towards the beginning it may have
+- chaotic: if you change something towards the beginning it may have
   non-linear effects way down the document
 
 - critically sensitive to small changes: every saved line counts
@@ -188,7 +192,7 @@ xxxxxxyyyyyyyyyyyyyy
 
 * Semantics (2): Disjunction
 
-By idiomatic distribution oversets
+By idiomatic distribution over sets
 
 #+BEGIN_SRC haskell
 instance Layout [L] where
@@ -263,7 +267,7 @@ Render time in seconds:
 
 * Conclusion
 
-- We have defined pretty printing (3 principes)
+- We have defined pretty printing (3 principles)
 - They are not compatible with a greedy approach
 - But we can still make a fast printer
 - And even write it in pearl style!
@@ -273,4 +277,13 @@ Render time in seconds:
   graphical models, worry about difficult parts only) and program
   calculation style found in classical pearls
 
-- In the paper: all reasoning steps and lovely typesetting.
+- In the paper: sound reasoning steps and lovely typesetting.
+
+* LocalWords
+
+#  LocalWords:  SExpr expr SRC abcde abcdefgh sep xs hsep vcat ys iff
+#  LocalWords:  foldDoc intercalate init xxxxxxxxxxxxxxxxxxxx fmap PJ
+#  LocalWords:  xxxxxxxxxxxxx xxxxxxxxxxxxxxxxxxxxxx yyyyyyyyyy ATTR
+#  LocalWords:  xxxxxxyyyyyyyyyyyyyy yyyyyyyyyyyyyyyyyy yyyyyyyyy ctx
+#  LocalWords:  disjunctions xxxxxxxxxxxxxxxxxx xxxxxxx sexprs Leijen
+#  LocalWords:  JSON FP
