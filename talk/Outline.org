@@ -14,7 +14,6 @@ vertically:
 #+BEGIN_EXAMPLE
 (a b c d)
 #+END_EXAMPLE
-
 or
 
 #+BEGIN_EXAMPLE
@@ -23,11 +22,10 @@ or
  c
  d)
 #+END_EXAMPLE
-
 Recall
 #+BEGIN_SRC haskell
 data SExpr = SExpr [SExpr] | Atom String
-  deriving Show
+
 #+END_SRC
 
 * State of the pop-art: Hughes
@@ -82,7 +80,6 @@ data SExpr = SExpr [SExpr] | Atom String
    (a b c d)
    (a b c d))))
 #+END_EXAMPLE
-
 - will waste a line here and there
 - lack of "hang" feature
 
@@ -104,23 +101,27 @@ What I want:
 #+END_EXAMPLE
 
 * Laws of Pretty-Printing (paraphrased)
-What do I really want?
+
+In general, this is what I want:
 
 1. A pretty-printer shall not print beyond the right margin
 2. A pretty-printer shall reveal the structure of the input
 3. A pretty-printer shall use as few lines as possible
 
-   - Hughes breaks 3.
-   - Wadler breaks 2.
-   - Greedy cannot be pretty.
+   - Hughes breaks 3
+   - Wadler breaks 2 (cannot specify "to the right of" in general)
+   - I am trading performance for abiding to the laws.
+     (Greedy cannot be pretty.)
 
 * What does rule 2 really mean?
-- Recall rule 2: "A pretty-printer shall reveal the structure of the input"
-- Cannot be guessed, the user must specify mapping from input to layout
-- Yet: it is clear that everyone (except perhaps Phil Wadler) wants to
-  be able to express vertical alignment after an arbitrary document.
 
-* Describing rule-2 layouts
+- Recall rule 2: "A pretty-printer shall reveal the structure of the
+  input"
+
+- The user must specify a mapping from input to
+  layout which reveals the structure
+
+- The API to describe pretty layouts:
 #+BEGIN_SRC haskell
 class Layout l where
   text    :: String -> l
@@ -150,7 +151,7 @@ foldDoc _ [x]     = x
 foldDoc f (x:xs)  = f x (foldDoc f xs)
 #+END_SRC
 
-* Semantics (1): Roughly following Hughes'
+* Semantics (1a): Roughly following Hughes'
 #+BEGIN_SRC haskell
 type L = [String] -- non empty.
 
@@ -172,7 +173,7 @@ instance Layout L where
 xs $$ ys = flush xs <> ys
 #+END_SRC
 
-* Semantics (2): Horizontal composition
+* Semantics (1b): Horizontal composition
 
 #+BEGIN_EXAMPLE
 xxxxxxxxxxxxxxxxxxxx
@@ -185,7 +186,7 @@ xxxxxxyyyyyyyyyyyyyy
 #+END_EXAMPLE
 
 
-* Semantics (3): Disjunction
+* Semantics (2): Disjunction
 
 By idiomatic distribution oversets
 
@@ -203,9 +204,9 @@ instance Layout [L] where
   Printing any document with >20 disjunctions is unrealistic.
 
 * Making it fast (1b): consider the useful parts only
+
 The choice of layout depends only on 3 parameters: width, height the
 width of the last line.
-
 
 #+BEGIN_EXAMPLE
              width
@@ -268,7 +269,8 @@ Render time in seconds:
 - And even write it in pearl style!
 
 - This is an attempt to do a more realistic FP pearl: bridge the gap
-  between what actually goes on in programming (graphical models,
-  worry about difficult parts only) and program calculation
+  between what actually goes on in programming (informal spec,
+  graphical models, worry about difficult parts only) and program
+  calculation style found in classical pearls
 
 - In the paper: all reasoning steps and lovely typesetting.
