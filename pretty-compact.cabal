@@ -17,12 +17,12 @@ maintainer: Jean-Philippe Bernardy <jeanphilippe.bernardy@gmail.com>
 build-type: Simple
 Cabal-Version: >= 1.8
 tested-with:
-  GHC == 7.4.2,
   GHC == 7.6.3,
   GHC == 7.8.4,
   GHC == 7.10.3,
   GHC == 8.0.2,
-  GHC == 8.2.1
+  GHC == 8.2.2,
+  GHC == 8.4.1
 
 source-repository head
                   type: git
@@ -40,6 +40,9 @@ Library
 
   if !impl(ghc >= 8.0)
     build-depends: semigroups
+
+  other-extensions:
+    LambdaCase
 
 benchmark pretty-comparison
   type: exitcode-stdio-1.0
