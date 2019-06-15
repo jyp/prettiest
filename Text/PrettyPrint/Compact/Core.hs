@@ -50,9 +50,13 @@ newtype L a = L (Seq (AS a)) -- non-empty sequence
   deriving (Eq,Ord,Show,Functor,Foldable,Traversable)
 
 instance Monoid a => Semigroup (L a) where
-  L (viewr -> xs :> x) <> L (viewl -> y :< ys) = L (xs <> singleton (x <> y) <> fmap (indent <>) ys)
-      where n = asLength x
-            indent = mkAS (P.replicate n ' ')
+  L (viewr -> xs :> x) <> L (viewl -> y :< ys) =
+    L (xs <> singleton (x <> y) <> indent ys) where
+
+    n      = asLength x
+    pad    = mkAS (P.replicate n ' ')
+    indent = if n == 0 then id else fmap (pad <>)
+
   L _ <> L _ = error "<> @L: invariant violated, Seq is empty"
 
 instance Monoid a => Monoid (L a) where
