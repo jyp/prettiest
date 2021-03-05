@@ -160,6 +160,7 @@ paretoOn' m acc (x:xs) = if any ((≺ m x) . m) acc
 -- list sorted by lexicographic order for the first component
 -- function argument is the page width
 newtype ODoc a = MkDoc {fromDoc :: Int -> [(Pair M L a)]}
+  deriving Functor
 
 instance Monoid a => Semigroup (ODoc a) where
   MkDoc xs <> MkDoc ys = MkDoc $ \w -> bestsOn frst [ discardInvalid w [x <> y | y <- ys w] | x <- xs w]
@@ -221,6 +222,7 @@ groupingBy separator ms = MkDoc $ \w ->
   in bestsOn frst [horizontal,vertical]
 
 data Pair f g a = (:-:) {frst :: f a, scnd :: g a}
+  deriving (Functor,Foldable,Traversable)
 
 instance (Semigroup (f a), Semigroup (g a)) => Semigroup (Pair f g a) where
   (x :-: y) <> (x' :-: y') = (x <> x') :-: (y <> y')
