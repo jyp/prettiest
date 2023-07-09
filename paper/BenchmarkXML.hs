@@ -18,8 +18,8 @@ pcXML Element{..} =
   PC.encloseSep
     (PC.encloseSep (PC.text "<" <> PC.text (qName elName)) (PC.text ">")
       (PC.text " ") (map pcAttrib (elAttribs)))
-    mempty
     (PC.text "</" <> PC.text (qName elName) <> PC.text ">")
+    mempty
     (map pcContent elContent)
 
 pcAttrib :: Attr -> DOC
@@ -35,8 +35,8 @@ wlXML Element{..} =
   WL.encloseSep
     (WL.encloseSep (WL.text "<" WL.<> WL.text (qName elName)) (WL.text ">")
       (WL.text " ") (map wlAttrib (elAttribs)))
-    WL.empty
     (WL.text "</" WL.<> WL.text (qName elName) WL.<> WL.text ">")
+    WL.empty
     (map wlContent elContent)
 
 wlAttrib :: Attr -> WL.Doc
@@ -55,8 +55,8 @@ hpjXML Element{..} =
   hpjEncloseSep
     (hpjEncloseSep (HPJ.text "<" HPJ.<> HPJ.text (qName elName)) (HPJ.text ">")
       (HPJ.text " ") (map hpjAttrib (elAttribs)))
-    HPJ.empty
     (HPJ.text "</" HPJ.<> HPJ.text (qName elName) HPJ.<> HPJ.text ">")
+    HPJ.empty
     (map hpjContent elContent)
 
 hpjAttrib :: Attr -> HPJ.Doc
