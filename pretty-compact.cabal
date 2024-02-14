@@ -1,5 +1,6 @@
+Cabal-Version: 3.4
 name: pretty-compact
-version: 3.0
+version: 3.1
 synopsis: Pretty-printing library
 description:
   This package contains a pretty-printing library, a set of API's
@@ -10,22 +11,11 @@ description:
   This library produces more compact outputs than both
   Wadler-Leijen or Hughes-PJ algorithms, at the expense of computational ressources.
   The core API is based on Hughes-PJ, but some combinators of the Leijen API are implemented as well.
-license: GPL
+license: LGPL-3.0-only
 license-file: LICENSE
 category: Text
 maintainer: Jean-Philippe Bernardy <jeanphilippe.bernardy@gmail.com>
 build-type: Simple
-Cabal-Version: >= 1.8
-tested-with:
-  GHC == 7.6.3,
-  GHC == 7.8.4,
-  GHC == 7.10.3,
-  GHC == 8.0.2,
-  GHC == 8.2.2,
-  GHC == 8.4.4,
-  GHC == 8.6.5,
-  GHC == 8.8.3,
-  GHC == 8.10.1
 
 source-repository head
                   type: git
@@ -39,10 +29,10 @@ Library
   build-depends:
     base >= 4.6 && < 5,
     base-compat >= 0.9.3 && <0.12,
-    containers
+    containers >= 0 && <666
 
   if !impl(ghc >= 8.0)
-    build-depends: semigroups
+    build-depends: semigroups >= 0 && <666
 
   other-extensions:
     LambdaCase

@@ -61,7 +61,6 @@ instance Monoid a => Semigroup (L a) where
 
 instance Monoid a => Monoid (L a) where
    mempty = L (singleton (mkAS ""))
-   mappend = (<>)
 
 instance Layout L where
    text = L . singleton . mkAS
@@ -228,7 +227,6 @@ instance (Semigroup (f a), Semigroup (g a)) => Semigroup (Pair f g a) where
   (x :-: y) <> (x' :-: y') = (x <> x') :-: (y <> y')
 instance (Monoid (f a), Monoid (g a)) => Monoid (Pair f g a) where
   mempty = mempty :-: mempty
-  mappend (x :-: y)(x' :-: y') = (x `mappend` x') :-: (y `mappend` y')
 
 instance (Layout a, Layout b) => Layout (Pair a b) where
   text s = text s :-: text s
