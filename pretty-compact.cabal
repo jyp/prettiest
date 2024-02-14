@@ -28,7 +28,7 @@ Library
     Text.PrettyPrint.Compact.Core
   build-depends:
     base >= 4.6 && < 5,
-    base-compat >= 0.9.3 && <0.12,
+    base-compat >= 0.9.3 && <666,
     containers >= 0 && <666
 
   if !impl(ghc >= 8.0)
